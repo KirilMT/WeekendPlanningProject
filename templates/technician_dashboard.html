@@ -1,4 +1,3 @@
-<!-- templates/technician_dashboard.html -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -73,7 +72,7 @@
         {% for task in tasks %}
         <tr>
             <td>{{ task.id }}</td>
-            <td {% if task.id in unassigned_tasks %} style="background-color: red;" title="No eligible technicians available or task duration exceeds available time." {% endif %}>
+            <td {% if task.id in unassigned_tasks %} style="background-color: red;" title="No eligible technicians available or no available time slots." {% endif %}>
                 {{ task.name }}
             </td>
             <td>{{ task.task_type }}</td>
@@ -106,7 +105,15 @@
         <tr>
             <td class="technician-column">{{ technician }}</td>
             {% for i in range(num_intervals) %}
-            <td>
+            <td {% for assignment in assignments %}
+                    {% if assignment.technician == technician %}
+                        {% set start_interval = (assignment.start / 15) | int %}
+                        {% set end_interval = ((assignment.start + assignment.duration) / 15) | int %}
+                        {% if start_interval <= i and i < end_interval and assignment.is_incomplete %}
+                            style="background-color: red;" title="Task duration exceeds available work time (required {{ assignment.original_duration }} minutes, capped at {{ assignment.duration }} minutes)."
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}>
                 {% for assignment in assignments %}
                     {% if assignment.technician == technician %}
                         {% set start_interval = (assignment.start / 15) | int %}

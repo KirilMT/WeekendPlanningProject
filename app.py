@@ -101,13 +101,14 @@ def normalize_string(s):
 def assign_tasks(tasks, present_technicians, total_work_minutes):
     print("Task types before filtering:", [task['task_type'] for task in tasks])
     filtered_tasks = []
-    unassigned_tasks = []  # Track tasks with zero eligible technicians
+    unassigned_tasks = []  # Track tasks with zero eligible technicians or unschedulable
+    incomplete_tasks = []  # Track tasks with duration exceeding total_work_minutes
     for task in tasks:
         task_type = task.get('task_type', '').upper()
         if task_type.startswith('PM'):
             filtered_tasks.append(task)
         else:
-            print(f"Skipping task {task.get('name', 'Unknown')}: task_type '{task_type}' is not 'PM'.")
+            print(f"Skipping task {task.get('name', 'Unknown')}: task_type '{task_type}' is not 'PM'.")  # Fixed typo
     tasks = filtered_tasks
     print("Task types after filtering:", [task['task_type'] for task in tasks])
     priority_order = {'A': 1, 'B': 2, 'C': 3}
@@ -170,13 +171,14 @@ def assign_tasks(tasks, present_technicians, total_work_minutes):
 
         if len(eligible_technicians) == 0:
             print(f"Task {task_name} has no eligible technicians. Marking as unassigned.")
-            unassigned_tasks.append(task['id'])  # Store task ID for dashboard
+            unassigned_tasks.append(task['id'])
             continue
 
         # Find a common start time for as many technicians as possible (up to num_technicians_needed)
         assigned_technicians = []
         common_start_time = None
-        for start_time in range(0, total_work_minutes - base_duration + 1, 15):  # Step by 15-minute intervals
+        max_possible_duration = total_work_minutes  # Allow up to total_work_minutes for scheduling
+        for start_time in range(0, total_work_minutes + 1, 15):  # Step by 15-minute intervals
             available_technicians = []
             for tech in eligible_technicians:
                 schedule = technician_schedules[tech]
@@ -185,7 +187,7 @@ def assign_tasks(tasks, present_technicians, total_work_minutes):
                     if not (end <= start_time or start >= start_time + base_duration):
                         is_available = False
                         break
-                if is_available and start_time + base_duration <= total_work_minutes:
+                if is_available and start_time + base_duration <= max_possible_duration:
                     available_technicians.append(tech)
                 if len(available_technicians) >= num_technicians_needed:
                     break
@@ -196,20 +198,23 @@ def assign_tasks(tasks, present_technicians, total_work_minutes):
 
         if len(assigned_technicians) == 0:
             print(f"Task {task_name} could not be scheduled: no technicians available at any start time.")
-            unassigned_tasks.append(task['id'])  # Store task ID for dashboard
+            unassigned_tasks.append(task['id'])
             continue
 
         # Adjust task duration based on number of assigned technicians
         missing_technicians = num_technicians_needed - len(assigned_technicians)
         duration_multiplier = 1 + missing_technicians  # Double duration per missing technician
         task_duration = base_duration * duration_multiplier
+        original_task_duration = task_duration  # Store for tooltip
 
-        # Ensure adjusted duration fits within total_work_minutes
+        # Cap duration at total_work_minutes and mark as incomplete if needed
+        is_incomplete = False
         if common_start_time + task_duration > total_work_minutes:
             print(
-                f"Task {task_name} duration {task_duration} exceeds total work minutes {total_work_minutes} at start time {common_start_time}. Marking as unassigned.")
-            unassigned_tasks.append(task['id'])
-            continue
+                f"Task {task_name} duration {task_duration} exceeds total work minutes {total_work_minutes}. Capping at {total_work_minutes - common_start_time}.")
+            task_duration = total_work_minutes - common_start_time
+            is_incomplete = True
+            incomplete_tasks.append(task['id'])
 
         # Assign the task to all technicians at the same start time
         for tech in assigned_technicians:
@@ -219,19 +224,21 @@ def assign_tasks(tasks, present_technicians, total_work_minutes):
                 'technician': tech,
                 'task_name': task_name,
                 'start': common_start_time,
-                'duration': task_duration
+                'duration': task_duration,
+                'is_incomplete': is_incomplete,
+                'original_duration': original_task_duration  # For tooltip
             })
 
         print(
-            f"Assigned task {task_name} to {assigned_technicians} at start time {common_start_time} with duration {task_duration} (multiplier: {duration_multiplier}x)")
+            f"Assigned task {task_name} to {assigned_technicians} at start time {common_start_time} with duration {task_duration} (multiplier: {duration_multiplier}x, incomplete: {is_incomplete})")
 
-    return assignments, unassigned_tasks  # Return unassigned task IDs for dashboard
+    return assignments, unassigned_tasks, incomplete_tasks
 
 def generate_html_files(data, present_technicians):
     tasks = []
     for idx, row in enumerate(data, start=1):  # Start index at 1
         task = {
-            "id": idx,  # Numeric ID
+            "id": idx,
             "name": row["scheduler_group_task"],
             "lines": row["lines"],
             "mitarbeiter_pro_aufgabe": row["mitarbeiter_pro_aufgabe"],
@@ -247,7 +254,7 @@ def generate_html_files(data, present_technicians):
     current_day = get_current_day()
     total_work_minutes = calculate_work_time(current_day)
     num_intervals = ceil(total_work_minutes / 15)
-    assignments, unassigned_tasks = assign_tasks(tasks, present_technicians, total_work_minutes)  # Updated to receive unassigned_tasks
+    assignments, unassigned_tasks, incomplete_tasks = assign_tasks(tasks, present_technicians, total_work_minutes)
     technician_template = env.get_template('technician_dashboard.html')
     technician_html = technician_template.render(
         tasks=tasks,
@@ -255,7 +262,8 @@ def generate_html_files(data, present_technicians):
         total_work_minutes=total_work_minutes,
         num_intervals=num_intervals,
         assignments=assignments,
-        unassigned_tasks=unassigned_tasks  # Pass to template
+        unassigned_tasks=unassigned_tasks,
+        incomplete_tasks=incomplete_tasks
     )
     with open(os.path.join(app.config['OUTPUT_FOLDER'], "technician_dashboard.html"), "w", encoding="utf-8") as f:
         f.write(technician_html)
