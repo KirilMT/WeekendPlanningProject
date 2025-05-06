@@ -1,0 +1,2457 @@
+<!-- templates/technician_dashboard.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Technician Dashboard</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .task-table, .gantt-chart {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .task-table th, .gantt-chart th {
+            background-color: lightblue;
+            font-weight: bold;
+            color: black;
+            padding: 8px;
+            text-align: left;
+            border: 1px solid #ccc;
+        }
+        .task-table td {
+            padding: 8px;
+            border: 1px solid black;
+        }
+        .prio-a { background-color: red; }
+        .prio-b { background-color: yellow; }
+        .prio-c { background-color: #D2B48C; }
+        .gantt-chart {
+            table-layout: fixed;
+        }
+        .gantt-chart .technician-column {
+            width: 200px;
+            font-weight: bold;
+            border: 1px solid #ccc;
+            padding: 8px;
+        }
+        .gantt-chart .time-column {
+            width: 40px;
+            text-align: center;
+            border: 1px solid #ccc;
+            padding: 8px;
+        }
+        .gantt-chart td {
+            height: 40px;
+            border: 1px solid #ccc;
+            position: relative;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Technician Dashboard</h1>
+
+    <!-- Task Table -->
+    <table class="task-table" border="1">
+        <tr>
+            <th>Index</th>
+            <th>Tasks</th>
+            <th>Type</th>
+            <th>Lines</th>
+            <th>Technicians</th>
+            <th>Time [min]</th>
+            <th>Prio</th>
+            <th>Qty</th>
+        </tr>
+        
+        <tr>
+            <td>1</td>
+            <td>BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines</td>
+            <td>PM</td>
+            <td>nan</td>
+            <td>2</td>
+            <td>90</td> <!-- Fixed: Changed from task.plan to task.planned_worktime_min -->
+            <td class="prio-a">
+                A
+            </td>
+            <td>10.0</td>
+        </tr>
+        
+        <tr>
+            <td>2</td>
+            <td>BiW_PM_ADH_Mesamoll Bodysides_wöchentlich</td>
+            <td>PM</td>
+            <td>nan</td>
+            <td>2</td>
+            <td>10</td> <!-- Fixed: Changed from task.plan to task.planned_worktime_min -->
+            <td class="prio-b">
+                B
+            </td>
+            <td>6.0</td>
+        </tr>
+        
+        <tr>
+            <td>3</td>
+            <td>BIW_Rebuild_RSW_Pivot Exchange</td>
+            <td>PM</td>
+            <td>RHD/LHD has to be finished</td>
+            <td>2</td>
+            <td>150</td> <!-- Fixed: Changed from task.plan to task.planned_worktime_min -->
+            <td class="prio-b">
+                B
+            </td>
+            <td>2.0</td>
+        </tr>
+        
+        <tr>
+            <td>4</td>
+            <td>BiW_PM_Kappenfräser_3 monatlich_Alle</td>
+            <td>PM</td>
+            <td>nan</td>
+            <td>2</td>
+            <td>40</td> <!-- Fixed: Changed from task.plan to task.planned_worktime_min -->
+            <td class="prio-c">
+                C
+            </td>
+            <td>1.0</td>
+        </tr>
+        
+        <tr>
+            <td>5</td>
+            <td>BiW_PM_Leitungspaket</td>
+            <td>PM</td>
+            <td>nan</td>
+            <td>2</td>
+            <td>15</td> <!-- Fixed: Changed from task.plan to task.planned_worktime_min -->
+            <td class="prio-b">
+                B
+            </td>
+            <td>13.0</td>
+        </tr>
+        
+        <tr>
+            <td>6</td>
+            <td>BIW_PdM_RSW_C-Factor</td>
+            <td>PM</td>
+            <td>nan</td>
+            <td>2</td>
+            <td>90</td> <!-- Fixed: Changed from task.plan to task.planned_worktime_min -->
+            <td class="prio-a">
+                A
+            </td>
+            <td>1.0</td>
+        </tr>
+        
+        <tr>
+            <td>7</td>
+            <td>Close open Tickets/  MO´s</td>
+            <td>REP</td>
+            <td>All</td>
+            <td>nan</td>
+            <td>nan</td> <!-- Fixed: Changed from task.plan to task.planned_worktime_min -->
+            <td class="prio-a">
+                A
+            </td>
+            <td>1.0</td>
+        </tr>
+        
+        <tr>
+            <td>8</td>
+            <td>Luft leakage</td>
+            <td>REP</td>
+            <td>RUO 660 </td>
+            <td>2</td>
+            <td>90</td> <!-- Fixed: Changed from task.plan to task.planned_worktime_min -->
+            <td class="prio-b">
+                B
+            </td>
+            <td>1.0</td>
+        </tr>
+        
+        <tr>
+            <td>9</td>
+            <td>die Schraube fällt beim einsetzen in die Linie am vorderen Sidesill</td>
+            <td>REP</td>
+            <td>UBM 50 tl07</td>
+            <td>2</td>
+            <td>120</td> <!-- Fixed: Changed from task.plan to task.planned_worktime_min -->
+            <td class="prio-b">
+                B
+            </td>
+            <td>1.0</td>
+        </tr>
+        
+        <tr>
+            <td>10</td>
+            <td>Die Schienen an OP80 deformiert</td>
+            <td>REP</td>
+            <td>FNL 80</td>
+            <td>2</td>
+            <td>150</td> <!-- Fixed: Changed from task.plan to task.planned_worktime_min -->
+            <td class="prio-b">
+                B
+            </td>
+            <td>1.0</td>
+        </tr>
+        
+        <tr>
+            <td>11</td>
+            <td>undicht</td>
+            <td>REP</td>
+            <td>LGT2 260 tl01</td>
+            <td>2</td>
+            <td>90</td> <!-- Fixed: Changed from task.plan to task.planned_worktime_min -->
+            <td class="prio-c">
+                C
+            </td>
+            <td>1.0</td>
+        </tr>
+        
+        <tr>
+            <td>12</td>
+            <td>undicht</td>
+            <td>REP</td>
+            <td>LHD 180</td>
+            <td>2</td>
+            <td>90</td> <!-- Fixed: Changed from task.plan to task.planned_worktime_min -->
+            <td class="prio-c">
+                C
+            </td>
+            <td>1.0</td>
+        </tr>
+        
+        <tr>
+            <td>13</td>
+            <td>undicht</td>
+            <td>REP</td>
+            <td>LHD 180</td>
+            <td>2</td>
+            <td>90</td> <!-- Fixed: Changed from task.plan to task.planned_worktime_min -->
+            <td class="prio-c">
+                C
+            </td>
+            <td>1.0</td>
+        </tr>
+        
+    </table>
+
+    <!-- Gantt Chart -->
+    <h2>Gantt Chart: 434 min of work</h2>
+    
+    <table class="gantt-chart">
+        <!-- Header Row: Time Intervals -->
+        <tr>
+            <th class="technician-column">Technician</th>
+            
+            <th class="time-column">0-15</th>
+            
+            <th class="time-column">15-30</th>
+            
+            <th class="time-column">30-45</th>
+            
+            <th class="time-column">45-60</th>
+            
+            <th class="time-column">60-75</th>
+            
+            <th class="time-column">75-90</th>
+            
+            <th class="time-column">90-105</th>
+            
+            <th class="time-column">105-120</th>
+            
+            <th class="time-column">120-135</th>
+            
+            <th class="time-column">135-150</th>
+            
+            <th class="time-column">150-165</th>
+            
+            <th class="time-column">165-180</th>
+            
+            <th class="time-column">180-195</th>
+            
+            <th class="time-column">195-210</th>
+            
+            <th class="time-column">210-225</th>
+            
+            <th class="time-column">225-240</th>
+            
+            <th class="time-column">240-255</th>
+            
+            <th class="time-column">255-270</th>
+            
+            <th class="time-column">270-285</th>
+            
+            <th class="time-column">285-300</th>
+            
+            <th class="time-column">300-315</th>
+            
+            <th class="time-column">315-330</th>
+            
+            <th class="time-column">330-345</th>
+            
+            <th class="time-column">345-360</th>
+            
+            <th class="time-column">360-375</th>
+            
+            <th class="time-column">375-390</th>
+            
+            <th class="time-column">390-405</th>
+            
+            <th class="time-column">405-420</th>
+            
+            <th class="time-column">420-435</th>
+            
+        </tr>
+        <!-- Technician Rows -->
+        
+        <tr>
+            <td class="technician-column">Bilgehan Berk Unsal</td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                            BiW_PM_Leitungspaket (0-15)
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                            BiW_PM_Kappenfräser_3 monatlich_Alle (15-55)
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                            BiW_PM_Kappenfräser_3 monatlich_Alle (15-55)
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+            </td>
+            
+        </tr>
+        
+        <tr>
+            <td class="technician-column">Yeison Berbeci</td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                            BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (0-90)
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                            BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (0-90)
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                            BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (0-90)
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                            BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (0-90)
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                            BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (0-90)
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                            BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (0-90)
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                            BiW_PM_Leitungspaket (90-105)
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                            BiW_PM_Kappenfräser_3 monatlich_Alle (105-145)
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                            BiW_PM_Kappenfräser_3 monatlich_Alle (105-145)
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+            </td>
+            
+        </tr>
+        
+        <tr>
+            <td class="technician-column">Lukasz Brach</td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                            BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (0-90)
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                            BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (0-90)
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                            BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (0-90)
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                            BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (0-90)
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                            BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (0-90)
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                            BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (0-90)
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+            <td>
+                
+                    
+                
+                    
+                        
+                        
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </td>
+            
+        </tr>
+        
+    </table>
+    
+
+</body>
+</html>

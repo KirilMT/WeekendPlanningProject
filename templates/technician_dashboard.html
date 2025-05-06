@@ -1,0 +1,125 @@
+<!-- templates/technician_dashboard.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Technician Dashboard</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .task-table, .gantt-chart {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .task-table th, .gantt-chart th {
+            background-color: lightblue;
+            font-weight: bold;
+            color: black;
+            padding: 8px;
+            text-align: left;
+            border: 1px solid #ccc;
+        }
+        .task-table td {
+            padding: 8px;
+            border: 1px solid black;
+        }
+        .prio-a { background-color: red; }
+        .prio-b { background-color: yellow; }
+        .prio-c { background-color: #D2B48C; }
+        .gantt-chart {
+            table-layout: fixed;
+        }
+        .gantt-chart .technician-column {
+            width: 200px;
+            font-weight: bold;
+            border: 1px solid #ccc;
+            padding: 8px;
+        }
+        .gantt-chart .time-column {
+            width: 40px;
+            text-align: center;
+            border: 1px solid #ccc;
+            padding: 8px;
+        }
+        .gantt-chart td {
+            height: 40px;
+            border: 1px solid #ccc;
+            position: relative;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Technician Dashboard</h1>
+
+    <!-- Task Table -->
+    <table class="task-table" border="1">
+        <tr>
+            <th>Index</th>
+            <th>Tasks</th>
+            <th>Type</th>
+            <th>Lines</th>
+            <th>Technicians</th>
+            <th>Time [min]</th>
+            <th>Prio</th>
+            <th>Qty</th>
+        </tr>
+        {% for task in tasks %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ task.name }}</td>
+            <td>{{ task.task_type }}</td>
+            <td>{{ task.lines }}</td>
+            <td>{{ task.mitarbeiter_pro_aufgabe }}</td>
+            <td>{{ task.planned_worktime_min }}</td> <!-- Fixed: Changed from task.plan to task.planned_worktime_min -->
+            <td class="{% if task.priority == 'A' %}prio-a{% elif task.priority == 'B' %}prio-b{% elif task.priority == 'C' %}prio-c{% endif %}">
+                {{ task.priority }}
+            </td>
+            <td>{{ task.status }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <!-- Gantt Chart -->
+    <h2>Gantt Chart: {{ total_work_minutes }} min of work</h2>
+    {% if technicians | length == 0 %}
+    <p>No technicians available to display in the Gantt chart.</p>
+    {% else %}
+    <table class="gantt-chart">
+        <!-- Header Row: Time Intervals -->
+        <tr>
+            <th class="technician-column">Technician</th>
+            {% for i in range(num_intervals) %}
+            <th class="time-column">{{ i * 15 }}-{{ (i + 1) * 15 }}</th>
+            {% endfor %}
+        </tr>
+        <!-- Technician Rows -->
+        {% for technician in technicians %}
+        <tr>
+            <td class="technician-column">{{ technician }}</td>
+            {% for i in range(num_intervals) %}
+            <td>
+                {% for assignment in assignments %}
+                    {% if assignment.technician == technician %}
+                        {% set start_interval = (assignment.start / 15) | int %}
+                        {% set end_interval = ((assignment.start + assignment.duration) / 15) | int %}
+                        {% if start_interval <= i and i < end_interval %}
+                            {{ assignment.task_name }} ({{ assignment.start }}-{{ assignment.start + assignment.duration }})
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
+            </td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </table>
+    {% endif %}
+
+</body>
+</html>
