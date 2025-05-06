@@ -72,16 +72,18 @@
         </tr>
         {% for task in tasks %}
         <tr>
-            <td>{{ loop.index }}</td>
-            <td>{{ task.name }}</td>
+            <td>{{ task.id }}</td>
+            <td {% if task.id in unassigned_tasks %} style="background-color: red;" title="No eligible technicians available or task duration exceeds available time." {% endif %}>
+                {{ task.name }}
+            </td>
             <td>{{ task.task_type }}</td>
             <td>{{ task.lines }}</td>
             <td>{{ task.mitarbeiter_pro_aufgabe }}</td>
-            <td>{{ task.planned_worktime_min }}</td> <!-- Fixed: Changed from task.plan to task.planned_worktime_min -->
+            <td>{{ task.planned_worktime_min }}</td>
             <td class="{% if task.priority == 'A' %}prio-a{% elif task.priority == 'B' %}prio-b{% elif task.priority == 'C' %}prio-c{% endif %}">
                 {{ task.priority }}
             </td>
-            <td>{{ task.status }}</td>
+            <td>{{ task.quantity }}</td>
         </tr>
         {% endfor %}
     </table>
