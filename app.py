@@ -158,20 +158,12 @@ def assign_tasks(tasks, present_technicians, total_work_minutes):
             if task_lines:  # Only check if task has specific lines
                 lines_match = any(line in tech_lines for line in task_lines)
 
-            # Optionally: Check sattelite_point (uncomment if tasks have group restrictions)
-            # task_sattelite_point = task.get('sattelite_point', None)  # Assume tasks may have a group
-            # sattelite_match = True
-            # if task_sattelite_point:
-            #     sattelite_match = tech_sattelite_point == task_sattelite_point
-
             if not can_do_task:
                 print(
                     f"Technician {tech} cannot do task '{task_name}' (JSON: '{json_task_name}', normalized: '{normalized_task_name}'). Available tasks: {tech_tasks}")
             elif not lines_match:
                 print(
                     f"Technician {tech} cannot do task '{task_name}' due to line mismatch. Task lines: {task_lines}, Technician lines: {tech_lines}")
-            # elif not sattelite_match:
-            #     print(f"Technician {tech} cannot do task '{task_name}' due to sattelite_point mismatch. Task group: {task_sattelite_point}, Technician group: {tech_sattelite_point}")
             else:
                 eligible_technicians.append(tech)
 
@@ -180,33 +172,44 @@ def assign_tasks(tasks, present_technicians, total_work_minutes):
                 f"Task {task_name} requires {num_technicians_needed} technicians, but only {len(eligible_technicians)} are eligible.")
             continue
 
+        # Find a common start time for exactly num_technicians_needed technicians
         assigned_technicians = []
-        for tech in eligible_technicians:
-            if len(assigned_technicians) >= num_technicians_needed:
+        common_start_time = None
+        for start_time in range(0, total_work_minutes - task_duration + 1, 15):  # Step by 15-minute intervals
+            available_technicians = []
+            for tech in eligible_technicians:
+                schedule = technician_schedules[tech]
+                is_available = True
+                for start, end, _ in schedule:
+                    if not (end <= start_time or start >= start_time + task_duration):
+                        is_available = False
+                        break
+                if is_available and start_time + task_duration <= total_work_minutes:
+                    available_technicians.append(tech)
+                if len(available_technicians) >= num_technicians_needed:
+                    break
+            if len(available_technicians) >= num_technicians_needed:
+                assigned_technicians = available_technicians[:num_technicians_needed]
+                common_start_time = start_time
                 break
+
+        if len(assigned_technicians) != num_technicians_needed:
+            print(
+                f"Could not assign exactly {num_technicians_needed} technicians to task {task_name} at the same time. Assigned {len(assigned_technicians)}.")
+            continue
+
+        # Assign the task to all technicians at the same start time
+        for tech in assigned_technicians:
             schedule = technician_schedules[tech]
-            start_time = 0
-            for start, end, _ in schedule:
-                if start_time < end:
-                    start_time = end
-            if start_time + task_duration > total_work_minutes:
-                continue
-            assigned_technicians.append(tech)
-            schedule.append((start_time, start_time + task_duration, task_name))
+            schedule.append((common_start_time, common_start_time + task_duration, task_name))
             assignments.append({
                 'technician': tech,
                 'task_name': task_name,
-                'start': start_time,
+                'start': common_start_time,
                 'duration': task_duration
             })
 
-        if len(assigned_technicians) < num_technicians_needed:
-            print(
-                f"Could not assign enough technicians to task {task_name}. Needed {num_technicians_needed}, assigned {len(assigned_technicians)}.")
-            for tech in assigned_technicians:
-                schedule = technician_schedules[tech]
-                schedule.pop()
-                assignments[:] = [a for a in assignments if a['technician'] != tech or a['task_name'] != task_name]
+        print(f"Assigned task {task_name} to {assigned_technicians} at start time {common_start_time}")
 
     return assignments
 
