@@ -5,6 +5,7 @@ from jinja2 import Environment, FileSystemLoader
 from extract_data import extract_data, get_current_day
 from math import ceil
 import re
+from itertools import combinations
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'Uploads'
@@ -108,25 +109,30 @@ def assign_tasks(tasks, present_technicians, total_work_minutes):
         if task_type.startswith('PM'):
             filtered_tasks.append(task)
         else:
-            print(f"Skipping task {task.get('name', 'Unknown')}: task_type '{task_type}' is not 'PM'.")  # Fixed typo
+            print(f"Skipping task {task.get('name', 'Unknown')}: task_type '{task_type}' is not 'PM'.")
     tasks = filtered_tasks
     print("Task types after filtering:", [task['task_type'] for task in tasks])
     priority_order = {'A': 1, 'B': 2, 'C': 3}
     tasks = sorted(tasks, key=lambda x: priority_order.get(x['priority'].upper(), 4))
+
     technician_schedules = {tech: [] for tech in present_technicians}
     assignments = []
+
     for task in tasks:
         task_name = task.get('name', 'Unknown')
         print(f"Processing task: {task_name}")
         try:
             base_duration = int(task['planned_worktime_min'])
             num_technicians_needed = int(task['mitarbeiter_pro_aufgabe'])
+            # Convert quantity to integer, default to 1 if invalid
+            quantity = int(float(str(task['quantity']).replace(',', '.'))) if str(task['quantity']).replace(',', '.').replace('.', '', 1).isdigit() else 1
         except (ValueError, TypeError) as e:
-            print(f"Skipping task {task_name}: invalid duration or number of technicians ({str(e)})")
+            print(f"Skipping task {task_name}: invalid duration, number of technicians, or quantity ({str(e)})")
             continue
-        if base_duration <= 0 or num_technicians_needed <= 0:
-            print(f"Skipping task {task_name}: invalid duration or number of technicians needed.")
+        if base_duration <= 0 or num_technicians_needed <= 0 or quantity <= 0:
+            print(f"Skipping task {task_name}: invalid duration, number of technicians needed, or quantity.")
             continue
+
         json_task_name = TASK_NAME_MAPPING.get(task_name, task_name)
         normalized_task_name = normalize_string(json_task_name)
         print(f"Task: '{task_name}' -> JSON: '{json_task_name}' -> Normalized: '{normalized_task_name}'")
@@ -137,16 +143,15 @@ def assign_tasks(tasks, present_technicians, total_work_minutes):
             if task.get('lines'):
                 task_lines = [int(line.strip()) for line in str(task['lines']).split(',') if line.strip().isdigit()]
         except (ValueError, TypeError):
-            print(
-                f"Warning: Invalid lines format for task {task_name}: '{task['lines']}'. Assuming no line restriction.")
+            print(f"Warning: Invalid lines format for task {task_name}: '{task['lines']}'. Assuming no line restriction.")
 
+        # Determine eligible technicians
         eligible_technicians = []
         for tech in present_technicians:
             tech_tasks = TECHNICIAN_TASKS.get(tech, [])
             tech_lines = TECHNICIAN_LINES.get(tech, [])
             tech_sattelite_point = technicians_data.get(tech, {}).get('sattelite_point', 'Aquarium')
 
-            # Check if technician can perform the task (task eligibility)
             can_do_task = False
             for tech_task in tech_tasks:
                 normalized_tech_task = normalize_string(tech_task)
@@ -155,88 +160,186 @@ def assign_tasks(tasks, present_technicians, total_work_minutes):
                     can_do_task = True
                     break
 
-            # Check if technician's lines match task lines (if task has lines specified)
             lines_match = True
-            if task_lines:  # Only check if task has specific lines
+            if task_lines:
                 lines_match = any(line in tech_lines for line in task_lines)
 
             if not can_do_task:
-                print(
-                    f"Technician {tech} cannot do task '{task_name}' (JSON: '{json_task_name}', normalized: '{normalized_task_name}'). Available tasks: {tech_tasks}")
+                print(f"Technician {tech} cannot do task '{task_name}' (JSON: '{json_task_name}', normalized: '{normalized_task_name}'). Available tasks: {tech_tasks}")
             elif not lines_match:
-                print(
-                    f"Technician {tech} cannot do task '{task_name}' due to line mismatch. Task lines: {task_lines}, Technician lines: {tech_lines}")
+                print(f"Technician {tech} cannot do task '{task_name}' due to line mismatch. Task lines: {task_lines}, Technician lines: {tech_lines}")
             else:
                 eligible_technicians.append(tech)
 
         if len(eligible_technicians) == 0:
-            print(f"Task {task_name} has no eligible technicians. Marking as unassigned.")
-            unassigned_tasks.append(task['id'])
+            print(f"Task {task_name} (all {quantity} instances) has no eligible technicians. Marking as unassigned.")
+            for i in range(quantity):
+                unassigned_tasks.append(f"{task['id']}_{i+1}")
             continue
 
-        # Find a common start time for as many technicians as possible (up to num_technicians_needed)
-        assigned_technicians = []
-        common_start_time = None
-        max_possible_duration = total_work_minutes  # Allow up to total_work_minutes for scheduling
-        for start_time in range(0, total_work_minutes + 1, 15):  # Step by 15-minute intervals
-            available_technicians = []
-            for tech in eligible_technicians:
-                schedule = technician_schedules[tech]
-                is_available = True
-                for start, end, _ in schedule:
-                    if not (end <= start_time or start >= start_time + base_duration):
-                        is_available = False
+        # Calculate total required duration for all instances
+        # Assume optimal case: num_technicians_needed met (multiplier = 1)
+        total_required_duration = base_duration * quantity
+        duration_multiplier = 1  # Start with optimal multiplier
+
+        # Generate possible technician groups
+        viable_groups = []
+        for r in range(num_technicians_needed, len(eligible_technicians) + 1):
+            for group in combinations(eligible_technicians, r):
+                viable_groups.append(list(group))
+
+        # Sort groups by size (prefer smaller groups with num_technicians_needed)
+        viable_groups.sort(key=len)
+
+        selected_group = None
+        group_start_time = None
+        instances_scheduled = 0
+        current_multiplier = 1
+
+        # Try each group to schedule all instances
+        for group in viable_groups:
+            # Check if group can handle all instances
+            missing_technicians = max(0, num_technicians_needed - len(group))
+            current_multiplier = 1 + missing_technicians
+            total_duration_with_multiplier = base_duration * quantity * current_multiplier
+
+            if total_duration_with_multiplier > total_work_minutes:
+                print(f"Group {group} cannot handle {quantity} instances of task {task_name}: total duration {total_duration_with_multiplier} exceeds {total_work_minutes}.")
+                continue
+
+            # Find earliest start time where all technicians in group are available
+            for start_time in range(0, total_work_minutes + 1, 15):
+                all_available = True
+                for tech in group:
+                    schedule = technician_schedules[tech]
+                    for start, end, _ in schedule:
+                        if not (end <= start_time or start >= start_time + base_duration * current_multiplier):
+                            all_available = False
+                            break
+                    if not all_available:
                         break
-                if is_available and start_time + base_duration <= max_possible_duration:
-                    available_technicians.append(tech)
-                if len(available_technicians) >= num_technicians_needed:
+                if all_available and start_time + total_duration_with_multiplier <= total_work_minutes:
+                    selected_group = group
+                    group_start_time = start_time
                     break
-            if len(available_technicians) > 0:  # Assign if at least one technician is available
-                assigned_technicians = available_technicians[:min(len(available_technicians), num_technicians_needed)]
-                common_start_time = start_time
+
+            if selected_group:
                 break
 
-        if len(assigned_technicians) == 0:
-            print(f"Task {task_name} could not be scheduled: no technicians available at any start time.")
-            unassigned_tasks.append(task['id'])
-            continue
+        if not selected_group:
+            print(f"No group can schedule all {quantity} instances of task {task_name}. Trying to schedule as many as possible.")
+            # Try to schedule as many instances as possible with the best group
+            for group in viable_groups:
+                missing_technicians = max(0, num_technicians_needed - len(group))
+                current_multiplier = 1 + missing_technicians
+                instances_scheduled = 0
+                temp_start_time = None
 
-        # Adjust task duration based on number of assigned technicians
-        missing_technicians = num_technicians_needed - len(assigned_technicians)
-        duration_multiplier = 1 + missing_technicians  # Double duration per missing technician
-        task_duration = base_duration * duration_multiplier
-        original_task_duration = task_duration  # Store for tooltip
+                for start_time in range(0, total_work_minutes + 1, 15):
+                    all_available = True
+                    for tech in group:
+                        schedule = technician_schedules[tech]
+                        for start, end, _ in schedule:
+                            if not (end <= start_time or start >= start_time + base_duration * current_multiplier):
+                                all_available = False
+                                break
+                        if not all_available:
+                            break
+                    if all_available and start_time + base_duration * current_multiplier <= total_work_minutes:
+                        temp_start_time = start_time
+                        instances_scheduled += 1
+                        # Temporarily update schedules to check next instance
+                        for tech in group:
+                            schedule = technician_schedules[tech]
+                            schedule.append((start_time, start_time + base_duration * current_multiplier, f"temp_{task_name}"))
+                        if instances_scheduled >= quantity:
+                            break
+                    else:
+                        break
 
-        # Cap duration at total_work_minutes and mark as incomplete if needed
-        is_incomplete = False
-        if common_start_time + task_duration > total_work_minutes:
-            print(
-                f"Task {task_name} duration {task_duration} exceeds total work minutes {total_work_minutes}. Capping at {total_work_minutes - common_start_time}.")
-            task_duration = total_work_minutes - common_start_time
-            is_incomplete = True
-            incomplete_tasks.append(task['id'])
+                # Reset schedules
+                for tech in group:
+                    technician_schedules[tech] = [(s, e, t) for s, e, t in technician_schedules[tech] if not t.startswith("temp_")]
 
-        # Assign the task to all technicians at the same start time
-        for tech in assigned_technicians:
-            schedule = technician_schedules[tech]
-            schedule.append((common_start_time, common_start_time + task_duration, task_name))
-            assignments.append({
-                'technician': tech,
-                'task_name': task_name,
-                'start': common_start_time,
-                'duration': task_duration,
-                'is_incomplete': is_incomplete,
-                'original_duration': original_task_duration  # For tooltip
-            })
+                if instances_scheduled > 0:
+                    selected_group = group
+                    group_start_time = temp_start_time
+                    break
 
-        print(
-            f"Assigned task {task_name} to {assigned_technicians} at start time {common_start_time} with duration {task_duration} (multiplier: {duration_multiplier}x, incomplete: {is_incomplete})")
+        if selected_group:
+            # Schedule all possible instances with the selected group
+            missing_technicians = max(0, num_technicians_needed - len(selected_group))
+            current_multiplier = 1 + missing_technicians
+            current_start_time = group_start_time
+            instances_scheduled = 0
+
+            for instance in range(quantity):
+                instance_id = f"{task['id']}_{instance+1}"
+                instance_task_name = f"{task_name} (Instance {instance+1}/{quantity})"
+                print(f"  Scheduling instance {instance+1}/{quantity} of task {task_name} (ID: {instance_id})")
+
+                # Check if we can schedule this instance
+                all_available = True
+                for tech in selected_group:
+                    schedule = technician_schedules[tech]
+                    for start, end, _ in schedule:
+                        if not (end <= current_start_time or start >= current_start_time + base_duration * current_multiplier):
+                            all_available = False
+                            break
+                    if not all_available:
+                        break
+
+                if not all_available or current_start_time + base_duration * current_multiplier > total_work_minutes:
+                    print(f"  Instance {instance+1}/{quantity} of task {task_name} (ID: {instance_id}) could not be scheduled with group {selected_group}.")
+                    unassigned_tasks.append(instance_id)
+                    continue
+
+                task_duration = base_duration * current_multiplier
+                original_task_duration = task_duration
+                is_incomplete = False
+                if current_start_time + task_duration > total_work_minutes:
+                    print(f"  Instance {instance+1}/{quantity} of task {task_name} duration {task_duration} exceeds total work minutes {total_work_minutes}. Capping at {total_work_minutes - current_start_time}.")
+                    task_duration = total_work_minutes - current_start_time
+                    is_incomplete = True
+                    incomplete_tasks.append(instance_id)
+
+                # Assign the instance to all technicians in the group
+                for tech in selected_group:
+                    schedule = technician_schedules[tech]
+                    schedule.append((current_start_time, current_start_time + task_duration, instance_task_name))
+                    assignments.append({
+                        'technician': tech,
+                        'task_name': instance_task_name,
+                        'start': current_start_time,
+                        'duration': task_duration,
+                        'is_incomplete': is_incomplete,
+                        'original_duration': original_task_duration,
+                        'instance_id': instance_id
+                    })
+
+                print(f"  Assigned instance {instance+1}/{quantity} of task {task_name} (ID: {instance_id}) to {selected_group} at start time {current_start_time} with duration {task_duration} (multiplier: {current_multiplier}x, incomplete: {is_incomplete})")
+                instances_scheduled += 1
+                current_start_time += task_duration  # Schedule next instance consecutively
+
+            if instances_scheduled < quantity:
+                print(f"Task {task_name} (ID: {task['id']}) scheduled {instances_scheduled}/{quantity} instances with group {selected_group}. {quantity - instances_scheduled} instances unassigned.")
+        else:
+            print(f"No group can schedule any instances of task {task_name}. All {quantity} instances unassigned.")
+            for i in range(quantity):
+                unassigned_tasks.append(f"{task['id']}_{i+1}")
 
     return assignments, unassigned_tasks, incomplete_tasks
 
 def generate_html_files(data, present_technicians):
     tasks = []
-    for idx, row in enumerate(data, start=1):  # Start index at 1
+    for idx, row in enumerate(data, start=1):
+        # Ensure quantity is a string representation of the number
+        quantity = str(row["quantity"]).strip()
+        try:
+            # Validate quantity as a number, default to 1 if invalid
+            quantity = str(int(float(quantity.replace(',', '.')))) if quantity.replace(',', '.').replace('.', '', 1).isdigit() else "1"
+        except (ValueError, TypeError):
+            quantity = "1"
         task = {
             "id": idx,
             "name": row["scheduler_group_task"],
@@ -245,9 +348,9 @@ def generate_html_files(data, present_technicians):
             "planned_worktime_min": row["planned_worktime_min"],
             "start": "2025-04-21",
             "end": "2025-04-22",
-            "progress": 100 if row["quantity"] == "done" else 0,
+            "progress": 100 if quantity.lower() == "done" else 0,
             "priority": row["priority"],
-            "quantity": row["quantity"],
+            "quantity": quantity,  # Ensure quantity is a string
             "task_type": row["task_type"]
         }
         tasks.append(task)

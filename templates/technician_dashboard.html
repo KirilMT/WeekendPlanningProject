@@ -68,12 +68,34 @@
             <th>Time [min]</th>
             <th>Prio</th>
             <th>Qty</th>
+            <th>Status</th>
         </tr>
         {% for task in tasks %}
         <tr>
             <td>{{ task.id }}</td>
-            <td {% if task.id in unassigned_tasks %} style="background-color: red;" title="No eligible technicians available or no available time slots." {% endif %}>
+            <td>
                 {{ task.name }}
+                {% set unassigned_instances = [] %}
+                {% set incomplete_instances = [] %}
+                {% for i in range(task.quantity | int) %}
+                    {% set instance_id = task.id ~ '_' ~ (i + 1) %}
+                    {% if instance_id in unassigned_tasks %}
+                        {% set _ = unassigned_instances.append(i + 1) %}
+                    {% endif %}
+                    {% if instance_id in incomplete_tasks %}
+                        {% set _ = incomplete_instances.append(i + 1) %}
+                    {% endif %}
+                {% endfor %}
+                {% if unassigned_instances %}
+                    <br><span style="color: red;" title="Instances {{ unassigned_instances | join(', ') }} could not be scheduled due to no eligible technicians or time slots.">
+                        Unassigned: {{ unassigned_instances | join(', ') }}
+                    </span>
+                {% endif %}
+                {% if incomplete_instances %}
+                    <br><span style="color: orange;" title="Instances {{ incomplete_instances | join(', ') }} were capped due to insufficient time.">
+                        Incomplete: {{ incomplete_instances | join(', ') }}
+                    </span>
+                {% endif %}
             </td>
             <td>{{ task.task_type }}</td>
             <td>{{ task.lines }}</td>
@@ -83,6 +105,14 @@
                 {{ task.priority }}
             </td>
             <td>{{ task.quantity }}</td>
+            <td>
+                {% if unassigned_instances or incomplete_instances %}
+                    {% set scheduled = (task.quantity | int) - (unassigned_instances | length) %}
+                    {{ scheduled }}/{{ task.quantity }} scheduled
+                {% else %}
+                    All {{ task.quantity }} scheduled
+                {% endif %}
+            </td>
         </tr>
         {% endfor %}
     </table>
