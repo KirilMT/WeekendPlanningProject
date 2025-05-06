@@ -17,57 +17,50 @@ try:
     print(f"Current working directory: {os.getcwd()}")
     with open('technician_mappings.json', 'r', encoding='utf-8') as f:
         mappings = json.load(f)
-    TECHNICIAN_TASKS = mappings['technician_tasks']
-    TECHNICIAN_LINES = mappings['technician_lines']  # Loaded but unused
-    TECHNICIANS = list(TECHNICIAN_TASKS.keys())
+
+    # Validate JSON structure
+    if 'technicians' not in mappings:
+        raise ValueError("Error: 'technicians' key missing in technician_mappings.json")
+
+    technicians_data = mappings['technicians']
+    TECHNICIAN_TASKS = {}
+    TECHNICIAN_LINES = {}
+    TECHNICIANS = list(technicians_data.keys())
+
+    # Validate each technician's data
+    valid_groups = {"Fuchsbau", "Closures", "Aquarium"}
+    for tech, data in technicians_data.items():
+        if not isinstance(data, dict):
+            raise ValueError(f"Error: Invalid data for technician '{tech}' in technician_mappings.json")
+        if 'sattelite_point' not in data:
+            raise ValueError(f"Error: Missing 'sattelite_point' for technician '{tech}' in technician_mappings.json")
+        if data['sattelite_point'] not in valid_groups:
+            raise ValueError(
+                f"Error: Invalid 'sattelite_point' '{data['sattelite_point']}' for technician '{tech}'. Must be one of {valid_groups}")
+        if 'technician_lines' not in data:
+            raise ValueError(f"Error: Missing 'technician_lines' for technician '{tech}' in technician_mappings.json")
+        if 'technician_tasks' not in data:
+            raise ValueError(f"Error: Missing 'technician_tasks' for technician '{tech}' in technician_mappings.json")
+        # Populate TECHNICIAN_TASKS and TECHNICIAN_LINES
+        TECHNICIAN_TASKS[tech] = data['technician_tasks']
+        TECHNICIAN_LINES[tech] = data['technician_lines']
+
+    # Define technician groupings based on JSON sattelite_point
+    TECHNICIAN_GROUPS = {
+        "Fuchsbau": [],
+        "Closures": [],
+        "Aquarium": []
+    }
+    for tech, data in technicians_data.items():
+        group = data['sattelite_point']
+        TECHNICIAN_GROUPS[group].append(tech)
+
 except FileNotFoundError:
     print("Error: 'technician_mappings.json' not found in the project directory.")
-    print("Creating a default empty mapping to continue...")
-    TECHNICIAN_TASKS = {}
-    TECHNICIAN_LINES = {}
-    TECHNICIANS = []
+    raise ValueError("Error: 'technician_mappings.json' not found. Please ensure the file exists.")
 except Exception as e:
     print(f"Error loading 'technician_mappings.json': {str(e)}")
-    TECHNICIAN_TASKS = {}
-    TECHNICIAN_LINES = {}
-    TECHNICIANS = []
-
-# Define technician groupings
-TECHNICIAN_GROUPS = {
-    "Fuchsbau": [
-        "Yeison Berbeci",
-        "Dianka Blick",
-        "Keegan Goeda",
-        "Gaurav Rawal",
-        "Mohamed Ali Loummir",
-        "Khanh Nguyen",
-        "Sophia Annabell Wagner",
-        "Robert Rakowski",
-        "Moritz Kipper",
-        "József Szőke (PLC)"
-    ],
-    "Closures": [
-        "Lukasz Brach",
-        "Rafal Crispim",
-        "Phannic Phiri (PLC)"
-    ],
-    "Aquarium": [
-        "Bilgehan Berk Unsal",
-        "Ben Kacem Hicham",
-        "Marvin Bienek",
-        "Codrean Dumitru",
-        "Tom Grage",
-        "Thiago Nery (PLC)",
-        "Kiril Martinez Tamayo (PLC)"
-    ]
-}
-
-# Add remaining technicians to the "Aquarium" group
-aquarium_technicians = TECHNICIAN_GROUPS["Aquarium"]
-for tech in TECHNICIANS:
-    if not any(tech in group for group in [TECHNICIAN_GROUPS["Fuchsbau"], TECHNICIAN_GROUPS["Closures"]]):
-        if tech not in aquarium_technicians:
-            aquarium_technicians.append(tech)
+    raise ValueError(f"Error loading 'technician_mappings.json': {str(e)}")
 
 # Task name mapping: Excel task names (English/simplified) to JSON task names (German)
 TASK_NAME_MAPPING = {
@@ -104,6 +97,7 @@ def normalize_string(s):
     s = s.replace('der druckanlage', '').replace('alle', 'all').replace('jahre', 'years')
     return s
 
+
 def assign_tasks(tasks, present_technicians, total_work_minutes):
     print("Task types before filtering:", [task['task_type'] for task in tasks])
     filtered_tasks = []
@@ -134,9 +128,23 @@ def assign_tasks(tasks, present_technicians, total_work_minutes):
         json_task_name = TASK_NAME_MAPPING.get(task_name, task_name)
         normalized_task_name = normalize_string(json_task_name)
         print(f"Task: '{task_name}' -> JSON: '{json_task_name}' -> Normalized: '{normalized_task_name}'")
+
+        # Parse task lines (e.g., "1,2" -> [1, 2])
+        task_lines = []
+        try:
+            if task.get('lines'):
+                task_lines = [int(line.strip()) for line in str(task['lines']).split(',') if line.strip().isdigit()]
+        except (ValueError, TypeError):
+            print(
+                f"Warning: Invalid lines format for task {task_name}: '{task['lines']}'. Assuming no line restriction.")
+
         eligible_technicians = []
         for tech in present_technicians:
             tech_tasks = TECHNICIAN_TASKS.get(tech, [])
+            tech_lines = TECHNICIAN_LINES.get(tech, [])
+            tech_sattelite_point = technicians_data.get(tech, {}).get('sattelite_point', 'Aquarium')
+
+            # Check if technician can perform the task (task eligibility)
             can_do_task = False
             for tech_task in tech_tasks:
                 normalized_tech_task = normalize_string(tech_task)
@@ -144,13 +152,34 @@ def assign_tasks(tasks, present_technicians, total_work_minutes):
                 if normalized_task_name in normalized_tech_task or normalized_tech_task in normalized_task_name:
                     can_do_task = True
                     break
+
+            # Check if technician's lines match task lines (if task has lines specified)
+            lines_match = True
+            if task_lines:  # Only check if task has specific lines
+                lines_match = any(line in tech_lines for line in task_lines)
+
+            # Optionally: Check sattelite_point (uncomment if tasks have group restrictions)
+            # task_sattelite_point = task.get('sattelite_point', None)  # Assume tasks may have a group
+            # sattelite_match = True
+            # if task_sattelite_point:
+            #     sattelite_match = tech_sattelite_point == task_sattelite_point
+
             if not can_do_task:
-                print(f"Technician {tech} cannot do task '{task_name}' (JSON: '{json_task_name}', normalized: '{normalized_task_name}'). Available tasks: {tech_tasks}")
-            if can_do_task:
+                print(
+                    f"Technician {tech} cannot do task '{task_name}' (JSON: '{json_task_name}', normalized: '{normalized_task_name}'). Available tasks: {tech_tasks}")
+            elif not lines_match:
+                print(
+                    f"Technician {tech} cannot do task '{task_name}' due to line mismatch. Task lines: {task_lines}, Technician lines: {tech_lines}")
+            # elif not sattelite_match:
+            #     print(f"Technician {tech} cannot do task '{task_name}' due to sattelite_point mismatch. Task group: {task_sattelite_point}, Technician group: {tech_sattelite_point}")
+            else:
                 eligible_technicians.append(tech)
+
         if len(eligible_technicians) < num_technicians_needed:
-            print(f"Task {task_name} requires {num_technicians_needed} technicians, but only {len(eligible_technicians)} are eligible.")
+            print(
+                f"Task {task_name} requires {num_technicians_needed} technicians, but only {len(eligible_technicians)} are eligible.")
             continue
+
         assigned_technicians = []
         for tech in eligible_technicians:
             if len(assigned_technicians) >= num_technicians_needed:
@@ -170,12 +199,15 @@ def assign_tasks(tasks, present_technicians, total_work_minutes):
                 'start': start_time,
                 'duration': task_duration
             })
+
         if len(assigned_technicians) < num_technicians_needed:
-            print(f"Could not assign enough technicians to task {task_name}. Needed {num_technicians_needed}, assigned {len(assigned_technicians)}.")
+            print(
+                f"Could not assign enough technicians to task {task_name}. Needed {num_technicians_needed}, assigned {len(assigned_technicians)}.")
             for tech in assigned_technicians:
                 schedule = technician_schedules[tech]
                 schedule.pop()
                 assignments[:] = [a for a in assignments if a['technician'] != tech or a['task_name'] != task_name]
+
     return assignments
 
 def generate_html_files(data, present_technicians):

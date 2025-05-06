@@ -1,152 +1,210 @@
 {
-  "technician_tasks": {
-    "Kiril Martinez Tamayo (PLC)": [
-      "BIW_PM_Tünkers Piercing Unit_Wöchentlich_RSP",
-      "BiW_PM_Laser Absauger_6 Monatlich Inspektion",
-      "BIW_PM_KUKA_Roboter Quantec_10 Jahre GWA"
-    ],
-    "Marvin Bienek": [
-      "BIW_PM_KUKA_Roboter Quantec_Ölwechsel",
-      "BIW_PM_KUKA_Roboter KRC5_10 Jahre",
-      "BiW_PM_Kappenfräser_3 monatlich_Alle",
-      "BiW_PM_Leitungspaket"
-    ],
-    "Ben Kacem Hicham": [
-      "BIW_PM_KUKA_Roboter KRC5_Quarterly",
-      "BIW_PM_KUKA_Roboter KRC5_jährlich",
-      "BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines",
-      "BIW_Rebuild_RSW_Pivot Exchange",
-      "BiW_PM_Kappenfräser_3 monatlich_Alle",
-      "BiW_PM_Leitungspaket",
-      "BIW_PdM_RSW_C-Factor"
-    ],
-    "Bilgehan Berk Unsal": [
-      "BIW_PM_KUKA_Roboter Fortec_10 Jahre GWA",
-      "BIW_PM_KUKA_Roboter Fortec_Axialspiel",
-      "BiW_PM_Kappenfräser_3 monatlich_Alle",
-      "BiW_PM_Leitungspaket"
-    ],
-    "Codrean Dumitru": [
-      "BIW_PM_KUKA_Roboter Fortec_O-Ring",
-      "BIW_PM_KUKA_Roboter Fortec_Ölwechsel",
-      "BiW_PM_ADH_Mesamoll Bodysides_wöchentlich",
-      "BIW_Rebuild_RSW_Pivot Exchange",
-      "BiW_PM_Leitungspaket"
-    ],
-    "Dianka Blick": [
-      "BIW_PM_KUKA_Roboter Quantec 2_10 Jahre GWA",
-      "BIW_PM_KUKA_Roboter KRC4_5 Jahre",
-      "BiW_PM_Kappenfräser_3 monatlich_Alle",
-      "BiW_PM_Leitungspaket",
-      "BIW_PdM_RSW_C-Factor"
-    ],
-    "Yeison Berbeci": [
-      "BiW_PM_Vigel_10 Järhlich TÜV Prufung der Druckanlage",
-      "BiW_PM_Dalmec Manipulator_Viertaljährlich",
-      "BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines",
-      "BiW_PM_Kappenfräser_3 monatlich_Alle",
-      "BiW_PM_Leitungspaket",
-      "BIW_PdM_RSW_C-Factor"
-    ],
-    "Tom Grage": [
-      "BiW_PM_Lübbering",
-      "BIW_PM_KUKA_Roboter Quantec 2_Ölwechsel",
-      "BIW_Rebuild_RSW_Pivot Exchange",
-      "BiW_PM_Leitungspaket"
-    ],
-    "Thiago Nery (PLC)": [
-      "BiW_PM_Markator_3 Wöchentlich",
-      "BIW_PM_Rollerbeds_change rubber bushing"
-    ],
-    "Sophia - Annabell Wagner": [
-      "BIW_PM_DGUV preparation",
-      "BIW_PM_Esypro_yearly",
-      "BiW_PM_ADH_Mesamoll Bodysides_wöchentlich",
-      "BiW_PM_Leitungspaket"
-    ],
-    "József Szőke (PLC)": [
-      "BiW_PM_Keller Absauger Jährlich",
-      "BIW_PM_FANUC_Roboter R30iB Plus 4 Jahre"
-    ],
-    "Gaurav Rawal": [
-      "BiW_PM_Leitungspaket",
-      "BIW_PM_FANUC_Roboter ArcMate_Fett-/Ölwechsel",
-      "BiW_PM_Leitungspaket"
-    ],
-    "Mohamed Ali Loummir": [
-      "BIW_PM_FANUC_Roboter M-900iB_Fettwechsel",
-      "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel",
-      "BiW_PM_ADH_Mesamoll Bodysides_wöchentlich",
-      "BiW_PM_Leitungspaket"
-    ],
-    "Khanh Nguyen": [
-      "BIW_PM_FANUC_Roboter ArcMate_jährlich",
-      "BIW_PM_FANUC_Roboter R30iB Plus",
-      "BiW_PM_ADH_Mesamoll Bodysides_wöchentlich",
-      "BiW_PM_Leitungspaket"
-    ],
-    "Keegan Goeda": [
-      "BiW_PM_TUCKER_SPR_Wöchentlich",
-      "BIW_Rebuild_RSW_Pivot Exchange",
-      "BiW_PM_ADH_Mesamoll Bodysides_wöchentlich",
-      "BiW_PM_Kappenfräser_3 monatlich_Alle",
-      "BiW_PM_Leitungspaket"
-    ],
-    "Moritz Kipper": [
-      "BIW_PM_FANUC_Roboter M-900iB_jährlich",
-      "BIW_PM_FANUC_Roboter R-2000iC_jährlich",
-      "BiW_PM_ADH_Mesamoll Bodysides_wöchentlich",
-      "BiW_PM_Leitungspaket"
-    ],
-    "Lukasz Brach": [
-      "BIW_Rebuild_Proteus WeldSavers",
-      "BIW_PM_Tünkers punching cylinders tool change",
-      "BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines",
-      "BIW_Rebuild_RSW_Pivot Exchange",
-      "BiW_PM_Kappenfräser_3 monatlich_Alle",
-      "BiW_PM_Leitungspaket"
-    ],
-    "Robert Rakowski": [
-      "BiW_PM_ADH_Spindel Schmierung",
-      "BiW_PM_Böllhoff_zweiwöchentlich",
-      "BiW_PM_ADH_Mesamoll Bodysides_wöchentlich",
-      "BiW_PM_Leitungspaket",
-      "BIW_PdM_RSW_C-Factor"
-    ],
-    "Rafael Crispim": [
-      "BiW_PM_MDS_RPC_zweiwöchentlich",
-      "BIW_PM_Nikon_Viertaljährlich",
-      "BiW_PM_ADH_Mesamoll Bodysides_wöchentlich",
-      "BIW_Rebuild_RSW_Pivot Exchange",
-      "BiW_PM_Kappenfräser_3 monatlich_Alle",
-      "BiW_PM_Leitungspaket",
-      "BIW_PdM_RSW_C-Factor"
-    ],
-    "Phannic Phiri (PLC)": [
-      "BIW_PM_Rollerbeds_Lift check",
-      "BIW_PM_KUKA_Roboter KRC4_Quarterly"
-    ]
-  },
-  "technician_lines": {
-    "Kiril Martinez Tamayo (PLC)": [1, 2, 3],
-    "Marvin Bienek": [1, 4],
-    "Ben Kacem Hicham": [2, 3],
-    "Bilgehan Berk Unsal": [1, 2],
-    "Codrean Dumitru": [3, 4],
-    "Dianka Blick": [1, 2],
-    "Yeison Berbeci": [2, 3],
-    "Tom Grage": [1, 4],
-    "Thiago Nery (PLC)": [2, 3],
-    "Sophia - Annabell Wagner": [1, 2],
-    "József Szőke (PLC)": [3, 4],
-    "Gaurav Rawal": [1, 2],
-    "Mohamed Ali Loummir": [2, 3],
-    "Khanh Nguyen": [1, 4],
-    "Keegan Goeda": [2, 3],
-    "Moritz Kipper": [1, 2],
-    "Lukasz Brach": [3, 4],
-    "Robert Rakowski": [1, 2],
-    "Rafael Crispim": [2, 3],
-    "Phannic Phiri (PLC)": [1, 4]
+  "technicians": {
+    "Kiril Martinez Tamayo (PLC)": {
+      "sattelite_point": "Aquarium",
+      "technician_lines": [1, 2, 3],
+      "technician_tasks": [
+        "BIW_PM_Tünkers Piercing Unit_Wöchentlich_RSP",
+        "BiW_PM_Laser Absauger_6 Monatlich Inspektion",
+        "BIW_PM_KUKA_Roboter Quantec_10 Jahre GWA"
+      ]
+    },
+    "Marvin Bienek": {
+      "sattelite_point": "Aquarium",
+      "technician_lines": [1, 4],
+      "technician_tasks": [
+        "BIW_PM_KUKA_Roboter Quantec_Ölwechsel",
+        "BIW_PM_KUKA_Roboter KRC5_10 Jahre",
+        "BiW_PM_Kappenfräser_3 monatlich_Alle",
+        "BiW_PM_Leitungspaket"
+      ]
+    },
+    "Ben Kacem Hicham": {
+      "sattelite_point": "Aquarium",
+      "technician_lines": [2, 3],
+      "technician_tasks": [
+        "BIW_PM_KUKA_Roboter KRC5_Quarterly",
+        "BIW_PM_KUKA_Roboter KRC5_jährlich",
+        "BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines",
+        "BIW_Rebuild_RSW_Pivot Exchange",
+        "BiW_PM_Kappenfräser_3 monatlich_Alle",
+        "BiW_PM_Leitungspaket",
+        "BIW_PdM_RSW_C-Factor"
+      ]
+    },
+    "Bilgehan Berk Unsal": {
+      "sattelite_point": "Aquarium",
+      "technician_lines": [1, 2],
+      "technician_tasks": [
+        "BIW_PM_KUKA_Roboter Fortec_10 Jahre GWA",
+        "BIW_PM_KUKA_Roboter Fortec_Axialspiel",
+        "BiW_PM_Kappenfräser_3 monatlich_Alle",
+        "BiW_PM_Leitungspaket"
+      ]
+    },
+    "Codrean Dumitru": {
+      "sattelite_point": "Aquarium",
+      "technician_lines": [3, 4],
+      "technician_tasks": [
+        "BIW_PM_KUKA_Roboter Fortec_O-Ring",
+        "BIW_PM_KUKA_Roboter Fortec_Ölwechsel",
+        "BiW_PM_ADH_Mesamoll Bodysides_wöchentlich",
+        "BIW_Rebuild_RSW_Pivot Exchange",
+        "BiW_PM_Leitungspaket"
+      ]
+    },
+    "Dianka Blick": {
+      "sattelite_point": "Fuchsbau",
+      "technician_lines": [1, 2],
+      "technician_tasks": [
+        "BIW_PM_KUKA_Roboter Quantec 2_10 Jahre GWA",
+        "BIW_PM_KUKA_Roboter KRC4_5 Jahre",
+        "BiW_PM_Kappenfräser_3 monatlich_Alle",
+        "BiW_PM_Leitungspaket",
+        "BIW_PdM_RSW_C-Factor"
+      ]
+    },
+    "Yeison Berbeci": {
+      "sattelite_point": "Fuchsbau",
+      "technician_lines": [2, 3],
+      "technician_tasks": [
+        "BiW_PM_Vigel_10 Järhlich TÜV Prufung der Druckanlage",
+        "BiW_PM_Dalmec Manipulator_Viertaljährlich",
+        "BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines",
+        "BiW_PM_Kappenfräser_3 monatlich_Alle",
+        "BiW_PM_Leitungspaket",
+        "BIW_PdM_RSW_C-Factor"
+      ]
+    },
+    "Tom Grage": {
+      "sattelite_point": "Aquarium",
+      "technician_lines": [1, 4],
+      "technician_tasks": [
+        "BiW_PM_Lübbering",
+        "BIW_PM_KUKA_Roboter Quantec 2_Ölwechsel",
+        "BIW_Rebuild_RSW_Pivot Exchange",
+        "BiW_PM_Leitungspaket"
+      ]
+    },
+    "Thiago Nery (PLC)": {
+      "sattelite_point": "Aquarium",
+      "technician_lines": [2, 3],
+      "technician_tasks": [
+        "BiW_PM_Markator_3 Wöchentlich",
+        "BIW_PM_Rollerbeds_change rubber bushing"
+      ]
+    },
+    "Sophia - Annabell Wagner": {
+      "sattelite_point": "Fuchsbau",
+      "technician_lines": [1, 2],
+      "technician_tasks": [
+        "BIW_PM_DGUV preparation",
+        "BIW_PM_Esypro_yearly",
+        "BiW_PM_ADH_Mesamoll Bodysides_wöchentlich",
+        "BiW_PM_Leitungspaket"
+      ]
+    },
+    "József Szőke (PLC)": {
+      "sattelite_point": "Fuchsbau",
+      "technician_lines": [3, 4],
+      "technician_tasks": [
+        "BiW_PM_Keller Absauger Jährlich",
+        "BIW_PM_FANUC_Roboter R30iB Plus 4 Jahre"
+      ]
+    },
+    "Gaurav Rawal": {
+      "sattelite_point": "Fuchsbau",
+      "technician_lines": [1, 2],
+      "technician_tasks": [
+        "BiW_PM_Leitungspaket",
+        "BIW_PM_FANUC_Roboter ArcMate_Fett-/Ölwechsel",
+        "BiW_PM_Leitungspaket"
+      ]
+    },
+    "Mohamed Ali Loummir": {
+      "sattelite_point": "Fuchsbau",
+      "technician_lines": [2, 3],
+      "technician_tasks": [
+        "BIW_PM_FANUC_Roboter M-900iB_Fettwechsel",
+        "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel",
+        "BiW_PM_ADH_Mesamoll Bodysides_wöchentlich",
+        "BiW_PM_Leitungspaket"
+      ]
+    },
+    "Khanh Nguyen": {
+      "sattelite_point": "Fuchsbau",
+      "technician_lines": [1, 4],
+      "technician_tasks": [
+        "BIW_PM_FANUC_Roboter ArcMate_jährlich",
+        "BIW_PM_FANUC_Roboter R30iB Plus",
+        "BiW_PM_ADH_Mesamoll Bodysides_wöchentlich",
+        "BiW_PM_Leitungspaket"
+      ]
+    },
+    "Keegan Goeda": {
+      "sattelite_point": "Fuchsbau",
+      "technician_lines": [2, 3],
+      "technician_tasks": [
+        "BiW_PM_TUCKER_SPR_Wöchentlich",
+        "BIW_Rebuild_RSW_Pivot Exchange",
+        "BiW_PM_ADH_Mesamoll Bodysides_wöchentlich",
+        "BiW_PM_Kappenfräser_3 monatlich_Alle",
+        "BiW_PM_Leitungspaket"
+      ]
+    },
+    "Moritz Kipper": {
+      "sattelite_point": "Fuchsbau",
+      "technician_lines": [1, 2],
+      "technician_tasks": [
+        "BIW_PM_FANUC_Roboter M-900iB_jährlich",
+        "BIW_PM_FANUC_Roboter R-2000iC_jährlich",
+        "BiW_PM_ADH_Mesamoll Bodysides_wöchentlich",
+        "BiW_PM_Leitungspaket"
+      ]
+    },
+    "Lukasz Brach": {
+      "sattelite_point": "Closures",
+      "technician_lines": [3, 4],
+      "technician_tasks": [
+        "BIW_Rebuild_Proteus WeldSavers",
+        "BIW_PM_Tünkers punching cylinders tool change",
+        "BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines",
+        "BIW_Rebuild_RSW_Pivot Exchange",
+        "BiW_PM_Kappenfräser_3 monatlich_Alle",
+        "BiW_PM_Leitungspaket"
+      ]
+    },
+    "Robert Rakowski": {
+      "sattelite_point": "Fuchsbau",
+      "technician_lines": [1, 2],
+      "technician_tasks": [
+        "BiW_PM_ADH_Spindel Schmierung",
+        "BiW_PM_Böllhoff_zweiwöchentlich",
+        "BiW_PM_ADH_Mesamoll Bodysides_wöchentlich",
+        "BiW_PM_Leitungspaket",
+        "BIW_PdM_RSW_C-Factor"
+      ]
+    },
+    "Rafael Crispim": {
+      "sattelite_point": "Closures",
+      "technician_lines": [2, 3],
+      "technician_tasks": [
+        "BiW_PM_MDS_RPC_zweiwöchentlich",
+        "BIW_PM_Nikon_Viertaljährlich",
+        "BiW_PM_ADH_Mesamoll Bodysides_wöchentlich",
+        "BIW_Rebuild_RSW_Pivot Exchange",
+        "BiW_PM_Kappenfräser_3 monatlich_Alle",
+        "BiW_PM_Leitungspaket",
+        "BIW_PdM_RSW_C-Factor"
+      ]
+    },
+    "Phannic Phiri (PLC)": {
+      "sattelite_point": "Closures",
+      "technician_lines": [1, 4],
+      "technician_tasks": [
+        "BIW_PM_Rollerbeds_Lift check",
+        "BIW_PM_KUKA_Roboter KRC4_Quarterly"
+      ]
+    }
   }
 }
