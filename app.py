@@ -212,18 +212,18 @@ def assign_tasks(tasks, present_technicians, total_work_minutes):
 
 def generate_html_files(data, present_technicians):
     tasks = []
-    for row in data:
+    for idx, row in enumerate(data, start=1):  # Start index at 1
         task = {
-            "id": row["scheduler_group_task"],
+            "id": idx,  # Use ascending index number
             "name": row["scheduler_group_task"],
             "lines": row["lines"],
             "mitarbeiter_pro_aufgabe": row["mitarbeiter_pro_aufgabe"],
             "planned_worktime_min": row["planned_worktime_min"],
             "start": "2025-04-21",
             "end": "2025-04-22",
-            "progress": 100 if row["status"] == "done" else 0,
+            "progress": 100 if row["quantity"] == "done" else 0,  # Updated to use "quantity"
             "priority": row["priority"],
-            "status": row["status"],
+            "quantity": row["quantity"],  # Renamed from "status" to "quantity"
             "task_type": row["task_type"]
         }
         tasks.append(task)

@@ -101,6 +101,10 @@ def find_and_filter_data(df, current_day, current_shift):
 def extract_data(file_path):
     try:
         sheet_name = get_current_week()  # e.g., "Summary KW17"
+        current_day = get_current_day()  # e.g., "Monday"
+        current_shift = get_current_shift()  # e.g., "early"
+        current_week = get_current_week_number()  # Define current_week
+
         _, file_extension = os.path.splitext(file_path)
 
         if file_extension.lower() == '.xlsb':
@@ -114,9 +118,6 @@ def extract_data(file_path):
         print("Raw row 2 (headers):", df.iloc[1].fillna("").to_list())
         if isinstance(df.columns, pd.MultiIndex):
             print("MultiIndex columns detected:", df.columns.tolist())
-
-        current_day = get_current_day()  # e.g., "Monday"
-        current_shift = get_current_shift()  # e.g., "early"
 
         filtered_df, target_col = find_and_filter_data(df, current_day, current_shift)
 
@@ -179,7 +180,7 @@ def extract_data(file_path):
         mitarbeiter_data = filtered_df.iloc[:, column_indices["mitarbeiter_col"]].astype(str).tolist()
         worktime_data = filtered_df.iloc[:, column_indices["worktime_col"]].astype(str).tolist()
         priority_data = filtered_df.iloc[:, column_indices["priority_col"]].astype(str).tolist() if column_indices["priority_col"] != 'priority' else filtered_df['priority'].astype(str).tolist()
-        status_data = filtered_df.iloc[:, target_col].astype(str).tolist()
+        quantity_data = filtered_df.iloc[:, target_col].astype(str).tolist()  # Corrected from previous response
         task_type_data = filtered_df.iloc[:, column_indices["task_type_col"]].astype(str).tolist() if column_indices["task_type_col"] != 'task_type' else filtered_df['task_type'].astype(str).tolist()
 
         extracted_data = []
@@ -191,7 +192,7 @@ def extract_data(file_path):
                 "mitarbeiter_pro_aufgabe": mitarbeiter_data[i],
                 "planned_worktime_min": worktime_data[i],
                 "priority": priority_data[i],
-                "status": status_data[i],
+                "quantity": quantity_data[i],
                 "task_type": task_type_data[i]
             })
 
