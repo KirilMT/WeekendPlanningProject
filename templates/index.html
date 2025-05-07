@@ -176,6 +176,9 @@
         }
         #repModal .modal-content {
             max-width: 900px;
+            width: 900px;
+            min-height: 500px;
+            resize: none;
         }
         #repSearch {
             width: 100%;
@@ -192,6 +195,7 @@
             border: 1px solid #ccc;
             padding: 10px;
             border-radius: 5px;
+            min-height: 300px;
         }
         .technician-checkboxes label {
             display: block;
@@ -256,6 +260,7 @@
         let repTasks = [];
         let currentRepTaskIndex = 0;
         let repAssignments = [];
+        let presentTechnicians = [];
 
         // Fetch the grouped technicians from the server
         console.log('Fetching technician groups...');
@@ -343,6 +348,8 @@
                     <p><strong>Progress:</strong> ${currentRepTaskIndex + 1} of ${repTasks.length}</p>
                 `;
                 populateRepTechnicians(task);
+                // Clear the search field
+                document.getElementById('repSearch').value = '';
                 document.getElementById('repModal').style.display = 'flex';
             } else {
                 console.log('All Rep tasks processed, submitting final assignments...');
@@ -387,8 +394,11 @@
             console.log('Populating Rep technicians...');
             const techniciansContainer = document.getElementById('repTechnicians');
             techniciansContainer.innerHTML = '';
-            const allTechnicians = Object.values(technicianGroups).flat();
-            allTechnicians.forEach(tech => {
+
+            // Sort presentTechnicians alphabetically
+            const sortedTechnicians = presentTechnicians.sort((a, b) => a.localeCompare(b));
+
+            sortedTechnicians.forEach(tech => {
                 const label = document.createElement('label');
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
@@ -468,6 +478,11 @@
             const absentButtons = document.querySelectorAll('.technician-button.absent');
             const absentTechnicians = Array.from(absentButtons).map(btn => btn.dataset.technician);
             console.log('Absent technicians selected:', absentTechnicians);
+
+            // Calculate present technicians
+            presentTechnicians = Object.values(technicianGroups).flat()
+                .filter(tech => !absentTechnicians.includes(tech));
+            console.log('Present technicians:', presentTechnicians);
 
             uploadedFileData.append('absentTechnicians', JSON.stringify(absentTechnicians));
 
