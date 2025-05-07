@@ -52,6 +52,13 @@
             position: relative;
             font-size: 12px;
         }
+        a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -68,6 +75,7 @@
             <th>Time [min]</th>
             <th>Prio</th>
             <th>Qty</th>
+            <th>Ticket/MO</th>
             <th>Status</th>
         </tr>
         {% for task in tasks %}
@@ -106,6 +114,17 @@
             </td>
             <td>{{ task.quantity }}</td>
             <td>
+                {% if task.task_type.upper() == 'REP' and task.ticket_mo %}
+                    {% if task.ticket_url %}
+                        <a href="{{ task.ticket_url }}" target="_blank">{{ task.ticket_mo }}</a>
+                    {% else %}
+                        {{ task.ticket_mo }}
+                    {% endif %}
+                {% else %}
+                    N/A
+                {% endif %}
+            </td>
+            <td>
                 {% if unassigned_instances or incomplete_instances %}
                     {% set scheduled = (task.quantity | int) - (unassigned_instances | length) %}
                     {{ scheduled }}/{{ task.quantity }} scheduled
@@ -123,14 +142,12 @@
     <p>No technicians available to display in the Gantt chart.</p>
     {% else %}
     <table class="gantt-chart">
-        <!-- Header Row: Time Intervals -->
         <tr>
             <th class="technician-column">Technician</th>
             {% for i in range(num_intervals) %}
             <th class="time-column">{{ i * 15 }}-{{ (i + 1) * 15 }}</th>
             {% endfor %}
         </tr>
-        <!-- Technician Rows -->
         {% for technician in technicians %}
         <tr>
             <td class="technician-column">{{ technician }}</td>
@@ -149,7 +166,11 @@
                         {% set start_interval = (assignment.start / 15) | int %}
                         {% set end_interval = ((assignment.start + assignment.duration) / 15) | int %}
                         {% if start_interval <= i and i < end_interval %}
-                            {{ assignment.task_name }} ({{ assignment.start }}-{{ assignment.start + assignment.duration }})
+                            {{ assignment.task_name }}
+                            {% if assignment.ticket_mo %}
+                                <br><a href="{{ assignment.ticket_url }}" target="_blank">{{ assignment.ticket_mo }}</a>
+                            {% endif %}
+                            ({{ assignment.start }}-{{ assignment.start + assignment.duration }})
                         {% endif %}
                     {% endif %}
                 {% endfor %}

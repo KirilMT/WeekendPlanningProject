@@ -103,7 +103,7 @@ def extract_data(file_path):
         sheet_name = get_current_week()  # e.g., "Summary KW17"
         current_day = get_current_day()  # e.g., "Monday"
         current_shift = get_current_shift()  # e.g., "early"
-        current_week = get_current_week_number()  # Define current_week
+        current_week = get_current_week_number()
 
         _, file_extension = os.path.splitext(file_path)
 
@@ -112,17 +112,15 @@ def extract_data(file_path):
         else:
             df = pd.read_excel(file_path, sheet_name=sheet_name, engine='openpyxl', header=None)
 
-        print("First 10 rows of DataFrame:")  # Extended to check for header row
+        print("First 10 rows of DataFrame:")
         print(df.head(10))
         print("DataFrame columns:", df.columns.tolist())
         print("Raw row 2 (headers):", df.iloc[1].fillna("").to_list())
-        if isinstance(df.columns, pd.MultiIndex):
-            print("MultiIndex columns detected:", df.columns.tolist())
 
         filtered_df, target_col = find_and_filter_data(df, current_day, current_shift)
 
         headers = fill_merged_cells(df.iloc[1])  # Row 2 (index 1)
-        print("Headers in row 2 (cleaned):", headers.to_list())  # Debug
+        print("Headers in row 2 (cleaned):", headers.to_list())
 
         required_columns = {
             "scheduler_col": "Scheduler Group /  Task",
@@ -131,7 +129,8 @@ def extract_data(file_path):
             "mitarbeiter_col": "Mitarbeiter pro Aufgabe",
             "worktime_col": "Planned Worktime in Min",
             "priority_col": "Prio",
-            "task_type_col": "&"
+            "task_type_col": "&",
+            "ticket_mo_col": "Scheduler Name / Dispatch ID / Ticket ID"
         }
 
         column_indices = {}
@@ -145,14 +144,13 @@ def extract_data(file_path):
                 else:
                     column_indices[col_name] = matching_columns.index[0]
             else:
-                # Normalize header for matching: remove newlines, normalize spaces
                 normalized_header = re.sub(r'\s+', ' ', header.lower().replace('\n', ' ').strip())
                 matching_columns = headers[
                     headers.str.lower().str.replace(r'\s+', ' ', regex=True).str.contains(
                         normalized_header, na=False, case=False
                     )
                 ]
-                if matching_columns.empty and col_name not in ["planning_notes_col", "priority_col"]:
+                if matching_columns.empty and col_name not in ["planning_notes_col", "priority_col", "ticket_mo_col"]:
                     print(f"Error: Column '{header}' not found in row 2. Available headers:")
                     print(headers.to_list())
                     raise ValueError(f"Column '{header}' not found in row 2 of the Excel file.")
@@ -164,27 +162,51 @@ def extract_data(file_path):
                     print(f"Warning: Column '{header}' not found in row 2. Setting priority to 'R'.")
                     filtered_df['priority'] = 'R'
                     column_indices[col_name] = 'priority'
+                elif matching_columns.empty and col_name == "ticket_mo_col":
+                    print(f"Warning: Column '{header}' not found in row 2. Setting ticket_mo to empty.")
+                    filtered_df['ticket_mo'] = ''
+                    column_indices[col_name] = 'ticket_mo'
                 else:
                     column_indices[col_name] = matching_columns.index[0]
 
         # Clean task_type values
         if column_indices["task_type_col"] != 'task_type':
-            filtered_df.iloc[:, column_indices["task_type_col"]] = filtered_df.iloc[:, column_indices["task_type_col"]].apply(
-                lambda x: re.match(r'^(PM|Rep)', str(x), re.IGNORECASE).group(0).upper() if re.match(r'^(PM|Rep)', str(x), re.IGNORECASE) else 'PM'
+            filtered_df.iloc[:, column_indices["task_type_col"]] = filtered_df.iloc[:,
+                                                                   column_indices["task_type_col"]].apply(
+                lambda x: re.match(r'^(PM|Rep)', str(x), re.IGNORECASE).group(0).upper() if re.match(r'^(PM|Rep)',
+                                                                                                     str(x),
+                                                                                                     re.IGNORECASE) else 'PM'
             )
-        print("Cleaned task_type values:", filtered_df.iloc[:, column_indices["task_type_col"]].tolist())  # Debug
 
+        # Extract data
         scheduler_data = filtered_df.iloc[:, column_indices["scheduler_col"]].astype(str).tolist()
-        planning_notes_data = filtered_df.iloc[:, column_indices["planning_notes_col"]].astype(str).tolist() if column_indices["planning_notes_col"] != 'planning_notes' else filtered_df['planning_notes'].astype(str).tolist()
+        planning_notes_data = filtered_df.iloc[:, column_indices["planning_notes_col"]].astype(str).tolist() if \
+        column_indices["planning_notes_col"] != 'planning_notes' else filtered_df['planning_notes'].astype(str).tolist()
         lines_data = filtered_df.iloc[:, column_indices["lines_col"]].astype(str).tolist()
         mitarbeiter_data = filtered_df.iloc[:, column_indices["mitarbeiter_col"]].astype(str).tolist()
         worktime_data = filtered_df.iloc[:, column_indices["worktime_col"]].astype(str).tolist()
-        priority_data = filtered_df.iloc[:, column_indices["priority_col"]].astype(str).tolist() if column_indices["priority_col"] != 'priority' else filtered_df['priority'].astype(str).tolist()
-        quantity_data = filtered_df.iloc[:, target_col].astype(str).tolist()  # Corrected from previous response
-        task_type_data = filtered_df.iloc[:, column_indices["task_type_col"]].astype(str).tolist() if column_indices["task_type_col"] != 'task_type' else filtered_df['task_type'].astype(str).tolist()
+        priority_data = filtered_df.iloc[:, column_indices["priority_col"]].astype(str).tolist() if column_indices[
+                                                                                                        "priority_col"] != 'priority' else \
+        filtered_df['priority'].astype(str).tolist()
+        quantity_data = filtered_df.iloc[:, target_col].astype(str).tolist()
+        task_type_data = filtered_df.iloc[:, column_indices["task_type_col"]].astype(str).tolist() if column_indices[
+                                                                                                          "task_type_col"] != 'task_type' else \
+        filtered_df['task_type'].astype(str).tolist()
+        ticket_mo_data = filtered_df.iloc[:, column_indices["ticket_mo_col"]].astype(str).tolist() if column_indices[
+                                                                                                          "ticket_mo_col"] != 'ticket_mo' else \
+        filtered_df['ticket_mo'].astype(str).tolist()
 
         extracted_data = []
         for i in range(len(scheduler_data)):
+            ticket_mo = ticket_mo_data[i].strip()
+            ticket_url = ""
+            if task_type_data[i].upper() == 'REP' and ticket_mo and ticket_mo != 'nan':
+                # Determine if it's a ticket or MO based on length
+                if len(ticket_mo) <= 6:
+                    ticket_url = f"https://flux-gfb.tesla.com/app/issues/view/{ticket_mo}"
+                else:
+                    ticket_url = f"https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?ids={ticket_mo}"
+
             extracted_data.append({
                 "scheduler_group_task": scheduler_data[i],
                 "planning_notes": planning_notes_data[i],
@@ -193,11 +215,14 @@ def extract_data(file_path):
                 "planned_worktime_min": worktime_data[i],
                 "priority": priority_data[i],
                 "quantity": quantity_data[i],
-                "task_type": task_type_data[i]
+                "task_type": task_type_data[i],
+                "ticket_mo": ticket_mo,
+                "ticket_url": ticket_url
             })
 
         if not extracted_data:
-            print(f"No tasks found after filtering. Check if the {sheet_name} sheet contains tasks with values >= 1 in the '{current_day} CW-{current_week}' column for shift '{current_shift}' starting from row 9.")
+            print(
+                f"No tasks found after filtering. Check if the {sheet_name} sheet contains tasks with values >= 1 in the '{current_day} CW-{current_week}' column for shift '{current_shift}' starting from row 9.")
 
         return extracted_data
 

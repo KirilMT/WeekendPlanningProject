@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8"> <!-- Ensure UTF-8 encoding for special characters -->
+    <meta charset="UTF-8">
     <title>Upload Excel File</title>
     <style>
         body {
@@ -39,7 +39,7 @@
             width: 100%;
             box-sizing: border-box;
         }
-        button[type="submit"], #openDashboardButton, #confirmAbsent {
+        button[type="submit"], #openDashboardButton, #confirmAbsent, #validateRep, #skipRep {
             padding: 12px 25px;
             border: none;
             border-radius: 25px;
@@ -65,13 +65,22 @@
             background-color: #2ab7c2;
             transform: scale(1.05);
         }
-        #confirmAbsent {
-            background-color: #ffeb3b; /* Yellow background */
+        #confirmAbsent, #validateRep {
+            background-color: #ffeb3b;
             color: black;
-            border-radius: 5px; /* Less rounded corners */
+            border-radius: 5px;
         }
-        #confirmAbsent:hover {
+        #confirmAbsent:hover, #validateRep:hover {
             background-color: #fdd835;
+            transform: scale(1.05);
+        }
+        #skipRep {
+            background-color: #ff6f61;
+            color: white;
+            border-radius: 5px;
+        }
+        #skipRep:hover {
+            background-color: #ff4f41;
             transform: scale(1.05);
         }
         #message {
@@ -92,7 +101,7 @@
         .modal {
             display: none;
             position: fixed;
-            z-index: 1;
+            z-index: 1000;
             left: 0;
             top: 0;
             width: 100%;
@@ -106,7 +115,7 @@
             padding: 30px;
             border-radius: 10px;
             width: 80%;
-            max-width: 800px; /* Increased width for larger groups */
+            max-width: 800px;
             max-height: 80vh;
             overflow-y: auto;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
@@ -122,13 +131,13 @@
             border-radius: 5px;
         }
         .group.fuchsbau {
-            background-color: #e6f3ff; /* Light blue for Fuchsbau */
+            background-color: #e6f3ff;
         }
         .group.closures {
-            background-color: #ffe6e6; /* Light red for Closures */
+            background-color: #ffe6e6;
         }
         .group.aquarium {
-            background-color: #e6ffe6; /* Light green for Aquarium */
+            background-color: #e6ffe6;
         }
         .group h3 {
             margin: 0 0 10px 0;
@@ -138,7 +147,7 @@
         }
         .technician-buttons {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); /* Grid for better wrapping */
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
             gap: 10px;
         }
         .technician-button {
@@ -159,11 +168,52 @@
             background-color: #f0f0f0;
         }
         .technician-button.absent {
-            background-color: #ff0000; /* Red when absent */
+            background-color: #ff0000;
             color: white;
         }
         .technician-button.absent:hover {
             background-color: #e60000;
+        }
+        #repModal .modal-content {
+            max-width: 900px;
+        }
+        #repSearch {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .technician-checkboxes {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .technician-checkboxes label {
+            display: block;
+            padding: 5px;
+            cursor: pointer;
+        }
+        .technician-checkboxes input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        #ticketInfo {
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        #ticketInfo a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        #ticketInfo a:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
@@ -178,6 +228,7 @@
         <button id="openDashboardButton" onclick="window.location.href='/output/technician_dashboard.html'">Open Technician Dashboard</button>
     </div>
 
+    <!-- Absent Technicians Modal -->
     <div id="absentModal" class="modal">
         <div class="modal-content">
             <h2>Select Technicians Not Available</h2>
@@ -187,14 +238,34 @@
         </div>
     </div>
 
+    <!-- Rep Task Technician Selection Modal -->
+    <div id="repModal" class="modal">
+        <div class="modal-content">
+            <h2>Select Technicians for Rep Task</h2>
+            <div id="ticketInfo"></div>
+            <input type="text" id="repSearch" placeholder="Search for technicians...">
+            <div class="technician-checkboxes" id="repTechnicians"></div>
+            <button id="validateRep">Validate Selection</button>
+            <button id="skipRep">Skip Task</button>
+        </div>
+    </div>
+
     <script>
         let technicianGroups = {};
         let uploadedFileData = null;
+        let repTasks = [];
+        let currentRepTaskIndex = 0;
+        let repAssignments = [];
 
         // Fetch the grouped technicians from the server
+        console.log('Fetching technician groups...');
         fetch('/technicians')
-            .then(response => response.json())
+            .then(response => {
+                console.log('Technicians response status:', response.status);
+                return response.json();
+            })
             .then(data => {
+                console.log('Technician groups received:', data);
                 technicianGroups = data;
             })
             .catch(error => {
@@ -206,12 +277,21 @@
             });
 
         function populateTechnicianGroups() {
+            console.log('Populating technician groups...');
+            if (!Object.keys(technicianGroups).length) {
+                console.error('No technician groups available.');
+                const messageDiv = document.getElementById('message');
+                messageDiv.style.display = 'block';
+                messageDiv.className = 'error';
+                messageDiv.textContent = 'No technicians available. Please check server configuration.';
+                return;
+            }
             const groupsContainer = document.getElementById('technicianGroups');
             groupsContainer.innerHTML = '';
 
             for (const [groupName, technicians] of Object.entries(technicianGroups)) {
                 const groupDiv = document.createElement('div');
-                groupDiv.className = `group ${groupName.toLowerCase()}`; // Add group-specific class
+                groupDiv.className = `group ${groupName.toLowerCase()}`;
 
                 const groupTitle = document.createElement('h3');
                 groupTitle.textContent = groupName;
@@ -223,8 +303,8 @@
                 technicians.forEach(tech => {
                     const button = document.createElement('button');
                     button.className = 'technician-button';
-                    button.textContent = tech; // Show full name
-                    button.dataset.technician = tech; // Store full name
+                    button.textContent = tech;
+                    button.dataset.technician = tech;
                     button.addEventListener('click', function() {
                         this.classList.toggle('absent');
                     });
@@ -234,24 +314,111 @@
                 groupDiv.appendChild(buttonsDiv);
                 groupsContainer.appendChild(groupDiv);
             }
+            console.log('Technician groups populated.');
         }
 
-        function showModal() {
+        function showAbsentModal() {
+            console.log('Showing absent modal...');
             populateTechnicianGroups();
-            document.getElementById('absentModal').style.display = 'flex';
+            const modal = document.getElementById('absentModal');
+            modal.style.display = 'flex';
+            console.log('Absent modal display set to flex.');
         }
 
-        function hideModal() {
+        function hideAbsentModal() {
+            console.log('Hiding absent modal...');
             document.getElementById('absentModal').style.display = 'none';
+        }
+
+        function showRepModal() {
+            console.log('Showing Rep modal for task index:', currentRepTaskIndex);
+            if (currentRepTaskIndex < repTasks.length) {
+                const task = repTasks[currentRepTaskIndex];
+                document.getElementById('ticketInfo').innerHTML = `
+                    <p><strong>Task:</strong> ${task.scheduler_group_task}</p>
+                    <p><strong>Ticket/MO:</strong> ${task.ticket_mo || 'N/A'}</p>
+                    ${task.ticket_url ? `<p><strong>Link:</strong> <a href="${task.ticket_url}" target="_blank">${task.ticket_url}</a></p>` : ''}
+                    <p><strong>Technicians Needed:</strong> ${task.mitarbeiter_pro_aufgabe}</p>
+                    <p><strong>Duration:</strong> ${task.planned_worktime_min} minutes</p>
+                    <p><strong>Progress:</strong> ${currentRepTaskIndex + 1} of ${repTasks.length}</p>
+                `;
+                populateRepTechnicians(task);
+                document.getElementById('repModal').style.display = 'flex';
+            } else {
+                console.log('All Rep tasks processed, submitting final assignments...');
+                uploadedFileData.append('repAssignments', JSON.stringify(repAssignments));
+                fetch('/upload', {
+                    method: 'POST',
+                    body: uploadedFileData
+                })
+                .then(response => {
+                    console.log('Final upload response status:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Final upload response data:', data);
+                    const messageDiv = document.getElementById('message');
+                    messageDiv.style.display = 'block';
+                    if (data.message.includes('Error')) {
+                        messageDiv.className = 'error';
+                        messageDiv.textContent = data.message;
+                    } else {
+                        messageDiv.className = 'success';
+                        messageDiv.textContent = data.message;
+                        document.getElementById('openDashboardButton').style.display = 'inline-block';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error in final upload:', error);
+                    const messageDiv = document.getElementById('message');
+                    messageDiv.style.display = 'block';
+                    messageDiv.className = 'error';
+                    messageDiv.textContent = 'An error occurred: ' + error.message;
+                });
+            }
+        }
+
+        function hideRepModal() {
+            console.log('Hiding Rep modal...');
+            document.getElementById('repModal').style.display = 'none';
+        }
+
+        function populateRepTechnicians(task) {
+            console.log('Populating Rep technicians...');
+            const techniciansContainer = document.getElementById('repTechnicians');
+            techniciansContainer.innerHTML = '';
+            const allTechnicians = Object.values(technicianGroups).flat();
+            allTechnicians.forEach(tech => {
+                const label = document.createElement('label');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = tech;
+                checkbox.dataset.technician = tech;
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(tech));
+                techniciansContainer.appendChild(label);
+            });
+        }
+
+        function filterTechnicians() {
+            console.log('Filtering technicians...');
+            const searchValue = document.getElementById('repSearch').value.toLowerCase();
+            const checkboxes = document.querySelectorAll('#repTechnicians label');
+            checkboxes.forEach(label => {
+                const techName = label.textContent.toLowerCase();
+                label.style.display = techName.includes(searchValue) ? 'block' : 'none';
+            });
         }
 
         document.getElementById('uploadForm').addEventListener('submit', function(event) {
             event.preventDefault();
+            console.log('Upload form submitted.');
 
             const fileInput = document.getElementById('excelFile');
             const messageDiv = document.getElementById('message');
 
             if (!fileInput.files.length) {
+                console.log('No file selected.');
                 messageDiv.style.display = 'block';
                 messageDiv.className = 'error';
                 messageDiv.textContent = 'Please select a file to upload.';
@@ -260,24 +427,36 @@
 
             uploadedFileData = new FormData();
             uploadedFileData.append('excelFile', fileInput.files[0]);
+            console.log('FormData contents:', Array.from(uploadedFileData.entries()));
 
+            console.log('Sending upload request...');
             fetch('/upload', {
                 method: 'POST',
                 body: uploadedFileData
             })
-            .then(response => response.json())
+            .then(response => {
+                console.log('Upload response status:', response.status);
+                return response.json();
+            })
             .then(data => {
+                console.log('Upload response data:', data);
                 messageDiv.style.display = 'block';
                 if (data.message.includes('Error')) {
+                    console.log('Upload error:', data.message);
                     messageDiv.className = 'error';
                     messageDiv.textContent = data.message;
                 } else {
+                    console.log('Upload successful, showing absent modal.');
                     messageDiv.className = 'success';
                     messageDiv.textContent = 'File uploaded successfully. Please select absent technicians.';
-                    showModal();
+                    repTasks = data.repTasks || [];
+                    currentRepTaskIndex = 0;
+                    repAssignments = [];
+                    showAbsentModal();
                 }
             })
             .catch(error => {
+                console.error('Upload error:', error);
                 messageDiv.style.display = 'block';
                 messageDiv.className = 'error';
                 messageDiv.textContent = 'An error occurred: ' + error.message;
@@ -285,36 +464,94 @@
         });
 
         document.getElementById('confirmAbsent').addEventListener('click', function() {
+            console.log('Confirm absent technicians clicked.');
             const absentButtons = document.querySelectorAll('.technician-button.absent');
             const absentTechnicians = Array.from(absentButtons).map(btn => btn.dataset.technician);
+            console.log('Absent technicians selected:', absentTechnicians);
 
             uploadedFileData.append('absentTechnicians', JSON.stringify(absentTechnicians));
 
-            fetch('/upload', {
-                method: 'POST',
-                body: uploadedFileData
-            })
-            .then(response => response.json())
-            .then(data => {
-                const messageDiv = document.getElementById('message');
-                messageDiv.style.display = 'block';
-                if (data.message.includes('Error')) {
+            if (repTasks.length > 0) {
+                console.log('Rep tasks found, showing Rep modal.');
+                hideAbsentModal();
+                showRepModal();
+            } else {
+                console.log('No Rep tasks, submitting final upload.');
+                fetch('/upload', {
+                    method: 'POST',
+                    body: uploadedFileData
+                })
+                .then(response => {
+                    console.log('Final upload response status:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Final upload response data:', data);
+                    const messageDiv = document.getElementById('message');
+                    messageDiv.style.display = 'block';
+                    if (data.message.includes('Error')) {
+                        messageDiv.className = 'error';
+                        messageDiv.textContent = data.message;
+                    } else {
+                        messageDiv.className = 'success';
+                        messageDiv.textContent = data.message;
+                        document.getElementById('openDashboardButton').style.display = 'inline-block';
+                    }
+                    hideAbsentModal();
+                })
+                .catch(error => {
+                    console.error('Final upload error:', error);
+                    const messageDiv = document.getElementById('message');
+                    messageDiv.style.display = 'block';
                     messageDiv.className = 'error';
-                    messageDiv.textContent = data.message;
-                } else {
-                    messageDiv.className = 'success';
-                    messageDiv.textContent = data.message;
-                    document.getElementById('openDashboardButton').style.display = 'inline-block';
-                }
-                hideModal();
-            })
-            .catch(error => {
-                const messageDiv = document.getElementById('message');
-                messageDiv.style.display = 'block';
-                messageDiv.className = 'error';
-                messageDiv.textContent = 'An error occurred: ' + error.message;
-                hideModal();
+                    messageDiv.textContent = 'An error occurred: ' + error.message;
+                    hideAbsentModal();
+                });
+            }
+        });
+
+        document.getElementById('repSearch').addEventListener('input', filterTechnicians);
+
+        document.getElementById('validateRep').addEventListener('click', function() {
+            console.log('Validate Rep selection clicked.');
+            const selectedCheckboxes = document.querySelectorAll('#repTechnicians input[type="checkbox"]:checked');
+            const selectedTechnicians = Array.from(selectedCheckboxes).map(cb => cb.value);
+            const task = repTasks[currentRepTaskIndex];
+            const techniciansNeeded = parseInt(task.mitarbeiter_pro_aufgabe) || 1;
+
+            console.log('Selected technicians:', selectedTechnicians, 'Technicians needed:', techniciansNeeded);
+            if (selectedTechnicians.length < techniciansNeeded) {
+                alert(`Please select at least ${techniciansNeeded} technician(s) for this task.`);
+                return;
+            }
+
+            repAssignments.push({
+                task_id: task.id,
+                technicians: selectedTechnicians,
+                ticket_mo: task.ticket_mo,
+                ticket_url: task.ticket_url
             });
+            console.log('Rep assignment added:', repAssignments[repAssignments.length - 1]);
+
+            currentRepTaskIndex++;
+            hideRepModal();
+            showRepModal();
+        });
+
+        document.getElementById('skipRep').addEventListener('click', function() {
+            console.log('Skip Rep task clicked.');
+            repAssignments.push({
+                task_id: repTasks[currentRepTaskIndex].id,
+                technicians: [],
+                ticket_mo: repTasks[currentRepTaskIndex].ticket_mo,
+                ticket_url: repTasks[currentRepTaskIndex].ticket_url,
+                skipped: true
+            });
+            console.log('Rep task skipped:', repAssignments[repAssignments.length - 1]);
+
+            currentRepTaskIndex++;
+            hideRepModal();
+            showRepModal();
         });
     </script>
 </body>
