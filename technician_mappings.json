@@ -7,7 +7,6 @@
         "BiW_PM_Floor scanner_6 monatlich",
         "BiW_PM_Bosch Spindel kalibrieren_jährlich",
         "BiW_PM_ADH Backup Steuerung_monatlich",
-        "BIW_PdM_RSW_C-Factor",
         "BiW_PM_Aufzüge Comau_3 monatlich",
         "BiW_PM_Leitungspaket_FUB/RUB Gr.1_Mo.",
         "BiW_PM_Leitungspaket_FUB2_Mo.",
@@ -42,7 +41,8 @@
         "BIW_PM_Tooling and gripper_yearly",
         "BiW_PM_APC Comau_5 wöchentlich",
         "BIW_PM_ADH_Wartung Dosierer_jährlich",
-        "BiW_PM_Rollenbahn Mainline Comau_jährlich"
+        "BiW_PM_Rollenbahn Mainline Comau_jährlich",
+        "BiW_PM_Kappenfräser_3 monatlich_Alle"
       ]
     },
     "Ben Kacem Hicham": {
@@ -71,7 +71,8 @@
         "BiW_PM_Leitungspaket_UBM/FRM/RSP Gr.3_Mo.",
         "BiW_PM_Leitungspaket_UBM/FRM/RSP Gr.4_Mo.",
         "BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_UBM Subs",
-        "BIW_PM_RSW_8 Weekly_SN Welding Points Check_Mainlines"
+        "BIW_PM_RSW_8 Weekly_SN Welding Points Check_Mainlines",
+        "BiW_PM_Kappenfräser_3 monatlich_Alle"
       ]
     },
     "Bilgehan Berk Unsal": {
@@ -102,7 +103,8 @@
         "BiW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_UBM Subs",
         "BiW_PM_APC Comau_5 wöchentlich",
         "BiW_PM_ADH_Wartung Dosierer_jährlich",
-        "BiW_PM_Rollenbahn Mainline Comau_jährlich"
+        "BiW_PM_Rollenbahn Mainline Comau_jährlich",
+        "BiW_PM_Kappenfräser_3 monatlich_Alle"
       ]
     },
     "Codrean Dumitru": {
@@ -144,7 +146,8 @@
         "BiW_PM_Laser Absauger_Wöchentlich",
         "BiW_PM_Laser_Wöchentlich",
         "BiW_PM_WEBER_wöchentlich",
-        "BiW_PM_SPR_Wöchentlich"
+        "BiW_PM_SPR_Wöchentlich",
+        "BiW_PM_Kappenfräser_3 monatlich_Alle"
       ]
     },
     "Yeison Berbeci": {
@@ -174,7 +177,8 @@
         "BiW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_UBM Subs",
         "BiW_PM_Leitungspaket ADH_FRM2 016",
         "BiW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_FUB+RUB+UBM",
-        "BiW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Battery"
+        "BiW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Battery",
+        "BiW_PM_Kappenfräser_3 monatlich_Alle"
       ]
     },
     "Tom Grage": {
@@ -350,7 +354,8 @@
         "BiW_PM_Keyence Laser_Monthly",
         "BiW_PM_Bosch Spindel kalibrieren_jährlich",
         "BiW_PM_ADH_Mesamoll FRS/DSH/FUB2/CUB/SFM_wöchentlich",
-        "BiW_PM_Aufzüge Arretierung Comau_monatlich"
+        "BiW_PM_Aufzüge Arretierung Comau_monatlich",
+        "BiW_PM_Kappenfräser_3 monatlich_Alle"
       ]
     },
     "Moritz Kipper": {
@@ -401,7 +406,8 @@
         "BiW_PM_FNL_Schmierung_monatlich",
         "BiW_PM_Bolting ZvG/Crowfoot_Monatlich",
         "BiW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Battery",
-        "BiW_PM_ADH_Spindle Schmierung manuell_wöchentlich"
+        "BiW_PM_ADH_Spindle Schmierung manuell_wöchentlich",
+        "BiW_PM_Kappenfräser_3 monatlich_Alle"
       ]
     },
     "Robert Rakowski": {
@@ -423,7 +429,8 @@
         "BiW_PM_Tooling and gripper_yearly",
         "BiW_PM_ADH_Mesamoll Closures_wöchentlich",
         "BiW_PM_ADH Backup Steuerung_monatlich",
-        "BiW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Battery"
+        "BiW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Battery",
+        "BiW_PM_Kappenfräser_3 monatlich_Alle"
       ]
     },
     "Rafael Crispim": {
@@ -447,7 +454,8 @@
         "BiW_PM_Manipulatoren",
         "BiW_PM_MDS_Zwei-Wochentlich",
         "BiW_PM_Bolting ZvG/Crowfoot_Monatlich",
-        "BiW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Battery"
+        "BiW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Battery",
+        "BiW_PM_Kappenfräser_3 monatlich_Alle"
       ]
     },
     "Phannic Phiri (PLC)": {
