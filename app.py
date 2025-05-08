@@ -418,23 +418,34 @@ def generate_html_files(data, present_technicians, rep_assignments=None):
             tasks.append(task)
         print(f"Created {len(tasks)} tasks")
 
+        # Get current day and work minutes
         current_day = get_current_day()
+        print(f"Current day: {current_day}")
         total_work_minutes = calculate_work_time(current_day)
+
+        # Check if total_work_minutes is valid
+        if not isinstance(total_work_minutes, (int, float)) or total_work_minutes <= 0:
+            total_work_minutes = 434  # Default value
+            print(f"Warning: Invalid total_work_minutes, using default: {total_work_minutes}")
+
         num_intervals = ceil(total_work_minutes / 15)
         print(f"Total work minutes: {total_work_minutes}, Num intervals: {num_intervals}")
 
-        assignments, unassigned_tasks, incomplete_tasks, available_time = assign_tasks(tasks, present_technicians,
-                                                                                       total_work_minutes,
-                                                                                       rep_assignments)
-        print(
-            f"Generated {len(assignments)} assignments, {len(unassigned_tasks)} unassigned, {len(incomplete_tasks)} incomplete")
+        # Generate assignments
+        assignments, unassigned_tasks, incomplete_tasks, available_time = assign_tasks(
+            tasks, present_technicians, total_work_minutes, rep_assignments
+        )
+        print(f"Generated {len(assignments)} assignments")
 
-        # Validate assignments before rendering
-        assignments = validate_assignments(assignments)
+        # Check assignments for valid data
+        for assignment in assignments:
+            if 'start' not in assignment or 'duration' not in assignment:
+                print(f"Warning: Invalid assignment: {assignment}")
+                assignments.remove(assignment)
 
+        # Render template
         print("Loading technician_dashboard.html template")
         technician_template = env.get_template('technician_dashboard.html')
-        print("Rendering template")
         technician_html = technician_template.render(
             tasks=tasks,
             technicians=present_technicians,
@@ -446,6 +457,7 @@ def generate_html_files(data, present_technicians, rep_assignments=None):
         )
         print("Template rendered successfully")
 
+        # Save output
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], "technician_dashboard.html")
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(technician_html)
@@ -454,7 +466,6 @@ def generate_html_files(data, present_technicians, rep_assignments=None):
         return available_time
     except Exception as e:
         print(f"Error in generate_html_files: {str(e)}")
-        print(traceback.format_exc())
         raise
 
 
