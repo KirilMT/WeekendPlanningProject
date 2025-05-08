@@ -6,58 +6,102 @@
         body {
             font-family: 'Segoe UI', Arial, sans-serif;
             margin: 20px;
+            background-color: #f5f5f5;
         }
-        h1 {
+        h1, h2 {
             text-align: center;
             color: #333;
+            font-weight: 500;
         }
-        .task-table, .gantt-chart {
+        .task-table {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 20px;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        .task-table th, .gantt-chart th {
-            background-color: lightblue;
-            font-weight: bold;
-            color: black;
-            padding: 8px;
+        .task-table th {
+            background-color: #e3f2fd;
+            font-weight: 600;
+            color: #333;
+            padding: 12px;
             text-align: left;
-            border: 1px solid #ccc;
+            border-bottom: 2px solid #ddd;
         }
         .task-table td {
-            padding: 8px;
-            border: 1px solid black;
+            padding: 12px;
+            border-bottom: 1px solid #eee;
         }
-        .prio-a { background-color: red; }
-        .prio-b { background-color: yellow; }
-        .prio-c { background-color: #D2B48C; }
-        .gantt-chart {
-            table-layout: fixed;
-        }
-        .gantt-chart .technician-column {
-            width: 200px;
-            font-weight: bold;
-            border: 1px solid #ccc;
-            padding: 8px;
-        }
-        .gantt-chart .time-column {
-            width: 40px;
-            text-align: center;
-            border: 1px solid #ccc;
-            padding: 8px;
-        }
-        .gantt-chart td {
-            height: 40px;
-            border: 1px solid #ccc;
-            position: relative;
-            font-size: 12px;
-        }
+        .prio-a { background-color: #ff4d4d; color: #fff; }
+        .prio-b { background-color: #ffd700; }
+        .prio-c { background-color: #d2b48c; }
         a {
             color: #007bff;
             text-decoration: none;
         }
         a:hover {
             text-decoration: underline;
+        }
+        .gantt-container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+        .gantt-chart {
+            position: relative;
+            overflow-x: auto;
+        }
+        .technician-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .technician-label {
+            width: 200px;
+            font-weight: 500;
+            color: #333;
+            padding: 10px;
+            flex-shrink: 0;
+        }
+        .bars-container {
+            flex-grow: 1;
+            height: 30px;
+            position: relative;
+            background: linear-gradient(to right, #f0f0f0 0%, #f0f0f0 100%);
+        }
+        .task-bar {
+            position: absolute;
+            height: 26px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 500;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            margin-top: 2px;
+            margin-bottom: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .time-axis {
+            display: flex;
+            margin-left: 200px;
+            border-bottom: 1px solid #ddd;
+        }
+        .time-tick {
+            flex: 1;
+            min-width: 40px;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+            padding: 5px 0;
         }
     </style>
 </head>
@@ -85,7 +129,7 @@
                 {{ task.name }}
                 {% set unassigned_instances = [] %}
                 {% set incomplete_instances = [] %}
-                {% for i in range(task.quantity | int) %}
+                {% for i in range(task.quantity | int | default(1)) %}
                     {% set instance_id = task.id ~ '_' ~ (i + 1) %}
                     {% if instance_id in unassigned_tasks %}
                         {% set _ = unassigned_instances.append(i + 1) %}
@@ -107,12 +151,12 @@
             </td>
             <td>{{ task.task_type }}</td>
             <td>{{ task.lines }}</td>
-            <td>{{ task.mitarbeiter_pro_aufgabe }}</td>
-            <td>{{ task.planned_worktime_min }}</td>
+            <td>{{ task.mitarbeiter_pro_aufgabe | default('1') }}</td>
+            <td>{{ task.planned_worktime_min | default('0') }}</td>
             <td class="{% if task.priority == 'A' %}prio-a{% elif task.priority == 'B' %}prio-b{% elif task.priority == 'C' %}prio-c{% endif %}">
                 {{ task.priority }}
             </td>
-            <td>{{ task.quantity }}</td>
+            <td>{{ task.quantity | default('1') }}</td>
             <td>
                 {% if task.task_type.upper() == 'REP' and task.ticket_mo %}
                     {% if task.ticket_url %}
@@ -126,10 +170,10 @@
             </td>
             <td>
                 {% if unassigned_instances or incomplete_instances %}
-                    {% set scheduled = (task.quantity | int) - (unassigned_instances | length) %}
-                    {{ scheduled }}/{{ task.quantity }} scheduled
+                    {% set scheduled = (task.quantity | int | default(1)) - (unassigned_instances | length) %}
+                    {{ scheduled }}/{{ task.quantity | default('1') }} scheduled
                 {% else %}
-                    All {{ task.quantity }} scheduled
+                    All {{ task.quantity | default('1') }} scheduled
                 {% endif %}
             </td>
         </tr>
@@ -137,61 +181,49 @@
     </table>
 
     <!-- Gantt Chart -->
-    <h2>Gantt Chart: {{ total_work_minutes }} min of work</h2>
+    <h2>Gantt Chart: {{ total_work_minutes | default(0) }} min of work</h2>
     {% if technicians | length == 0 %}
     <p>No technicians available to display in the Gantt chart.</p>
     {% else %}
-    <table class="gantt-chart">
-        <tr>
-            <th class="technician-column">Technician</th>
-            {% for i in range(num_intervals) %}
-            <th class="time-column">{{ i * 15 }}-{{ (i + 1) * 15 }}</th>
-            {% endfor %}
-        </tr>
-        {% for technician in technicians %}
-        <tr>
-            <td class="technician-column">{{ technician }}</td>
-            {% for i in range(num_intervals) %}
-            <td>
-                {% set ns = namespace(has_content=false, cell_content=[]) %}
-                {% set div_style = '' %}
-                {% set div_title = '' %}
-                {% set seen_tasks = [] %}
-                {% for assignment in assignments %}
-                    {% if assignment.technician == technician %}
-                        {% set start_interval = (assignment.start / 15) | int %}
-                        {% set end_interval = ((assignment.start + assignment.duration - 1) / 15) | int %}
-                        {% if start_interval <= i and i <= end_interval %}
-                            {% set task_key = assignment.technician ~ '|' ~ assignment.task_name ~ '|' ~ assignment.start|string ~ '|' ~ assignment.duration|string %}
-                            {% if task_key not in seen_tasks %}
-                                {% set ns.has_content = true %}
-                                {% set task_content = assignment.task_name %}
-                                {% if assignment.ticket_mo %}
-                                    {% set task_content = task_content + '<br><a href="' + assignment.ticket_url + '" target="_blank">' + assignment.ticket_mo + '</a>' %}
-                                {% endif %}
-                                {% set task_content = task_content + ' (' + assignment.start|string + '-' + (assignment.start + assignment.duration)|string + ')' %}
-                                {% set ns.cell_content = ns.cell_content + [task_content] %}
-                                {% if assignment.is_incomplete %}
-                                    {% set div_style = 'background-color: red;' %}
-                                    {% set div_title = 'Task duration exceeds available work time (required ' + assignment.original_duration|string + ' minutes, capped at ' + assignment.duration|string + ' minutes).' %}
-                                {% endif %}
-                                {% set seen_tasks = seen_tasks + [task_key] %}
-                            {% endif %}
-                        {% endif %}
-                    {% endif %}
+    <div class="gantt-container">
+        <div class="gantt-chart">
+            <!-- Time Axis -->
+            <div class="time-axis">
+                {% for i in range(num_intervals | default(0)) %}
+                <div class="time-tick">{{ i * 15 }}-{{ (i + 1) * 15 }}</div>
                 {% endfor %}
-                <!-- Debug: Tasks in interval {{ i }}: {{ ns.cell_content|length }} -->
-                {% if ns.has_content %}
-                    <div style="{{ div_style }}" title="{{ div_title }}">{{ ns.cell_content | join('<br>') | safe }}</div>
-                {% else %}
-                    <!-- Empty cell -->
-                {% endif %}
-            </td>
+            </div>
+            <!-- Technician Rows -->
+            {% for technician in technicians %}
+            <div class="technician-row">
+                <div class="technician-label">{{ technician }}</div>
+                <div class="bars-container">
+                    {% set bar_index = 0 %}
+                    {% for assignment in assignments if assignment.technician == technician %}
+                        {% set task_id = assignment.instance_id.split('_')[0] if assignment.instance_id and '_' in assignment.instance_id else '0' %}
+                        {% set start_percent = ((assignment.start | float / (total_work_minutes | float | default(1))) * 100) if assignment.start is defined and total_work_minutes else 0 %}
+                        {% set duration_percent = ((assignment.duration | float / (total_work_minutes | float | default(1))) * 100) if assignment.duration is defined and total_work_minutes else 0 %}
+                        {% set color_r = ((task_id | int | default(1)) * 97 % 200 + 55) %}
+                        {% set color_g = ((task_id | int | default(1)) * 53 % 200 + 55) %}
+                        {% set color_b = ((task_id | int | default(1)) * 37 % 200 + 55) %}
+                        <div class="task-bar"
+                             style="
+                                left: {{ start_percent | round(2) }}%;
+                                width: {{ duration_percent | round(2) }}%;
+                                background-color: #{{ '%02x%02x%02x' % (color_r, color_g, color_b) }};
+                                margin-top: {{ bar_index * 30 + 2 }}px;
+                                z-index: {{ bar_index }};
+                             "
+                             title="{{ assignment.task_name | default('Unknown') }} ({{ assignment.start | default(0) }}-{{ (assignment.start | default(0)) + (assignment.duration | default(0)) }} min{% if assignment.is_incomplete %}, capped from {{ assignment.original_duration | default(0) }} min{% endif %})">
+                            {{ task_id | default('0') }}
+                        </div>
+                        {% set bar_index = bar_index + 1 %}
+                    {% endfor %}
+                </div>
+            </div>
             {% endfor %}
-        </tr>
-        {% endfor %}
-    </table>
+        </div>
+    </div>
     {% endif %}
-
 </body>
 </html>

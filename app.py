@@ -6,6 +6,9 @@ from extract_data import extract_data, get_current_day
 from math import ceil
 import re
 from itertools import combinations
+import numpy as np
+import pandas as pd
+import traceback  # Added for detailed traceback logging
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'Uploads'
@@ -13,56 +16,41 @@ app.config['OUTPUT_FOLDER'] = 'output'
 
 env = Environment(loader=FileSystemLoader('templates'))
 
-# Store uploaded file paths temporarily (in-memory for simplicity)
+# Store uploaded file paths temporarily
 uploaded_files = {}
 
-# Load technician mappings (unchanged)
+# Load technician mappings
 try:
     print(f"Current working directory: {os.getcwd()}")
     with open('technician_mappings.json', 'r', encoding='utf-8') as f:
         mappings = json.load(f)
-
     if 'technicians' not in mappings:
         raise ValueError("Error: 'technicians' key missing in technician_mappings.json")
-
     technicians_data = mappings['technicians']
     TECHNICIAN_TASKS = {}
     TECHNICIAN_LINES = {}
     TECHNICIANS = list(technicians_data.keys())
-
     valid_groups = {"Fuchsbau", "Closures", "Aquarium"}
     for tech, data in technicians_data.items():
         if not isinstance(data, dict):
-            raise ValueError(f"Error: Invalid data for technician '{tech}' in technician_mappings.json")
-        if 'sattelite_point' not in data:
-            raise ValueError(f"Error: Missing 'sattelite_point' for technician '{tech}' in technician_mappings.json")
-        if data['sattelite_point'] not in valid_groups:
-            raise ValueError(
-                f"Error: Invalid 'sattelite_point' '{data['sattelite_point']}' for technician '{tech}'. Must be one of {valid_groups}")
-        if 'technician_lines' not in data:
-            raise ValueError(f"Error: Missing 'technician_lines' for technician '{tech}' in technician_mappings.json")
-        if 'technician_tasks' not in data:
-            raise ValueError(f"Error: Missing 'technician_tasks' for technician '{tech}' in technician_mappings.json")
+            raise ValueError(f"Error: Invalid data for technician '{tech}'")
+        if 'sattelite_point' not in data or data['sattelite_point'] not in valid_groups:
+            raise ValueError(f"Error: Invalid 'sattelite_point' for technician '{tech}'")
+        if 'technician_lines' not in data or 'technician_tasks' not in data:
+            raise ValueError(f"Error: Missing 'technician_lines' or 'technician_tasks' for technician '{tech}'")
         TECHNICIAN_TASKS[tech] = data['technician_tasks']
         TECHNICIAN_LINES[tech] = data['technician_lines']
-
-    TECHNICIAN_GROUPS = {
-        "Fuchsbau": [],
-        "Closures": [],
-        "Aquarium": []
-    }
+    TECHNICIAN_GROUPS = {"Fuchsbau": [], "Closures": [], "Aquarium": []}
     for tech, data in technicians_data.items():
-        group = data['sattelite_point']
-        TECHNICIAN_GROUPS[group].append(tech)
-
+        TECHNICIAN_GROUPS[data['sattelite_point']].append(tech)
 except FileNotFoundError:
-    print("Error: 'technician_mappings.json' not found in the project directory.")
-    raise ValueError("Error: 'technician_mappings.json' not found. Please ensure the file exists.")
+    print("Error: 'technician_mappings.json' not found")
+    raise ValueError("Error: 'technician_mappings.json' not found")
 except Exception as e:
     print(f"Error loading 'technician_mappings.json': {str(e)}")
     raise ValueError(f"Error loading 'technician_mappings.json': {str(e)}")
 
-# Task name mapping (unchanged)
+# Task name mapping
 TASK_NAME_MAPPING = {
     "BiW_PM_Tunkers Piercing Unit_Weekly_RSP": "BiW_PM_Tünkers Piercing Unit_Wöchentlich_RSP",
     "BiW_PM_Laser Absauger_6 Monthly Inspection": "BiW_PM_Laser Absauger_6 Monatlich Inspektion",
@@ -75,16 +63,15 @@ TASK_NAME_MAPPING = {
     "BIW_PdM_RSW_C-Factor": "BIW_PdM_RSW_C-Factor"
 }
 
+
 def calculate_work_time(day):
-    if day in ["Monday", "Friday", "Sunday"]:
-        return 434
-    elif day == "Saturday":
-        return 651
-    else:
-        return 434
+    return {"Monday": 434, "Friday": 434, "Sunday": 434, "Saturday": 651}.get(day, 434)
+
 
 def normalize_string(s):
-    s = str(s).lower().strip()
+    if not s or not isinstance(s, str):
+        return ""
+    s = s.lower().strip()
     s = re.sub(r'\s+', ' ', s)
     s = s.replace('Ã¼', 'u').replace('Ã¶', 'o').replace('Ã¤', 'a').replace('ÃŸ', 'ss')
     s = s.replace('ü', 'u').replace('ö', 'o').replace('ä', 'a').replace('ß', 'ss')
@@ -93,11 +80,8 @@ def normalize_string(s):
     s = s.replace('der druckanlage', '').replace('alle', 'all').replace('jahre', 'years')
     return s
 
+
 def calculate_available_time(assignments, present_technicians, total_work_minutes):
-    """
-    Calculate remaining available time for each technician after assignments.
-    Returns a dictionary with technician names as keys and remaining minutes as values.
-    """
     available_time = {tech: total_work_minutes for tech in present_technicians}
     for assignment in assignments:
         tech = assignment['technician']
@@ -105,134 +89,182 @@ def calculate_available_time(assignments, present_technicians, total_work_minute
         available_time[tech] -= duration
     return available_time
 
-def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments=None):
-    print("Task types before processing:", [task['task_type'] for task in tasks])
-    filtered_tasks = []
-    unassigned_tasks = []
-    incomplete_tasks = []
-    for task in tasks:
-        task_type = task.get('task_type', '').upper()
-        if task_type in ['PM', 'REP']:
-            filtered_tasks.append(task)
-        else:
-            print(f"Skipping task {task.get('name', 'Unknown')}: task_type '{task_type}' is not 'PM' or 'REP'.")
-    tasks = filtered_tasks
-    print("Task types after filtering:", [task['task_type'] for task in tasks])
 
-    # Sort only PM tasks by priority
+def is_valid_number(value):
+    """Check if a value can be converted to a positive integer."""
+    if value is None or value == '' or pd.isna(value):
+        return False
+    try:
+        num = float(str(value).replace(',', '.').strip())
+        return num > 0 and num.is_integer()
+    except (ValueError, TypeError):
+        return False
+
+
+def sanitize_data(data):
+    """Preprocess Excel data to ensure all required fields are valid."""
+    sanitized_data = []
+    required_fields = ['scheduler_group_task', 'task_type', 'priority']
+    numeric_fields = ['planned_worktime_min', 'mitarbeiter_pro_aufgabe', 'quantity']
+
+    for idx, row in enumerate(data):
+        sanitized_row = row.copy() if isinstance(row, dict) else {}
+        task_name = row.get('scheduler_group_task', 'Unknown')
+
+        # Ensure required fields have defaults
+        for field in required_fields:
+            if field not in sanitized_row or sanitized_row[field] is None or pd.isna(sanitized_row[field]):
+                sanitized_row[field] = 'Unknown' if field == 'scheduler_group_task' else (
+                    'C' if field == 'priority' else '')
+                print(f"Warning: Missing or invalid {field} for task {task_name} at row {idx + 1}, set to default")
+
+        # Sanitize numeric fields
+        for field in numeric_fields:
+            value = sanitized_row.get(field)
+            if not is_valid_number(value):
+                default = '1' if field in ['mitarbeiter_pro_aufgabe', 'quantity'] else '0'
+                print(f"Warning: Invalid {field}='{value}' for task {task_name} at row {idx + 1}, setting to {default}")
+                sanitized_row[field] = default
+            else:
+                sanitized_row[field] = str(int(float(str(value).replace(',', '.'))))
+
+        # Handle optional fields
+        sanitized_row['lines'] = sanitized_row.get('lines', '')
+        sanitized_row['ticket_mo'] = sanitized_row.get('ticket_mo', '')
+        sanitized_row['ticket_url'] = sanitized_row.get('ticket_url', '')
+
+        sanitized_data.append(sanitized_row)
+
+    print(f"Sanitized {len(sanitized_data)} rows from {len(data)} input rows")
+    return sanitized_data
+
+
+def validate_assignments(assignments):
+    """Validate assignments to ensure all required fields are present and valid."""
+    valid_assignments = []
+    for idx, assignment in enumerate(assignments):
+        if not isinstance(assignment, dict):
+            print(f"Warning: Invalid assignment at index {idx}: not a dictionary")
+            continue
+        required_fields = ['technician', 'task_name', 'start', 'duration', 'instance_id']
+        for field in required_fields:
+            if field not in assignment or assignment[field] is None:
+                print(f"Warning: Missing or None {field} in assignment at index {idx}: {assignment}")
+                break
+        else:
+            try:
+                start = float(assignment['start'])
+                duration = float(assignment['duration'])
+                if start < 0 or duration <= 0:
+                    print(
+                        f"Warning: Invalid start={start} or duration={duration} in assignment at index {idx}: {assignment}")
+                    continue
+                if not isinstance(assignment['instance_id'], str) or '_' not in assignment['instance_id']:
+                    print(
+                        f"Warning: Invalid instance_id='{assignment['instance_id']}' in assignment at index {idx}: {assignment}")
+                    continue
+                task_id = assignment['instance_id'].split('_')[0]
+                int(task_id)  # Ensure task_id is a valid integer
+                valid_assignments.append(assignment)
+            except (ValueError, TypeError) as e:
+                print(f"Warning: Invalid assignment at index {idx}: {str(e)} - {assignment}")
+    print(f"Validated {len(valid_assignments)} assignments from {len(assignments)}")
+    return valid_assignments
+
+
+def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments=None):
+    print(f"Processing {len(tasks)} tasks with {len(present_technicians)} technicians")
+    filtered_tasks = [task for task in tasks if task.get('task_type', '').upper() in ['PM', 'REP']]
+    print(f"Filtered to {len(filtered_tasks)} PM/REP tasks")
+
     priority_order = {'A': 1, 'B': 2, 'C': 3}
     pm_tasks = sorted(
-        [task for task in tasks if task['task_type'].upper() == 'PM'],
+        [task for task in filtered_tasks if task['task_type'].upper() == 'PM'],
         key=lambda x: priority_order.get(x['priority'].upper(), 4)
     )
-    rep_tasks = [task for task in tasks if task['task_type'].upper() == 'REP']  # Keep Excel order
+    rep_tasks = [task for task in filtered_tasks if task['task_type'].upper() == 'REP']
     rep_assignments_dict = {item['task_id']: item for item in rep_assignments} if rep_assignments else {}
 
     technician_schedules = {tech: [] for tech in present_technicians}
     assignments = []
+    unassigned_tasks = []
+    incomplete_tasks = []
 
     # Process PM tasks
     for task in pm_tasks:
         task_name = task.get('name', 'Unknown')
-        task_type = task.get('task_type', '').upper()
         task_id = task['id']
         print(f"Processing PM task: {task_name} (ID: {task_id})")
-        try:
-            base_duration = int(task['planned_worktime_min'])
-            num_technicians_needed = int(task['mitarbeiter_pro_aufgabe'])
-            quantity = int(float(str(task['quantity']).replace(',', '.'))) if str(task['quantity']).replace(',', '.').replace('.', '', 1).isdigit() else 1
-        except (ValueError, TypeError) as e:
-            print(f"Skipping task {task_name}: invalid duration, number of technicians, or quantity ({str(e)})")
-            continue
+
+        base_duration = int(task['planned_worktime_min']) if is_valid_number(task['planned_worktime_min']) else 0
+        num_technicians_needed = int(task['mitarbeiter_pro_aufgabe']) if is_valid_number(
+            task['mitarbeiter_pro_aufgabe']) else 1
+        quantity = int(task['quantity']) if is_valid_number(task['quantity']) else 1
+
         if base_duration <= 0 or num_technicians_needed <= 0 or quantity <= 0:
-            print(f"Skipping task {task_name}: invalid duration, number of technicians needed, or quantity.")
+            print(
+                f"Skipping task {task_name}: invalid or zero duration={base_duration}, technicians={num_technicians_needed}, or quantity={quantity}")
+            for i in range(quantity):
+                unassigned_tasks.append(f"{task_id}_{i + 1}")
             continue
 
         json_task_name = TASK_NAME_MAPPING.get(task_name, task_name)
         normalized_task_name = normalize_string(json_task_name)
-        print(f"Task: '{task_name}' -> JSON: '{json_task_name}' -> Normalized: '{normalized_task_name}'")
 
         task_lines = []
         try:
             if task.get('lines'):
                 task_lines = [int(line.strip()) for line in str(task['lines']).split(',') if line.strip().isdigit()]
         except (ValueError, TypeError):
-            print(f"Warning: Invalid lines format for task {task_name}: '{task['lines']}'. Assuming no line restriction.")
+            print(f"Warning: Invalid lines format for task {task_name}")
 
-        eligible_technicians = []
-        for tech in present_technicians:
-            tech_tasks = TECHNICIAN_TASKS.get(tech, [])
-            tech_lines = TECHNICIAN_LINES.get(tech, [])
-            can_do_task = False
-            for tech_task in tech_tasks:
-                normalized_tech_task = normalize_string(tech_task)
-                if normalized_task_name in normalized_tech_task or normalized_tech_task in normalized_task_name:
-                    can_do_task = True
-                    break
-            lines_match = True
-            if task_lines:
-                lines_match = any(line in tech_lines for line in task_lines)
-            if can_do_task and lines_match:
-                eligible_technicians.append(tech)
-            else:
-                print(f"Technician {tech} ineligible for task {task_name} (can_do_task: {can_do_task}, lines_match: {lines_match})")
+        eligible_technicians = [
+            tech for tech in present_technicians
+            if any(normalize_string(tech_task) in normalized_task_name or normalized_task_name in normalize_string(
+                tech_task)
+                   for tech_task in TECHNICIAN_TASKS.get(tech, []))
+               and (not task_lines or any(line in TECHNICIAN_LINES.get(tech, []) for line in task_lines))
+        ]
 
         if len(eligible_technicians) < num_technicians_needed:
-            print(f"Task {task_name} (all {quantity} instances) lacks enough eligible technicians. Needed: {num_technicians_needed}, Available: {len(eligible_technicians)}")
+            print(
+                f"Task {task_name}: insufficient eligible technicians ({len(eligible_technicians)}/{num_technicians_needed})")
             for i in range(quantity):
-                unassigned_tasks.append(f"{task['id']}_{i+1}")
+                unassigned_tasks.append(f"{task_id}_{i + 1}")
             continue
 
-        viable_groups = []
-        for r in range(num_technicians_needed, len(eligible_technicians) + 1):
-            for group in combinations(eligible_technicians, r):
-                viable_groups.append(list(group))
+        viable_groups = [list(group) for r in range(num_technicians_needed, len(eligible_technicians) + 1)
+                         for group in combinations(eligible_technicians, r)]
+        viable_groups.sort(key=lambda group: (len(group), sum(
+            sum(end - start for start, end, _ in technician_schedules[tech]) for tech in group)))
 
-        def group_busy_score(group):
-            total_busy_time = sum(
-                sum(end - start for start, end, _ in technician_schedules[tech])
-                for tech in group
-            )
-            return (len(group), total_busy_time)
-
-        viable_groups.sort(key=group_busy_score)
-
-        instances_to_schedule = [(f"{task['id']}_{i+1}", i + 1) for i in range(quantity)]
-        instances_scheduled = 0
-
-        for instance_id, instance_num in instances_to_schedule:
+        for instance_num in range(1, quantity + 1):
+            instance_id = f"{task_id}_{instance_num}"
             instance_task_name = f"{task_name} (Instance {instance_num}/{quantity})"
-            print(f"  Scheduling instance {instance_num}/{quantity} of task {task_name} (ID: {instance_id})")
-
             assigned = False
+
             for group in viable_groups:
                 missing_technicians = max(0, num_technicians_needed - len(group))
-                current_multiplier = 1 + missing_technicians
-                task_duration = base_duration * current_multiplier
-
+                task_duration = base_duration * (1 + missing_technicians)
                 start_time = 0
+
                 while start_time <= total_work_minutes - task_duration:
-                    all_available = True
-                    for tech in group:
-                        schedule = technician_schedules[tech]
-                        for start, end, _ in schedule:
-                            if not (end <= start_time or start >= start_time + task_duration):
-                                all_available = False
-                                break
-                        if not all_available:
-                            break
+                    all_available = all(
+                        all(end <= start_time or start >= start_time + task_duration
+                            for start, end, _ in technician_schedules[tech])
+                        for tech in group
+                    )
                     if all_available:
                         is_incomplete = False
                         original_task_duration = task_duration
                         if start_time + task_duration > total_work_minutes:
-                            print(f"  Instance {instance_num}/{quantity} of task {task_name} duration {task_duration} exceeds total work minutes {total_work_minutes}. Capping at {total_work_minutes - start_time}.")
                             task_duration = total_work_minutes - start_time
                             is_incomplete = True
                             incomplete_tasks.append(instance_id)
 
                         for tech in group:
-                            schedule = technician_schedules[tech]
-                            schedule.append((start_time, start_time + task_duration, instance_task_name))
+                            technician_schedules[tech].append(
+                                (start_time, start_time + task_duration, instance_task_name))
                             assignments.append({
                                 'technician': tech,
                                 'task_name': instance_task_name,
@@ -242,9 +274,7 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                                 'original_duration': original_task_duration,
                                 'instance_id': instance_id
                             })
-
-                        print(f"  Assigned instance {instance_num}/{quantity} of task {task_name} (ID: {instance_id}) to {group} at start time {start_time} with duration {task_duration} (multiplier: {current_multiplier}x, incomplete: {is_incomplete})")
-                        instances_scheduled += 1
+                        print(f"Assigned {instance_task_name} to {group} at {start_time}")
                         assigned = True
                         break
                     start_time += 15
@@ -253,257 +283,240 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                     break
 
             if not assigned:
-                print(f"  Instance {instance_num}/{quantity} of task {task_name} (ID: {instance_id}) could not be scheduled with any group. No available time slots.")
+                print(f"Could not schedule {instance_task_name}")
                 unassigned_tasks.append(instance_id)
 
-        if instances_scheduled < quantity:
-            print(f"Task {task_name} (ID: {task['id']}) scheduled {instances_scheduled}/{quantity} instances. {quantity - instances_scheduled} instances unassigned.")
-        else:
-            print(f"Task {task_name} (ID: {task['id']}) scheduled all {quantity} instances.")
-
-    # Calculate available time after PM tasks
+    # Process REP tasks
     available_time = calculate_available_time(assignments, present_technicians, total_work_minutes)
-    print(f"Available time after PM assignments: {available_time}")
+    for task in rep_tasks:
+        task_name = task.get('name', 'Unknown')
+        task_id = task['id']
+        print(f"Processing REP task: {task_name} (ID: {task_id})")
 
-    # Process REP tasks in Excel order
-    if rep_assignments:
-        for task in rep_tasks:
-            task_name = task.get('name', 'Unknown')
-            task_type = task.get('task_type', '').upper()
-            task_id = task['id']
-            print(f"Processing REP task: {task_name} (ID: {task_id})")
-            try:
-                base_duration = int(task['planned_worktime_min'])
-                num_technicians_needed = int(task['mitarbeiter_pro_aufgabe'])
-                quantity = int(float(str(task['quantity']).replace(',', '.'))) if str(task['quantity']).replace(',', '.').replace('.', '', 1).isdigit() else 1
-            except (ValueError, TypeError) as e:
-                print(f"Skipping task {task_name}: invalid duration, number of technicians, or quantity ({str(e)})")
-                continue
-            if base_duration <= 0 or num_technicians_needed <= 0 or quantity <= 0:
-                print(f"Skipping task {task_name}: invalid duration, number of technicians needed, or quantity.")
-                continue
+        base_duration = int(task['planned_worktime_min']) if is_valid_number(task['planned_worktime_min']) else 0
+        num_technicians_needed = int(task['mitarbeiter_pro_aufgabe']) if is_valid_number(
+            task['mitarbeiter_pro_aufgabe']) else 1
+        quantity = int(task['quantity']) if is_valid_number(task['quantity']) else 1
 
-            json_task_name = TASK_NAME_MAPPING.get(task_name, task_name)
-            print(f"Task: '{task_name}' -> JSON: '{json_task_name}'")
+        if base_duration <= 0 or num_technicians_needed <= 0 or quantity <= 0:
+            print(
+                f"Skipping task {task_name}: invalid or zero duration={base_duration}, technicians={num_technicians_needed}, or quantity={quantity}")
+            for i in range(quantity):
+                unassigned_tasks.append(f"{task_id}_{i + 1}")
+            continue
 
-            task_lines = []
-            try:
-                if task.get('lines'):
-                    task_lines = [int(line.strip()) for line in str(task['lines']).split(',') if line.strip().isdigit()]
-            except (ValueError, TypeError):
-                print(f"Warning: Invalid lines format for task {task_name}: '{task['lines']}'. Assuming no line restriction.")
+        task_lines = []
+        try:
+            if task.get('lines'):
+                task_lines = [int(line.strip()) for line in str(task['lines']).split(',') if line.strip().isdigit()]
+        except (ValueError, TypeError):
+            print(f"Warning: Invalid lines format for task {task_name}")
 
-            eligible_technicians = []
-            if task_id in rep_assignments_dict and not rep_assignments_dict[task_id].get('skipped'):
-                selected_techs = rep_assignments_dict[task_id]['technicians']
-                tech_lines = {tech: TECHNICIAN_LINES.get(tech, []) for tech in present_technicians}
-                for tech in selected_techs:
-                    if tech in present_technicians:
-                        lines_match = True
-                        if task_lines:
-                            lines_match = any(line in tech_lines[tech] for line in task_lines)
-                        if lines_match and available_time.get(tech, 0) >= base_duration:
-                            eligible_technicians.append(tech)
-                        else:
-                            print(f"Technician {tech} ineligible for REP task {task_name} (lines_match: {lines_match}, available_time: {available_time.get(tech, 0)})")
-            else:
-                print(f"Task {task_name} (ID: {task_id}) skipped or unassigned.")
-                for i in range(quantity):
-                    unassigned_tasks.append(f"{task['id']}_{i+1}")
-                continue
+        eligible_technicians = []
+        if task_id in rep_assignments_dict and not rep_assignments_dict[task_id].get('skipped'):
+            selected_techs = rep_assignments_dict[task_id]['technicians']
+            for tech in selected_techs:
+                if tech in present_technicians and available_time.get(tech, 0) >= base_duration:
+                    if not task_lines or any(line in TECHNICIAN_LINES.get(tech, []) for line in task_lines):
+                        eligible_technicians.append(tech)
+        else:
+            print(f"Task {task_name} skipped or unassigned")
+            for i in range(quantity):
+                unassigned_tasks.append(f"{task_id}_{i + 1}")
+            continue
 
-            if len(eligible_technicians) < num_technicians_needed:
-                print(f"Task {task_name} (all {quantity} instances) lacks enough eligible technicians. Needed: {num_technicians_needed}, Available: {len(eligible_technicians)}")
-                for i in range(quantity):
-                    unassigned_tasks.append(f"{task['id']}_{i+1}")
-                continue
+        if len(eligible_technicians) < num_technicians_needed:
+            print(
+                f"Task {task_name}: insufficient eligible technicians ({len(eligible_technicians)}/{num_technicians_needed})")
+            for i in range(quantity):
+                unassigned_tasks.append(f"{task_id}_{i + 1}")
+            continue
 
-            viable_groups = []
-            for r in range(num_technicians_needed, len(eligible_technicians) + 1):
-                for group in combinations(eligible_technicians, r):
-                    viable_groups.append(list(group))
+        viable_groups = [list(group) for r in range(num_technicians_needed, len(eligible_technicians) + 1)
+                         for group in combinations(eligible_technicians, r)]
+        viable_groups.sort(key=lambda group: (len(group), sum(
+            sum(end - start for start, end, _ in technician_schedules[tech]) for tech in group)))
 
-            def group_busy_score(group):
-                total_busy_time = sum(
-                    sum(end - start for start, end, _ in technician_schedules[tech])
-                    for tech in group
-                )
-                return (len(group), total_busy_time)
+        for instance_num in range(1, quantity + 1):
+            instance_id = f"{task_id}_{instance_num}"
+            instance_task_name = f"{task_name} (Instance {instance_num}/{quantity})"
+            assigned = False
 
-            viable_groups.sort(key=group_busy_score)
+            for group in viable_groups:
+                missing_technicians = max(0, num_technicians_needed - len(group))
+                task_duration = base_duration * (1 + missing_technicians)
+                start_time = 0
 
-            instances_to_schedule = [(f"{task['id']}_{i+1}", i + 1) for i in range(quantity)]
-            instances_scheduled = 0
+                while start_time <= total_work_minutes - task_duration:
+                    all_available = all(
+                        all(end <= start_time or start >= start_time + task_duration
+                            for start, end, _ in technician_schedules[tech])
+                        for tech in group
+                    )
+                    if all_available:
+                        is_incomplete = False
+                        original_task_duration = task_duration
+                        if start_time + task_duration > total_work_minutes:
+                            task_duration = total_work_minutes - start_time
+                            is_incomplete = True
+                            incomplete_tasks.append(instance_id)
 
-            for instance_id, instance_num in instances_to_schedule:
-                instance_task_name = f"{task_name} (Instance {instance_num}/{quantity})"
-                print(f"  Scheduling instance {instance_num}/{quantity} of task {task_name} (ID: {instance_id})")
-
-                assigned = False
-                for group in viable_groups:
-                    missing_technicians = max(0, num_technicians_needed - len(group))
-                    current_multiplier = 1 + missing_technicians
-                    task_duration = base_duration * current_multiplier
-
-                    start_time = 0
-                    while start_time <= total_work_minutes - task_duration:
-                        all_available = True
                         for tech in group:
-                            schedule = technician_schedules[tech]
-                            for start, end, _ in schedule:
-                                if not (end <= start_time or start >= start_time + task_duration):
-                                    all_available = False
-                                    break
-                            if not all_available:
-                                break
-                        if all_available:
-                            is_incomplete = False
-                            original_task_duration = task_duration
-                            if start_time + task_duration > total_work_minutes:
-                                print(f"  Instance {instance_num}/{quantity} of task {task_name} duration {task_duration} exceeds total work minutes {total_work_minutes}. Capping at {total_work_minutes - start_time}.")
-                                task_duration = total_work_minutes - start_time
-                                is_incomplete = True
-                                incomplete_tasks.append(instance_id)
+                            technician_schedules[tech].append(
+                                (start_time, start_time + task_duration, instance_task_name))
+                            assignments.append({
+                                'technician': tech,
+                                'task_name': instance_task_name,
+                                'start': start_time,
+                                'duration': task_duration,
+                                'is_incomplete': is_incomplete,
+                                'original_duration': original_task_duration,
+                                'instance_id': instance_id,
+                                'ticket_mo': task.get('ticket_mo', ''),
+                                'ticket_url': task.get('ticket_url', '')
+                            })
+                            available_time[tech] -= task_duration
 
-                            for tech in group:
-                                schedule = technician_schedules[tech]
-                                schedule.append((start_time, start_time + task_duration, instance_task_name))
-                                assignment = {
-                                    'technician': tech,
-                                    'task_name': instance_task_name,
-                                    'start': start_time,
-                                    'duration': task_duration,
-                                    'is_incomplete': is_incomplete,
-                                    'original_duration': original_task_duration,
-                                    'instance_id': instance_id,
-                                    'ticket_mo': task.get('ticket_mo', ''),
-                                    'ticket_url': task.get('ticket_url', '')
-                                }
-                                assignments.append(assignment)
-                                available_time[tech] -= task_duration
-
-                            print(f"  Assigned instance {instance_num}/{quantity} of task {task_name} (ID: {instance_id}) to {group} at start time {start_time} with duration {task_duration} (multiplier: {current_multiplier}x, incomplete: {is_incomplete}, group_busy_score: {group_busy_score(group)})")
-                            instances_scheduled += 1
-                            assigned = True
-                            break
-                        start_time += 15
-
-                    if assigned:
+                        print(f"Assigned {instance_task_name} to {group} at {start_time}")
+                        assigned = True
                         break
+                    start_time += 15
 
-                if not assigned:
-                    print(f"  Instance {instance_num}/{quantity} of task {task_name} (ID: {instance_id}) could not be scheduled with any group. No available time slots.")
-                    unassigned_tasks.append(instance_id)
+                if assigned:
+                    break
 
-            if instances_scheduled < quantity:
-                print(f"Task {task_name} (ID: {task['id']}) scheduled {instances_scheduled}/{quantity} instances. {quantity - instances_scheduled} instances unassigned.")
-            else:
-                print(f"Task {task_name} (ID: {task['id']}) scheduled all {quantity} instances.")
+            if not assigned:
+                print(f"Could not schedule {instance_task_name}")
+                unassigned_tasks.append(instance_id)
 
     return assignments, unassigned_tasks, incomplete_tasks, available_time
 
+
 def generate_html_files(data, present_technicians, rep_assignments=None):
-    tasks = []
-    for idx, row in enumerate(data, start=1):
-        quantity = str(row["quantity"]).strip()
-        try:
-            quantity = str(int(float(quantity.replace(',', '.')))) if quantity.replace(',', '.').replace('.', '', 1).isdigit() else "1"
-        except (ValueError, TypeError):
-            quantity = "1"
-        task = {
-            "id": str(idx),
-            "name": row["scheduler_group_task"],
-            "lines": row["lines"],
-            "mitarbeiter_pro_aufgabe": row["mitarbeiter_pro_aufgabe"],
-            "planned_worktime_min": row["planned_worktime_min"],
-            "start": "2025-04-21",
-            "end": "2025-04-22",
-            "progress": 100 if quantity.lower() == "done" else 0,
-            "priority": row["priority"],
-            "quantity": quantity,
-            "task_type": row["task_type"],
-            "ticket_mo": row.get("ticket_mo", ""),
-            "ticket_url": row.get("ticket_url", "")
-        }
-        tasks.append(task)
-    current_day = get_current_day()
-    total_work_minutes = calculate_work_time(current_day)
-    num_intervals = ceil(total_work_minutes / 15)
-    assignments, unassigned_tasks, incomplete_tasks, available_time = assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments)
-    technician_template = env.get_template('technician_dashboard.html')
-    technician_html = technician_template.render(
-        tasks=tasks,
-        technicians=present_technicians,
-        total_work_minutes=total_work_minutes,
-        num_intervals=num_intervals,
-        assignments=assignments,
-        unassigned_tasks=unassigned_tasks,
-        incomplete_tasks=incomplete_tasks
-    )
-    with open(os.path.join(app.config['OUTPUT_FOLDER'], "technician_dashboard.html"), "w", encoding="utf-8") as f:
-        f.write(technician_html)
-    return available_time
+    try:
+        print("Starting generate_html_files")
+        sanitized_data = sanitize_data(data)
+        print(f"Sanitized data: {len(sanitized_data)} tasks")
+
+        tasks = []
+        for idx, row in enumerate(sanitized_data, start=1):
+            task = {
+                "id": str(idx),
+                "name": row.get("scheduler_group_task", "Unknown"),
+                "lines": row.get("lines", ""),
+                "mitarbeiter_pro_aufgabe": row.get("mitarbeiter_pro_aufgabe", "1"),
+                "planned_worktime_min": row.get("planned_worktime_min", "0"),
+                "start": "2025-04-21",
+                "end": "2025-04-22",
+                "progress": 100 if row.get("quantity", "1").lower() == "done" else 0,
+                "priority": row.get("priority", "C"),
+                "quantity": row.get("quantity", "1"),
+                "task_type": row.get("task_type", ""),
+                "ticket_mo": row.get("ticket_mo", ""),
+                "ticket_url": row.get("ticket_url", "")
+            }
+            tasks.append(task)
+        print(f"Created {len(tasks)} tasks")
+
+        current_day = get_current_day()
+        total_work_minutes = calculate_work_time(current_day)
+        num_intervals = ceil(total_work_minutes / 15)
+        print(f"Total work minutes: {total_work_minutes}, Num intervals: {num_intervals}")
+
+        assignments, unassigned_tasks, incomplete_tasks, available_time = assign_tasks(tasks, present_technicians,
+                                                                                       total_work_minutes,
+                                                                                       rep_assignments)
+        print(
+            f"Generated {len(assignments)} assignments, {len(unassigned_tasks)} unassigned, {len(incomplete_tasks)} incomplete")
+
+        # Validate assignments before rendering
+        assignments = validate_assignments(assignments)
+
+        print("Loading technician_dashboard.html template")
+        technician_template = env.get_template('technician_dashboard.html')
+        print("Rendering template")
+        technician_html = technician_template.render(
+            tasks=tasks,
+            technicians=present_technicians,
+            total_work_minutes=total_work_minutes,
+            num_intervals=num_intervals,
+            assignments=assignments,
+            unassigned_tasks=unassigned_tasks,
+            incomplete_tasks=incomplete_tasks
+        )
+        print("Template rendered successfully")
+
+        output_path = os.path.join(app.config['OUTPUT_FOLDER'], "technician_dashboard.html")
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(technician_html)
+        print(f"Written output to {output_path}")
+
+        return available_time
+    except Exception as e:
+        print(f"Error in generate_html_files: {str(e)}")
+        print(traceback.format_exc())
+        raise
+
 
 @app.route('/')
 def index():
     with open('templates/index.html', 'r', encoding='utf-8') as f:
         return f.read()
 
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    session_id = request.form.get('session_id', '')  # Unique identifier for the session
+    session_id = request.form.get('session_id', '')
     if 'excelFile' in request.files and request.files['excelFile'].filename != '':
         file = request.files['excelFile']
         if file.filename == '':
             return jsonify({"message": "No file selected"}), 400
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
         file.save(file_path)
-        uploaded_files[session_id] = file_path  # Store file path
+        uploaded_files[session_id] = file_path
         try:
             data = extract_data(file_path)
-            if not data:
+            sanitized_data = sanitize_data(data)
+            if not sanitized_data:
                 return jsonify({
-                    "message": "No data found after filtering. Check if the Summary KW17 sheet contains tasks with values >= 1 in the 'Monday CW-17' column for shift 'early', starting from row 9."
+                    "message": "No valid data found after sanitization. Check if the Summary KW17 sheet contains valid tasks."
                 }), 400
 
             rep_tasks = [
                 task | {'id': str(idx + 1)}
-                for idx, task in enumerate(data)
-                if task['task_type'].upper() == 'REP' and task.get('ticket_mo') and task.get('ticket_mo') != 'nan'
+                for idx, task in enumerate(sanitized_data)
+                if task.get('task_type', '').upper() == 'REP' and task.get('ticket_mo') and str(
+                    task.get('ticket_mo')) != 'nan'
             ]
-
-            print("Initial file upload successful, prompting for absent technicians.")
             return jsonify({
                 "message": "File uploaded successfully. Please select absent technicians.",
                 "repTasks": rep_tasks,
                 "filename": file.filename,
                 "session_id": session_id
             })
-
         except Exception as e:
-            print(f"Error processing file: {str(e)}")
+            print(f"Error processing file upload: {str(e)}")
+            print(traceback.format_exc())
             return jsonify({"message": f"Error processing file: {str(e)}"}), 500
 
-    # Handle requests without file (e.g., absent technicians or REP assignments)
     if 'filename' in request.form and session_id in uploaded_files:
         file_path = uploaded_files[session_id]
         if not os.path.exists(file_path):
             return jsonify({"message": "Uploaded file not found on server"}), 400
         try:
             data = extract_data(file_path)
-            if not data:
+            sanitized_data = sanitize_data(data)
+            if not sanitized_data:
                 return jsonify({
-                    "message": "No data found after filtering. Check if the Summary KW17 sheet contains tasks with values >= 1 in the 'Monday CW-17' column for shift 'early', starting from row 9."
+                    "message": "No valid data found after sanitization. Check if the Summary KW17 sheet contains valid tasks."
                 }), 400
 
             absent_technicians = json.loads(request.form.get('absentTechnicians', '[]'))
             present_technicians = [tech for tech in TECHNICIANS if tech not in absent_technicians]
 
             if 'repAssignments' in request.form:
-                print("Received REP assignments, generating dashboard.")
                 rep_assignments_list = json.loads(request.form['repAssignments'])
-                available_time = generate_html_files(data, present_technicians, rep_assignments_list)
-                # Clean up uploaded file
+                available_time = generate_html_files(sanitized_data, present_technicians, rep_assignments_list)
                 if session_id in uploaded_files:
                     del uploaded_files[session_id]
                 return jsonify({
@@ -511,24 +524,22 @@ def upload_file():
                     "availableTime": available_time
                 })
 
-            # After absent technicians are selected, calculate PM assignments only
             current_day = get_current_day()
             total_work_minutes = calculate_work_time(current_day)
-            pm_tasks = [task for task in data if task['task_type'].upper() == 'PM']
+            pm_tasks = [task for task in sanitized_data if task.get('task_type', '').upper() == 'PM']
             pm_tasks = [
                 {
                     "id": str(idx + 1),
-                    "name": row["scheduler_group_task"],
-                    "lines": row["lines"],
-                    "mitarbeiter_pro_aufgabe": row["mitarbeiter_pro_aufgabe"],
-                    "planned_worktime_min": row["planned_worktime_min"],
+                    "name": row.get("scheduler_group_task", "Unknown"),
+                    "lines": row.get("lines", ""),
+                    "mitarbeiter_pro_aufgabe": row.get("mitarbeiter_pro_aufgabe", "1"),
+                    "planned_worktime_min": row.get("planned_worktime_min", "0"),
                     "start": "2025-04-21",
                     "end": "2025-04-22",
-                    "progress": 100 if str(row["quantity"]).lower() == "done" else 0,
-                    "priority": row["priority"],
-                    "quantity": str(int(float(str(row["quantity"]).replace(',', '.')))) if str(row["quantity"]).replace(
-                        ',', '.').replace('.', '', 1).isdigit() else "1",
-                    "task_type": row["task_type"],
+                    "progress": 100 if str(row.get("quantity", "1")).lower() == "done" else 0,
+                    "priority": row.get("priority", "C"),
+                    "quantity": row.get("quantity", "1"),
+                    "task_type": row.get("task_type", ""),
                     "ticket_mo": row.get("ticket_mo", ""),
                     "ticket_url": row.get("ticket_url", "")
                 } for idx, row in enumerate(pm_tasks)
@@ -538,23 +549,20 @@ def upload_file():
                                                                                            total_work_minutes, [])
             rep_tasks = [
                 task | {'id': str(idx + 1)}
-                for idx, task in enumerate(data)
-                if task['task_type'].upper() == 'REP' and task.get('ticket_mo') and task.get('ticket_mo') != 'nan'
+                for idx, task in enumerate(sanitized_data)
+                if task.get('task_type', '').upper() == 'REP' and task.get('ticket_mo') and str(
+                    task.get('ticket_mo')) != 'nan'
             ]
             eligible_rep_technicians = {}
             for task in rep_tasks:
-                try:
-                    base_duration = int(task['planned_worktime_min'])
-                    # Include available time for each technician
-                    eligible_technicians = [
-                        {"name": tech, "available_time": time}
-                        for tech, time in available_time.items()
-                        if time >= base_duration and tech in present_technicians
-                    ]
-                    eligible_rep_technicians[task['id']] = eligible_technicians
-                except (ValueError, TypeError) as e:
-                    print(f"Skipping REP task {task.get('name', 'Unknown')}: invalid duration ({str(e)})")
-                    eligible_rep_technicians[task['id']] = []
+                base_duration = int(task.get('planned_worktime_min', 0)) if is_valid_number(
+                    task.get('planned_worktime_min')) else 0
+                eligible_technicians = [
+                    {"name": tech, "available_time": time}
+                    for tech, time in available_time.items()
+                    if time >= base_duration and tech in present_technicians
+                ]
+                eligible_rep_technicians[task['id']] = eligible_technicians
 
             return jsonify({
                 "message": "PM tasks processed. Please assign technicians for REP tasks.",
@@ -563,20 +571,23 @@ def upload_file():
                 "filename": os.path.basename(file_path),
                 "session_id": session_id
             })
-
         except Exception as e:
             print(f"Error processing file: {str(e)}")
+            print(traceback.format_exc())
             return jsonify({"message": f"Error processing file: {str(e)}"}), 500
 
     return jsonify({"message": "No file uploaded or invalid session"}), 400
+
 
 @app.route('/technicians', methods=['GET'])
 def get_technicians():
     return jsonify(TECHNICIAN_GROUPS)
 
+
 @app.route('/output/<path:filename>')
 def serve_output(filename):
     return send_from_directory(app.config['OUTPUT_FOLDER'], filename)
+
 
 if __name__ == '__main__':
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
