@@ -152,28 +152,40 @@
         <tr>
             <td class="technician-column">{{ technician }}</td>
             {% for i in range(num_intervals) %}
-            <td {% for assignment in assignments %}
-                    {% if assignment.technician == technician %}
-                        {% set start_interval = (assignment.start / 15) | int %}
-                        {% set end_interval = ((assignment.start + assignment.duration) / 15) | int %}
-                        {% if start_interval <= i and i < end_interval and assignment.is_incomplete %}
-                            style="background-color: red;" title="Task duration exceeds available work time (required {{ assignment.original_duration }} minutes, capped at {{ assignment.duration }} minutes)."
-                        {% endif %}
-                    {% endif %}
-                {% endfor %}>
+            <td>
+                {% set ns = namespace(has_content=false, cell_content=[]) %}
+                {% set div_style = '' %}
+                {% set div_title = '' %}
+                {% set seen_tasks = [] %}
                 {% for assignment in assignments %}
                     {% if assignment.technician == technician %}
                         {% set start_interval = (assignment.start / 15) | int %}
-                        {% set end_interval = ((assignment.start + assignment.duration) / 15) | int %}
-                        {% if start_interval <= i and i < end_interval %}
-                            {{ assignment.task_name }}
-                            {% if assignment.ticket_mo %}
-                                <br><a href="{{ assignment.ticket_url }}" target="_blank">{{ assignment.ticket_mo }}</a>
+                        {% set end_interval = ((assignment.start + assignment.duration - 1) / 15) | int %}
+                        {% if start_interval <= i and i <= end_interval %}
+                            {% set task_key = assignment.technician ~ '|' ~ assignment.task_name ~ '|' ~ assignment.start|string ~ '|' ~ assignment.duration|string %}
+                            {% if task_key not in seen_tasks %}
+                                {% set ns.has_content = true %}
+                                {% set task_content = assignment.task_name %}
+                                {% if assignment.ticket_mo %}
+                                    {% set task_content = task_content + '<br><a href="' + assignment.ticket_url + '" target="_blank">' + assignment.ticket_mo + '</a>' %}
+                                {% endif %}
+                                {% set task_content = task_content + ' (' + assignment.start|string + '-' + (assignment.start + assignment.duration)|string + ')' %}
+                                {% set ns.cell_content = ns.cell_content + [task_content] %}
+                                {% if assignment.is_incomplete %}
+                                    {% set div_style = 'background-color: red;' %}
+                                    {% set div_title = 'Task duration exceeds available work time (required ' + assignment.original_duration|string + ' minutes, capped at ' + assignment.duration|string + ' minutes).' %}
+                                {% endif %}
+                                {% set seen_tasks = seen_tasks + [task_key] %}
                             {% endif %}
-                            ({{ assignment.start }}-{{ assignment.start + assignment.duration }})
                         {% endif %}
                     {% endif %}
                 {% endfor %}
+                <!-- Debug: Tasks in interval {{ i }}: {{ ns.cell_content|length }} -->
+                {% if ns.has_content %}
+                    <div style="{{ div_style }}" title="{{ div_title }}">{{ ns.cell_content | join('<br>') | safe }}</div>
+                {% else %}
+                    <!-- Empty cell -->
+                {% endif %}
             </td>
             {% endfor %}
         </tr>
