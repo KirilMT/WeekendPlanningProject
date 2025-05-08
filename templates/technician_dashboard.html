@@ -176,7 +176,30 @@
             <td class="index-cell" style="background-color: #{{ '%02x%02x%02x' % ((task.id | int | default(1)) * 97 % 200 + 55, (task.id | int | default(1)) * 53 % 200 + 55, (task.id | int | default(1)) * 37 % 200 + 55) }}; color: #fff;">
                 {{ task.id }}
             </td>
-            <td>{{ task.name }}</td>
+            <td>
+                {{ task.name }}
+                {% set unassigned_instances = [] %}
+                {% set incomplete_instances = [] %}
+                {% for i in range(task.quantity | int | default(1)) %}
+                    {% set instance_id = task.id ~ '_' ~ (i + 1) %}
+                    {% if instance_id in unassigned_tasks %}
+                        {% set _ = unassigned_instances.append(i + 1) %}
+                    {% endif %}
+                    {% if instance_id in incomplete_tasks %}
+                        {% set _ = incomplete_instances.append(i + 1) %}
+                    {% endif %}
+                {% endfor %}
+                {% if unassigned_instances %}
+                    <br><span style="color: red;" title="Instances {{ unassigned_instances | join(', ') }} could not be scheduled due to no eligible technicians or time slots.">
+                        Unassigned: {{ unassigned_instances | join(', ') }}
+                    </span>
+                {% endif %}
+                {% if incomplete_instances %}
+                    <br><span style="color: orange;" title="Instances {{ incomplete_instances | join(', ') }} were capped due to insufficient time.">
+                        Incomplete: {{ incomplete_instances | join(', ') }}
+                    </span>
+                {% endif %}
+            </td>
             <td>{{ task.task_type }}</td>
             <td>
                 {% if task.lines is none or task.lines == 'nan' %}
