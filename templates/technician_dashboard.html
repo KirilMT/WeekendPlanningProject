@@ -7,6 +7,7 @@
             font-family: 'Segoe UI', Arial, sans-serif;
             margin: 20px;
             background-color: #f5f5f5;
+            overflow-x: hidden; /* Prevent page-wide horizontal scroll */
         }
         h1, h2 {
             text-align: center;
@@ -15,22 +16,36 @@
         }
         .task-table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate; /* For rounded corners */
+            border-spacing: 0;
             margin-bottom: 20px;
             background-color: #fff;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 8px; /* Match Gantt chart */
+            overflow: hidden; /* Ensure rounded corners apply */
         }
         .task-table th {
             background-color: #e3f2fd;
             font-weight: 600;
             color: #333;
-            padding: 12px;
+            padding: 12px 16px; /* Consistent padding */
             text-align: left;
-            border-bottom: 2px solid #ddd;
+            border-bottom: 1px solid #ddd;
         }
         .task-table td {
-            padding: 12px;
+            padding: 12px 16px;
             border-bottom: 1px solid #eee;
+            color: #333;
+        }
+        .task-table tr:last-child td {
+            border-bottom: none; /* Clean edge at bottom */
+        }
+        .task-table tr:hover {
+            background-color: #f9f9f9; /* Subtle hover effect */
+        }
+        .task-table .index-cell {
+            text-align: center;
+            font-weight: 500;
         }
         .prio-a { background-color: #ff4d4d; color: #fff; }
         .prio-b { background-color: #ffd700; }
@@ -44,16 +59,18 @@
         }
         .gantt-container {
             width: 100%;
-            max-width: 1200px;
+            max-width: 100%;
             margin: 0 auto;
             padding: 20px;
             background-color: #fff;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             border-radius: 8px;
+            box-sizing: border-box;
         }
         .gantt-chart {
             position: relative;
-            overflow-x: auto;
+            overflow-x: auto; /* Horizontal scroll only if needed */
+            overflow-y: visible; /* No vertical scroll */
         }
         .technician-row {
             display: flex;
@@ -69,13 +86,31 @@
         }
         .bars-container {
             flex-grow: 1;
-            height: 30px;
+            height: auto; /* Adjust based on content */
             position: relative;
-            background: linear-gradient(to right, #f0f0f0 0%, #f0f0f0 100%);
+            background: #f0f0f0;
+            box-sizing: border-box;
+        }
+        /* Alternating background for intervals */
+        .bars-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                to right,
+                #f0f0f0,
+                #f0f0f0 {{ (15 / (total_work_minutes | float | default(1)) * 100) | round(2) }}%,
+                #fafafa {{ (15 / (total_work_minutes | float | default(1)) * 100) | round(2) }}%,
+                #fafafa {{ (30 / (total_work_minutes | float | default(1)) * 100) | round(2) }}%
+            );
+            z-index: -1;
         }
         .task-bar {
             position: absolute;
-            height: 26px;
+            height: 24px;
             border-radius: 4px;
             display: flex;
             align-items: center;
@@ -84,16 +119,18 @@
             font-size: 12px;
             font-weight: 500;
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-            margin-top: 2px;
-            margin-bottom: 2px;
+            box-sizing: border-box;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            text-align: center; /* Center text inside bar */
+            margin-right: 2px; /* Horizontal gap */
         }
         .time-axis {
             display: flex;
             margin-left: 200px;
             border-bottom: 1px solid #ddd;
+            position: relative;
         }
         .time-tick {
             flex: 1;
@@ -102,6 +139,19 @@
             font-size: 10px;
             color: #666;
             padding: 5px 0;
+            position: relative;
+        }
+        .time-tick::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            height: calc(100% + {{ technicians | length * 40 }}px); /* Extend to bottom of chart */
+            border-right: 1px solid #e0e0e0;
+            z-index: -1;
+        }
+        .time-tick:last-child::after {
+            border-right: none;
         }
     </style>
 </head>
@@ -120,37 +170,21 @@
             <th>Prio</th>
             <th>Qty</th>
             <th>Ticket/MO</th>
-            <th>Status</th>
         </tr>
-        {% for task in tasks %}
+        {% for task in tasks if not task.ticket_mo is none and task.ticket_mo != 'nan' %}
         <tr>
-            <td>{{ task.id }}</td>
+            <td class="index-cell" style="background-color: #{{ '%02x%02x%02x' % ((task.id | int | default(1)) * 97 % 200 + 55, (task.id | int | default(1)) * 53 % 200 + 55, (task.id | int | default(1)) * 37 % 200 + 55) }}; color: #fff;">
+                {{ task.id }}
+            </td>
+            <td>{{ task.name }}</td>
+            <td>{{ task.task_type }}</td>
             <td>
-                {{ task.name }}
-                {% set unassigned_instances = [] %}
-                {% set incomplete_instances = [] %}
-                {% for i in range(task.quantity | int | default(1)) %}
-                    {% set instance_id = task.id ~ '_' ~ (i + 1) %}
-                    {% if instance_id in unassigned_tasks %}
-                        {% set _ = unassigned_instances.append(i + 1) %}
-                    {% endif %}
-                    {% if instance_id in incomplete_tasks %}
-                        {% set _ = incomplete_instances.append(i + 1) %}
-                    {% endif %}
-                {% endfor %}
-                {% if unassigned_instances %}
-                    <br><span style="color: red;" title="Instances {{ unassigned_instances | join(', ') }} could not be scheduled due to no eligible technicians or time slots.">
-                        Unassigned: {{ unassigned_instances | join(', ') }}
-                    </span>
-                {% endif %}
-                {% if incomplete_instances %}
-                    <br><span style="color: orange;" title="Instances {{ incomplete_instances | join(', ') }} were capped due to insufficient time.">
-                        Incomplete: {{ incomplete_instances | join(', ') }}
-                    </span>
+                {% if task.lines is none or task.lines == 'nan' %}
+                    N/A
+                {% else %}
+                    {{ task.lines }}
                 {% endif %}
             </td>
-            <td>{{ task.task_type }}</td>
-            <td>{{ task.lines }}</td>
             <td>{{ task.mitarbeiter_pro_aufgabe | default('1') }}</td>
             <td>{{ task.planned_worktime_min | default('0') }}</td>
             <td class="{% if task.priority == 'A' %}prio-a{% elif task.priority == 'B' %}prio-b{% elif task.priority == 'C' %}prio-c{% endif %}">
@@ -164,16 +198,13 @@
                     {% else %}
                         {{ task.ticket_mo }}
                     {% endif %}
+                {% elif task.task_type.upper() == 'PM' %}
+                    {% set encoded_name = task.name | urlencode %}
+                    <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name={{ encoded_name }}" target="_blank">
+                        Flux MOs
+                    </a>
                 {% else %}
                     N/A
-                {% endif %}
-            </td>
-            <td>
-                {% if unassigned_instances or incomplete_instances %}
-                    {% set scheduled = (task.quantity | int | default(1)) - (unassigned_instances | length) %}
-                    {{ scheduled }}/{{ task.quantity | default('1') }} scheduled
-                {% else %}
-                    All {{ task.quantity | default('1') }} scheduled
                 {% endif %}
             </td>
         </tr>
@@ -199,10 +230,13 @@
                 <div class="technician-label">{{ technician }}</div>
                 <div class="bars-container">
                     {% set bar_index = 0 %}
+                    {% set previous_end = -15 %}
                     {% for assignment in assignments if assignment.technician == technician %}
                         {% set task_id = assignment.instance_id.split('_')[0] if assignment.instance_id and '_' in assignment.instance_id else '0' %}
-                        {% set start_percent = ((assignment.start | float / (total_work_minutes | float | default(1))) * 100) if assignment.start is defined and total_work_minutes else 0 %}
-                        {% set duration_percent = ((assignment.duration | float / (total_work_minutes | float | default(1))) * 100) if assignment.duration is defined and total_work_minutes else 0 %}
+                        {% set slot_start = ((assignment.start | float / 15) | round(0, 'floor') * 15) %}
+                        {% set slot_end = (((assignment.start | float + assignment.duration | float) / 15) | round(0, 'ceil') * 15) %}
+                        {% set start_percent = (slot_start / (total_work_minutes | float | default(1))) * 100 %}
+                        {% set duration_percent = ((slot_end - slot_start) / (total_work_minutes | float | default(1))) * 100 %}
                         {% set color_r = ((task_id | int | default(1)) * 97 % 200 + 55) %}
                         {% set color_g = ((task_id | int | default(1)) * 53 % 200 + 55) %}
                         {% set color_b = ((task_id | int | default(1)) * 37 % 200 + 55) %}
@@ -211,13 +245,14 @@
                                 left: {{ start_percent | round(2) }}%;
                                 width: {{ duration_percent | round(2) }}%;
                                 background-color: #{{ '%02x%02x%02x' % (color_r, color_g, color_b) }};
-                                margin-top: {{ bar_index * 30 + 2 }}px;
+                                top: {{ bar_index * 34 + 3 }}px; /* Increased spacing to 34px */
                                 z-index: {{ bar_index }};
                              "
                              title="{{ assignment.task_name | default('Unknown') }} ({{ assignment.start | default(0) }}-{{ (assignment.start | default(0)) + (assignment.duration | default(0)) }} min{% if assignment.is_incomplete %}, capped from {{ assignment.original_duration | default(0) }} min{% endif %})">
                             {{ task_id | default('0') }}
                         </div>
                         {% set bar_index = bar_index + 1 %}
+                        {% set previous_end = slot_end %}
                     {% endfor %}
                 </div>
             </div>
