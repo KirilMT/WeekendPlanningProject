@@ -5,19 +5,19 @@ import re
 
 # Step 0: Determine the current week (KW)
 def get_current_week():
-    current_date = datetime(2025, 4, 21)  # Hardcoded for testing
+    current_date = datetime(2025, 4, 20)  # Hardcoded for testing
     week_number = current_date.isocalendar().week
     return f"Summary KW{week_number:02d}"  # e.g., "Summary KW17"
 
 # Helper function to get the current week number (e.g., "17")
 def get_current_week_number():
-    current_date = datetime(2025, 4, 21)  # Hardcoded for testing
+    current_date = datetime(2025, 4, 20)  # Hardcoded for testing
     week_number = current_date.isocalendar().week
     return f"{week_number:02d}"
 
 # Step 1: Determine the current day
 def get_current_day():
-    current_date = datetime(2025, 4, 21)  # Hardcoded for testing
+    current_date = datetime(2025, 4, 20)  # Hardcoded for testing
     return current_date.strftime("%A")  # e.g., "Monday"
 
 # Step 2: Determine the current shift
