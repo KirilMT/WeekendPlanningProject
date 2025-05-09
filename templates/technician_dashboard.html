@@ -131,7 +131,7 @@
             flex: 1;
             min-width: 40px;
             text-align: center;
-            font-size: 12px;
+            font-size: 10px;
             color: #666;
             padding: 5px 0;
             position: relative;
@@ -152,35 +152,6 @@
         }
         .time-tick:last-child::after {
             border-right: none;
-        }
-        .task-bar {
-            position: absolute;
-            height: 24px;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            font-size: 12px;
-            font-weight: 500;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-            box-sizing: border-box;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            text-align: center;
-            top: 8px;
-            {% if total_work_minutes is defined and total_work_minutes > 0 and start_percent is defined and duration_percent is defined %}
-            --tick-width: {{ (15 / (total_work_minutes | float)) * 100 | round(4) }}%;
-            --gap: calc(var(--tick-width) * 0.038); /* 3.8% gap, matches 49.38px / 51.315px */
-            width: calc({{ duration_percent | round(4) }}% - var(--gap));
-            left: calc({{ start_percent | round(4) }}% + calc({{ duration_percent | round(4) }}% * 0.5));
-            transform: translateX(-50%);
-            {% else %}
-            width: 96.2%;
-            left: 50%;
-            transform: translateX(-50%);
-            {% endif %}
         }
     </style>
 </head>
@@ -294,8 +265,35 @@
                         {% set color_b = ((task_id | int | default(1)) * 37 % 200 + 55) %}
                         <div class="task-bar"
                              style="
+                                position: absolute;
+                                height: 24px;
+                                border-radius: 4px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                color: #fff;
+                                font-size: 12px;
+                                font-weight: 500;
+                                box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+                                box-sizing: border-box;
+                                overflow: hidden;
+                                text-overflow: ellipsis;
+                                white-space: nowrap;
+                                text-align: center;
                                 z-index: {{ bar_index }};
                                 background-color: #{{ '%02x%02x%02x' % (color_r, color_g, color_b) }};
+                                top: 8px;
+                                {% if total_work_minutes is defined and total_work_minutes > 0 and start_percent is defined and duration_percent is defined %}
+                                --tick-width: {{ (15 / (total_work_minutes | float)) * 100 | round(4) }}%;
+                                --gap: calc(var(--tick-width) * 0.038); /* 3.8% gap, matches 49.38px / 51.315px */
+                                width: calc({{ duration_percent | round(4) }}% - var(--gap));
+                                left: calc({{ start_percent | round(4) }}% + calc({{ duration_percent | round(4) }}% * 0.5));
+                                transform: translateX(-50%);
+                                {% else %}
+                                width: 96.2%;
+                                left: 50%;
+                                transform: translateX(-50%);
+                                {% endif %}
                              "
                              title="{{ assignment.task_name | default('Unknown') }} ({{ assignment.start | default(0) }}-{{ (assignment.start | default(0)) + (assignment.duration | default(0)) }} min{% if assignment.is_incomplete %}, capped from {{ assignment.original_duration | default(0) }} min{% endif %})">
                             {{ task_id | default('0') }}

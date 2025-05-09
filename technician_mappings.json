@@ -130,7 +130,8 @@
         "BiW_PM_SPR_Wöchentlich",
         "BiW_PM_APC Mino_Palette Gliederschmierung_monatlich",
         "BiW_PM_ADH_Wartung Dosierer_jährlich",
-        "BiW_PM_Rollenbahn Mainline Comau_jährlich"
+        "BiW_PM_Rollenbahn Mainline Comau_jährlich",
+        "BIW_PM_DGUV preparation"
       ]
     },
     "Dianka Blick": {
@@ -199,7 +200,8 @@
         "BiW_PM_Böllhoff BTC_Zweiwöchentlich",
         "BiW_PM_KUKA_Roboter KR C4_Quarterly",
         "BiW_PM_Tooling and gripper_yearly",
-        "BiW_PM_KUKA_Roboter Fortec_jährlich"
+        "BiW_PM_KUKA_Roboter Fortec_jährlich",
+        "BIW_PM_DGUV preparation"
       ]
     },
     "Thiago Nery (PLC)": {
@@ -254,7 +256,9 @@
         "BiW_PM_Vigel_Jährlich",
         "BiW_PM_FAMATEC_Manipulator FPC",
         "BiW_PM_Böllhoff BTC_Zweiwöchentlich",
-        "BiW_PM_ADH_Wartung Dosierer_jährlich"
+        "BiW_PM_ADH_Wartung Dosierer_jährlich",
+        "BiW_PM_MDS_RPC_zweiwöchentlich",
+        "BIW_PM_DGUV preparation"
       ]
     },
     "Mohamed Ali Loummir": {
@@ -278,7 +282,9 @@
         "BiW_PM_Vigel_Jährlich",
         "BiW_PM_FAMATEC_Manipulator FPC",
         "BiW_PM_Lineareinheit_Jährlich",
-        "BiW_PM_Böllhoff BTC_Zweiwöchentlich"
+        "BiW_PM_Böllhoff BTC_Zweiwöchentlich",
+        "BiW_PM_MDS_RPC_zweiwöchentlich",
+        "BIW_PM_DGUV preparation"
       ]
     },
     "Khanh Nguyen": {
@@ -355,7 +361,8 @@
         "BiW_PM_Bosch Spindel kalibrieren_jährlich",
         "BiW_PM_ADH_Mesamoll FRS/DSH/FUB2/CUB/SFM_wöchentlich",
         "BiW_PM_Aufzüge Arretierung Comau_monatlich",
-        "BiW_PM_Kappenfräser_3 monatlich_Alle"
+        "BiW_PM_Kappenfräser_3 monatlich_Alle",
+        "BiW_PM_MDS_RPC_zweiwöchentlich"
       ]
     },
     "Moritz Kipper": {

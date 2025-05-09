@@ -65,7 +65,7 @@ TASK_NAME_MAPPING = {
 
 
 def calculate_work_time(day):
-    return {"Monday": 434, "Friday": 434, "Sunday": 434, "Saturday": 651}.get(day, 434)
+    return {"Monday": 434, "Friday": 434, "Sunday": 651, "Saturday": 651}.get(day, 434)
 
 
 def normalize_string(s):
