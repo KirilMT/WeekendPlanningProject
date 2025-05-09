@@ -163,15 +163,25 @@
         <tr>
             <th>Index</th>
             <th>Tasks</th>
-            <th>Type</th>
             <th>Lines</th>
             <th>Technicians</th>
+            <th>Assigned Technicians</th>
             <th>Time [min]</th>
             <th>Prio</th>
             <th>Qty</th>
             <th>Ticket/MO</th>
         </tr>
-        {% for task in tasks if not task.ticket_mo is none and task.ticket_mo != 'nan' %}
+        {% set pm_tasks = tasks | selectattr('task_type', 'equalto', 'PM') | list %}
+        {% set rep_tasks = tasks | selectattr('task_type', 'equalto', 'REP') | list %}
+
+        <!-- PM Section -->
+        {% if pm_tasks %}
+        <tr style="background-color: #d3d3d3;">
+            <td colspan="9" style="text-align: left; font-weight: bold; padding: 8px 16px;">
+                PMs & PdMs
+            </td>
+        </tr>
+        {% for task in pm_tasks if not task.ticket_mo is none and task.ticket_mo != 'nan' %}
         <tr>
             <td class="index-cell" style="background-color: #{{ '%02x%02x%02x' % ((task.id | int | default(1)) * 97 % 200 + 55, (task.id | int | default(1)) * 53 % 200 + 55, (task.id | int | default(1)) * 37 % 200 + 55) }}; color: #fff;">
                 {{ task.id }}
@@ -200,7 +210,6 @@
                     </span>
                 {% endif %}
             </td>
-            <td>{{ task.task_type }}</td>
             <td>
                 {% if task.lines is none or task.lines == 'nan' %}
                     N/A
@@ -209,6 +218,15 @@
                 {% endif %}
             </td>
             <td>{{ task.mitarbeiter_pro_aufgabe | default('1') }}</td>
+            <td>
+                {% set assigned_techs = [] %}
+                {% for assignment in assignments if assignment.instance_id.startswith(task.id ~ '_') %}
+                    {% if assignment.technician not in assigned_techs %}
+                        {% set _ = assigned_techs.append(assignment.technician) %}
+                    {% endif %}
+                {% endfor %}
+                {{ assigned_techs | join(', ') | default('None') }}
+            </td>
             <td>{{ task.planned_worktime_min | default('0') }}</td>
             <td class="{% if task.priority == 'A' %}prio-a{% elif task.priority == 'B' %}prio-b{% elif task.priority == 'C' %}prio-c{% endif %}">
                 {{ task.priority }}
@@ -232,6 +250,85 @@
             </td>
         </tr>
         {% endfor %}
+        {% endif %}
+
+        <!-- REP Section -->
+        {% if rep_tasks %}
+        <tr style="background-color: #d3d3d3;">
+            <td colspan="9" style="text-align: left; font-weight: bold; padding: 8px 16px;">
+                Tickets/MOs/Engineering Requests
+            </td>
+        </tr>
+        {% for task in rep_tasks if not task.ticket_mo is none and task.ticket_mo != 'nan' %}
+        <tr>
+            <td class="index-cell" style="background-color: #{{ '%02x%02x%02x' % ((task.id | int | default(1)) * 97 % 200 + 55, (task.id | int | default(1)) * 53 % 200 + 55, (task.id | int | default(1)) * 37 % 200 + 55) }}; color: #fff;">
+                {{ task.id }}
+            </td>
+            <td style="background-color: #e6e6e6;">
+                {{ task.name }}
+                {% set unassigned_instances = [] %}
+                {% set incomplete_instances = [] %}
+                {% for i in range(task.quantity | int | default(1)) %}
+                    {% set instance_id = task.id ~ '_' ~ (i + 1) %}
+                    {% if instance_id in unassigned_tasks %}
+                        {% set _ = unassigned_instances.append(i + 1) %}
+                    {% endif %}
+                    {% if instance_id in incomplete_tasks %}
+                        {% set _ = incomplete_instances.append(i + 1) %}
+                    {% endif %}
+                {% endfor %}
+                {% if unassigned_instances %}
+                    <br><span style="color: red;" title="Instances {{ unassigned_instances | join(', ') }} could not be scheduled due to no eligible technicians or time slots.">
+                        Unassigned: {{ unassigned_instances | join(', ') }}
+                    </span>
+                {% endif %}
+                {% if incomplete_instances %}
+                    <br><span style="color: orange;" title="Instances {{ incomplete_instances | join(', ') }} were capped due to insufficient time.">
+                        Incomplete: {{ incomplete_instances | join(', ') }}
+                    </span>
+                {% endif %}
+            </td>
+            <td style="background-color: #e6e6e6;">
+                {% if task.lines is none or task.lines == 'nan' %}
+                    N/A
+                {% else %}
+                    {{ task.lines }}
+                {% endif %}
+            </td>
+            <td style="background-color: #e6e6e6;">{{ task.mitarbeiter_pro_aufgabe | default('1') }}</td>
+            <td style="background-color: #e6e6e6;">
+                {% set assigned_techs = [] %}
+                {% for assignment in assignments if assignment.instance_id.startswith(task.id ~ '_') %}
+                    {% if assignment.technician not in assigned_techs %}
+                        {% set _ = assigned_techs.append(assignment.technician) %}
+                    {% endif %}
+                {% endfor %}
+                {{ assigned_techs | join(', ') | default('None') }}
+            </td>
+            <td style="background-color: #e6e6e6;">{{ task.planned_worktime_min | default('0') }}</td>
+            <td class="{% if task.priority == 'A' %}prio-a{% elif task.priority == 'B' %}prio-b{% elif task.priority == 'C' %}prio-c{% endif %}">
+                {{ task.priority }}
+            </td>
+            <td style="background-color: #e6e6e6;">{{ task.quantity | default('1') }}</td>
+            <td style="background-color: #e6e6e6;">
+                {% if task.task_type.upper() == 'REP' and task.ticket_mo %}
+                    {% if task.ticket_url %}
+                        <a href="{{ task.ticket_url }}" target="_blank">{{ task.ticket_mo }}</a>
+                    {% else %}
+                        {{ task.ticket_mo }}
+                    {% endif %}
+                {% elif task.task_type.upper() == 'PM' %}
+                    {% set encoded_name = task.name | urlencode %}
+                    <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name={{ encoded_name }}" target="_blank">
+                        Flux MOs
+                    </a>
+                {% else %}
+                    N/A
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        {% endif %}
     </table>
 
     <!-- Gantt Chart -->
