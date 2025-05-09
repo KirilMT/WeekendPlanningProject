@@ -7,7 +7,7 @@
             font-family: 'Segoe UI', Arial, sans-serif;
             margin: 20px;
             background-color: #f5f5f5;
-            overflow-x: hidden; /* Prevent page-wide horizontal scroll */
+            overflow-x: hidden;
         }
         h1, h2 {
             text-align: center;
@@ -16,19 +16,19 @@
         }
         .task-table {
             width: 100%;
-            border-collapse: separate; /* For rounded corners */
+            border-collapse: separate;
             border-spacing: 0;
             margin-bottom: 20px;
             background-color: #fff;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            border-radius: 8px; /* Match Gantt chart */
-            overflow: hidden; /* Ensure rounded corners apply */
+            border-radius: 8px;
+            overflow: hidden;
         }
         .task-table th {
             background-color: #e3f2fd;
             font-weight: 600;
             color: #333;
-            padding: 12px 16px; /* Consistent padding */
+            padding: 12px 16px;
             text-align: left;
             border-bottom: 1px solid #ddd;
         }
@@ -38,10 +38,10 @@
             color: #333;
         }
         .task-table tr:last-child td {
-            border-bottom: none; /* Clean edge at bottom */
+            border-bottom: none;
         }
         .task-table tr:hover {
-            background-color: #f9f9f9; /* Subtle hover effect */
+            background-color: #f9f9f9;
         }
         .task-table .index-cell {
             text-align: center;
@@ -69,13 +69,37 @@
         }
         .gantt-chart {
             position: relative;
-            overflow-x: auto; /* Horizontal scroll only if needed */
-            overflow-y: visible; /* No vertical scroll */
+            overflow-x: auto;
+            overflow-y: visible;
+            display: flex;
+            flex-direction: column;
+        }
+        .gantt-chart::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 200px;
+            width: calc(100% - 200px);
+            height: 100%;
+            {% if total_work_minutes is defined and total_work_minutes > 0 %}
+            background: repeating-linear-gradient(
+                to right,
+                #d9e2ec,
+                #d9e2ec {{ (15 / (total_work_minutes | float)) * 100 | round(2) }}%,
+                #f8fafc {{ (15 / (total_work_minutes | float)) * 100 | round(2) }}%,
+                #f8fafc {{ (30 / (total_work_minutes | float)) * 100 | round(2) }}%
+            );
+            {% else %}
+            background: #d9e2ec;
+            {% endif %}
+            z-index: -2;
+            opacity: 1;
         }
         .technician-row {
             display: flex;
             align-items: center;
-            margin-bottom: 10px;
+            min-height: 40px;
+            position: relative;
         }
         .technician-label {
             width: 200px;
@@ -83,30 +107,51 @@
             color: #333;
             padding: 10px;
             flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            height: 100%;
+            box-sizing: border-box;
         }
         .bars-container {
             flex-grow: 1;
-            height: auto; /* Adjust based on content */
+            height: 40px;
             position: relative;
-            background: #f0f0f0;
+            background: transparent;
+            box-sizing: border-box;
+            margin-left: 0;
+        }
+        .time-axis {
+            display: flex;
+            margin-left: 200px;
+            border-bottom: 1px solid #ddd;
+            position: relative;
+            height: 30px;
+        }
+        .time-tick {
+            flex: 1;
+            min-width: 40px;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+            padding: 5px 0;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
             box-sizing: border-box;
         }
-        /* Alternating background for intervals */
-        .bars-container::before {
+        .time-tick::after {
             content: '';
             position: absolute;
             top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: repeating-linear-gradient(
-                to right,
-                #f0f0f0,
-                #f0f0f0 {{ (15 / (total_work_minutes | float | default(1)) * 100) | round(2) }}%,
-                #fafafa {{ (15 / (total_work_minutes | float | default(1)) * 100) | round(2) }}%,
-                #fafafa {{ (30 / (total_work_minutes | float | default(1)) * 100) | round(2) }}%
-            );
-            z-index: -1;
+            right: 0;
+            height: var(--line-height, 100%);
+            border-right: 1px solid #c0c0c0;
+            z-index: 0;
+        }
+        .time-tick:last-child::after {
+            border-right: none;
         }
         .task-bar {
             position: absolute;
@@ -123,35 +168,19 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            text-align: center; /* Center text inside bar */
-            margin-right: 2px; /* Horizontal gap */
-        }
-        .time-axis {
-            display: flex;
-            margin-left: 200px;
-            border-bottom: 1px solid #ddd;
-            position: relative;
-        }
-        .time-tick {
-            flex: 1;
-            min-width: 40px;
             text-align: center;
-            font-size: 10px;
-            color: #666;
-            padding: 5px 0;
-            position: relative;
-        }
-        .time-tick::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            right: 0;
-            height: calc(100% + {{ technicians | length * 40 }}px); /* Extend to bottom of chart */
-            border-right: 1px solid #e0e0e0;
-            z-index: -1;
-        }
-        .time-tick:last-child::after {
-            border-right: none;
+            top: 8px;
+            {% if total_work_minutes is defined and total_work_minutes > 0 and start_percent is defined and duration_percent is defined %}
+            --tick-width: {{ (15 / (total_work_minutes | float)) * 100 | round(4) }}%;
+            --gap: calc(var(--tick-width) * 0.038); /* 3.8% gap, matches 49.38px / 51.315px */
+            width: calc({{ duration_percent | round(4) }}% - var(--gap));
+            left: calc({{ start_percent | round(4) }}% + calc({{ duration_percent | round(4) }}% * 0.5));
+            transform: translateX(-50%);
+            {% else %}
+            width: 96.2%;
+            left: 50%;
+            transform: translateX(-50%);
+            {% endif %}
         }
     </style>
 </head>
@@ -265,11 +294,8 @@
                         {% set color_b = ((task_id | int | default(1)) * 37 % 200 + 55) %}
                         <div class="task-bar"
                              style="
-                                left: {{ start_percent | round(2) }}%;
-                                width: {{ duration_percent | round(2) }}%;
-                                background-color: #{{ '%02x%02x%02x' % (color_r, color_g, color_b) }};
-                                top: {{ bar_index * 34 + 3 }}px; /* Increased spacing to 34px */
                                 z-index: {{ bar_index }};
+                                background-color: #{{ '%02x%02x%02x' % (color_r, color_g, color_b) }};
                              "
                              title="{{ assignment.task_name | default('Unknown') }} ({{ assignment.start | default(0) }}-{{ (assignment.start | default(0)) + (assignment.duration | default(0)) }} min{% if assignment.is_incomplete %}, capped from {{ assignment.original_duration | default(0) }} min{% endif %})">
                             {{ task_id | default('0') }}
@@ -283,5 +309,18 @@
         </div>
     </div>
     {% endif %}
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const ganttChart = document.querySelector('.gantt-chart');
+            const timeTicks = document.querySelectorAll('.time-tick');
+            if (ganttChart && timeTicks.length) {
+                const chartHeight = ganttChart.offsetHeight;
+                timeTicks.forEach(tick => {
+                    tick.style.setProperty('--line-height', `${chartHeight}px`);
+                });
+            }
+        });
+    </script>
 </body>
 </html>
