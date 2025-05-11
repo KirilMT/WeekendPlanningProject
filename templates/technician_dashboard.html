@@ -118,7 +118,7 @@
             position: absolute;
             top: 0;
             left: 0;
-            height: 100%;
+            height: var(--chart-height, 100%);
             border-left: 1px solid #c0c0c0;
         }
         .time-tick:first-child {
@@ -375,11 +375,9 @@
                 function updateGrid() {
                     const chartWidth = ganttChart.offsetWidth - 200;
                     const tickWidth = chartWidth / {{ num_intervals | default(1) }};
+                    ganttChart.style.setProperty('--chart-height', `${ganttChart.offsetHeight}px`);
                     timeTicks.forEach(tick => {
                         tick.style.minWidth = `${tickWidth}px`;
-                    });
-                    timeGrids.forEach(grid => {
-                        grid.style.gridTemplateColumns = `repeat({{ num_intervals | default(1) }}, ${tickWidth}px)`;
                     });
                 }
                 updateGrid();
