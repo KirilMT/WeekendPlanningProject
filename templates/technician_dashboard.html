@@ -74,62 +74,35 @@
             display: flex;
             flex-direction: column;
         }
-        .gantt-chart::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 200px;
-            width: calc(100% - 200px);
-            height: 100%;
-            {% if total_work_minutes is defined and total_work_minutes > 0 %}
-            background: repeating-linear-gradient(
-                to right,
-                #d9e2ec,
-                #d9e2ec {{ (15 / (total_work_minutes | float)) * 100 | round(2) }}%,
-                #f8fafc {{ (15 / (total_work_minutes | float)) * 100 | round(2) }}%,
-                #f8fafc {{ (30 / (total_work_minutes | float)) * 100 | round(2) }}%
-            );
-            {% else %}
-            background: #d9e2ec;
-            {% endif %}
-            z-index: -2;
-            opacity: 1;
-        }
         .technician-row {
-            display: flex;
+            display: grid;
+            grid-template-columns: 200px minmax(0, 1fr);
             align-items: center;
             min-height: 40px;
-            position: relative;
+            border-bottom: 1px solid #eee;
         }
         .technician-label {
             width: 200px;
             font-weight: 500;
             color: #333;
             padding: 10px;
-            flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            height: 100%;
             box-sizing: border-box;
+            background-color: #f9f9f9;
+            text-align: left;
         }
-        .bars-container {
-            flex-grow: 1;
-            height: 40px;
+        .time-grid {
+            display: grid;
+            grid-template-columns: repeat({{ num_intervals | default(1) }}, minmax(40px, 1fr));
             position: relative;
-            background: transparent;
-            box-sizing: border-box;
-            margin-left: 0;
+            height: 40px;
         }
         .time-axis {
-            display: flex;
-            margin-left: 200px;
+            display: grid;
+            grid-template-columns: 200px repeat({{ num_intervals | default(1) }}, minmax(40px, 1fr));
             border-bottom: 1px solid #ddd;
-            position: relative;
             height: 30px;
         }
         .time-tick {
-            flex: 1;
-            min-width: 40px;
             text-align: center;
             font-size: 10px;
             color: #666;
@@ -138,20 +111,36 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 100%;
             box-sizing: border-box;
         }
-        .time-tick::after {
+        .time-tick:not(:first-child)::after {
             content: '';
             position: absolute;
             top: 0;
-            right: 0;
-            height: var(--line-height, 100%);
-            border-right: 1px solid #c0c0c0;
-            z-index: 0;
+            left: 0;
+            height: 100%;
+            border-left: 1px solid #c0c0c0;
         }
-        .time-tick:last-child::after {
-            border-right: none;
+        .time-tick:first-child {
+            width: 200px;
+            background-color: #f9f9f9;
+        }
+        .task-bar {
+            height: 24px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 500;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            box-sizing: border-box;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            text-align: center;
+            margin: 8px 2px;
         }
     </style>
 </head>
@@ -340,6 +329,7 @@
         <div class="gantt-chart">
             <!-- Time Axis -->
             <div class="time-axis">
+                <div class="time-tick"></div>
                 {% for i in range(num_intervals | default(0)) %}
                 <div class="time-tick">{{ i * 15 }}-{{ (i + 1) * 15 }}</div>
                 {% endfor %}
@@ -348,55 +338,26 @@
             {% for technician in technicians %}
             <div class="technician-row">
                 <div class="technician-label">{{ technician }}</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     {% set bar_index = 0 %}
-                    {% set previous_end = -15 %}
                     {% for assignment in assignments if assignment.technician == technician %}
                         {% set task_id = assignment.instance_id.split('_')[0] if assignment.instance_id and '_' in assignment.instance_id else '0' %}
-                        {% set slot_start = ((assignment.start | float / 15) | round(0, 'floor') * 15) %}
-                        {% set slot_end = (((assignment.start | float + assignment.duration | float) / 15) | round(0, 'ceil') * 15) %}
-                        {% set start_percent = (slot_start / (total_work_minutes | float | default(1))) * 100 %}
-                        {% set duration_percent = ((slot_end - slot_start) / (total_work_minutes | float | default(1))) * 100 %}
+                        {% set slot_start = ((assignment.start | float / 15) | round(0, 'floor') | int) %}
+                        {% set slot_end = (((assignment.start | float + assignment.duration | float) / 15) | round(0, 'ceil') | int) %}
+                        {% set num_slots = slot_end - slot_start %}
                         {% set color_r = ((task_id | int | default(1)) * 97 % 200 + 55) %}
                         {% set color_g = ((task_id | int | default(1)) * 53 % 200 + 55) %}
                         {% set color_b = ((task_id | int | default(1)) * 37 % 200 + 55) %}
                         <div class="task-bar"
                              style="
-                                position: absolute;
-                                height: 24px;
-                                border-radius: 4px;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                color: #fff;
-                                font-size: 12px;
-                                font-weight: 500;
-                                box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-                                box-sizing: border-box;
-                                overflow: hidden;
-                                text-overflow: ellipsis;
-                                white-space: nowrap;
-                                text-align: center;
-                                z-index: {{ bar_index }};
+                                grid-column: {{ slot_start + 1 }} / {{ slot_end + 1 }};
                                 background-color: #{{ '%02x%02x%02x' % (color_r, color_g, color_b) }};
-                                top: 8px;
-                                {% if total_work_minutes is defined and total_work_minutes > 0 and start_percent is defined and duration_percent is defined %}
-                                --tick-width: {{ (15 / (total_work_minutes | float)) * 100 | round(4) }}%;
-                                --gap: calc(var(--tick-width) * 0.038); /* 3.8% gap, matches 49.38px / 51.315px */
-                                width: calc({{ duration_percent | round(4) }}% - var(--gap));
-                                left: calc({{ start_percent | round(4) }}% + calc({{ duration_percent | round(4) }}% * 0.5));
-                                transform: translateX(-50%);
-                                {% else %}
-                                width: 96.2%;
-                                left: 50%;
-                                transform: translateX(-50%);
-                                {% endif %}
+                                z-index: {{ bar_index }};
                              "
                              title="{{ assignment.task_name | default('Unknown') }} ({{ assignment.start | default(0) }}-{{ (assignment.start | default(0)) + (assignment.duration | default(0)) }} min{% if assignment.is_incomplete %}, capped from {{ assignment.original_duration | default(0) }} min{% endif %})">
                             {{ task_id | default('0') }}
                         </div>
                         {% set bar_index = bar_index + 1 %}
-                        {% set previous_end = slot_end %}
                     {% endfor %}
                 </div>
             </div>
@@ -408,12 +369,21 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const ganttChart = document.querySelector('.gantt-chart');
-            const timeTicks = document.querySelectorAll('.time-tick');
+            const timeTicks = document.querySelectorAll('.time-tick:not(:first-child)');
+            const timeGrids = document.querySelectorAll('.time-grid');
             if (ganttChart && timeTicks.length) {
-                const chartHeight = ganttChart.offsetHeight;
-                timeTicks.forEach(tick => {
-                    tick.style.setProperty('--line-height', `${chartHeight}px`);
-                });
+                function updateGrid() {
+                    const chartWidth = ganttChart.offsetWidth - 200;
+                    const tickWidth = chartWidth / {{ num_intervals | default(1) }};
+                    timeTicks.forEach(tick => {
+                        tick.style.minWidth = `${tickWidth}px`;
+                    });
+                    timeGrids.forEach(grid => {
+                        grid.style.gridTemplateColumns = `repeat({{ num_intervals | default(1) }}, ${tickWidth}px)`;
+                    });
+                }
+                updateGrid();
+                window.addEventListener('resize', updateGrid);
             }
         });
     </script>
