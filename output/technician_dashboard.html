@@ -7,7 +7,7 @@
             font-family: 'Segoe UI', Arial, sans-serif;
             margin: 20px;
             background-color: #f5f5f5;
-            overflow-x: hidden; /* Prevent page-wide horizontal scroll */
+            overflow-x: hidden;
         }
         h1, h2 {
             text-align: center;
@@ -16,19 +16,19 @@
         }
         .task-table {
             width: 100%;
-            border-collapse: separate; /* For rounded corners */
+            border-collapse: separate;
             border-spacing: 0;
             margin-bottom: 20px;
             background-color: #fff;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            border-radius: 8px; /* Match Gantt chart */
-            overflow: hidden; /* Ensure rounded corners apply */
+            border-radius: 8px;
+            overflow: hidden;
         }
         .task-table th {
             background-color: #e3f2fd;
             font-weight: 600;
             color: #333;
-            padding: 12px 16px; /* Consistent padding */
+            padding: 12px 16px;
             text-align: left;
             border-bottom: 1px solid #ddd;
         }
@@ -38,10 +38,10 @@
             color: #333;
         }
         .task-table tr:last-child td {
-            border-bottom: none; /* Clean edge at bottom */
+            border-bottom: none;
         }
         .task-table tr:hover {
-            background-color: #f9f9f9; /* Subtle hover effect */
+            background-color: #f9f9f9;
         }
         .task-table .index-cell {
             text-align: center;
@@ -66,50 +66,92 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             border-radius: 8px;
             box-sizing: border-box;
+            overflow: hidden;
         }
         .gantt-chart {
             position: relative;
-            overflow-x: auto; /* Horizontal scroll only if needed */
-            overflow-y: visible; /* No vertical scroll */
+            overflow-x: auto;
+            overflow-y: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
         }
         .technician-row {
-            display: flex;
+            display: grid;
+            grid-template-columns: 200px minmax(0, 1fr);
             align-items: center;
-            margin-bottom: 10px;
+            min-height: 40px;
+            position: relative;
+        }
+        .technician-row::after {
+            content: "";
+            display: block;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 1960px;
+            border-bottom: 1px solid #eee;
         }
         .technician-label {
             width: 200px;
             font-weight: 500;
             color: #333;
             padding: 10px;
-            flex-shrink: 0;
+            box-sizing: border-box;
+            background-color: #f9f9f9;
+            text-align: left;
         }
-        .bars-container {
-            flex-grow: 1;
-            height: auto; /* Adjust based on content */
+        .time-grid {
+            display: grid;
+            grid-template-columns: repeat(44, minmax(40px, 1fr));
             position: relative;
-            background: #f0f0f0;
+            height: 40px;
+            background: transparent;
+        }
+        .time-axis {
+            display: grid;
+            grid-template-columns: 200px repeat(44, minmax(40px, 1fr));
+            height: 30px;
+            position: sticky;
+            top: 0;
+            background-color: #fff;
+            z-index: 1;
+        }
+        .time-axis::after {
+            content: "";
+            display: block;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 1960px;
+            border-bottom: 1px solid #ddd;
+        }
+        .time-tick {
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+            padding: 5px 0;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             box-sizing: border-box;
         }
-        /* Alternating background for intervals */
-        .bars-container::before {
+        .time-tick:not(:first-child)::after {
             content: '';
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            background: repeating-linear-gradient(
-                to right,
-                #f0f0f0,
-                #f0f0f0 3.46%,
-                #fafafa 3.46%,
-                #fafafa 6.91%
-            );
-            z-index: -1;
+            bottom: 0;
+            height: 100vh;
+            border-left: 1px solid #c0c0c0;
+            z-index: -1; /* Set to -1 to ensure grid lines are behind task bars */
+        }
+        .time-tick:first-child {
+            width: 200px;
+            background-color: #f9f9f9;
         }
         .task-bar {
-            position: absolute;
             height: 24px;
             border-radius: 4px;
             display: flex;
@@ -123,35 +165,8 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            text-align: center; /* Center text inside bar */
-            margin-right: 2px; /* Horizontal gap */
-        }
-        .time-axis {
-            display: flex;
-            margin-left: 200px;
-            border-bottom: 1px solid #ddd;
-            position: relative;
-        }
-        .time-tick {
-            flex: 1;
-            min-width: 40px;
             text-align: center;
-            font-size: 10px;
-            color: #666;
-            padding: 5px 0;
-            position: relative;
-        }
-        .time-tick::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            right: 0;
-            height: calc(100% + 800px); /* Extend to bottom of chart */
-            border-right: 1px solid #e0e0e0;
-            z-index: -1;
-        }
-        .time-tick:last-child::after {
-            border-right: none;
+            margin: 8px 2px;
         }
     </style>
 </head>
@@ -163,13 +178,23 @@
         <tr>
             <th>Index</th>
             <th>Tasks</th>
-            <th>Type</th>
             <th>Lines</th>
             <th>Technicians</th>
+            <th>Assigned Technicians</th>
             <th>Time [min]</th>
             <th>Prio</th>
             <th>Qty</th>
             <th>Ticket/MO</th>
+        </tr>
+        
+        
+
+        <!-- PM Section -->
+        
+        <tr style="background-color: #d3d3d3;">
+            <td colspan="9" style="text-align: left; font-weight: bold; padding: 8px 16px;">
+                PMs & PdMs
+            </td>
         </tr>
         
         <tr>
@@ -177,47 +202,9 @@
                 1
             </td>
             <td>
-                BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines
+                BIW_PM_DGUV preparation
                 
                 
-                
-                    
-                    
-                    
-                
-                    
-                    
-                    
-                
-                    
-                    
-                    
-                
-                    
-                    
-                    
-                
-                    
-                    
-                    
-                
-                    
-                    
-                    
-                
-                    
-                    
-                    
-                
-                    
-                    
-                    
-                
-                    
-                    
-                        
-                    
-                    
                 
                     
                     
@@ -226,28 +213,32 @@
                     
                 
                 
-                    <br><span style="color: red;" title="Instances 9, 10 could not be scheduled due to no eligible technicians or time slots.">
-                        Unassigned: 9, 10
+                    <br><span style="color: red;" title="Instances 1 could not be scheduled due to no eligible technicians or time slots.">
+                        Unassigned: 1
                     </span>
                 
                 
             </td>
-            <td>PM</td>
             <td>
                 
-                    N/A
+                    UBM 20 CNV01/02 FRM2 15 CNV01/02 FRM1 ST30 FRM2 ST30
                 
             </td>
             <td>2</td>
-            <td>90</td>
+            <td>
+                
+                
+                
+            </td>
+            <td>660</td>
             <td class="prio-a">
                 A
             </td>
-            <td>10</td>
+            <td>1</td>
             <td>
                 
                     
-                    <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name=BIW_PM_RSW_8%20Weekly_Visual%20checks%20%2B%20Mastering%20%26%20Force%20%26%20Current%20calibration_New%20Lines" target="_blank">
+                    <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name=BIW_PM_DGUV%20preparation" target="_blank">
                         Flux MOs
                     </a>
                 
@@ -259,9 +250,29 @@
                 2
             </td>
             <td>
-                BiW_PM_ADH_Mesamoll Bodysides_wöchentlich
+                BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures
                 
                 
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
                 
                     
                     
@@ -290,22 +301,78 @@
                 
                 
             </td>
-            <td>PM</td>
             <td>
                 
-                    N/A
+                    All needs to be finished LHD/RHD
                 
             </td>
             <td>2</td>
-            <td>10</td>
-            <td class="prio-b">
-                B
+            <td>
+                
+                
+                    
+                        
+                    
+                
+                    
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                        
+                    
+                
+                    
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                Ben Kacem Hicham, Codrean Dumitru, Dianka Blick, Yeison Berbeci
             </td>
-            <td>6</td>
+            <td>90</td>
+            <td class="prio-a">
+                A
+            </td>
+            <td>11</td>
             <td>
                 
                     
-                    <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name=BiW_PM_ADH_Mesamoll%20Bodysides_w%C3%B6chentlich" target="_blank">
+                    <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name=BIW_PM_RSW_8%20Weekly_Visual%20checks%20%2B%20Mastering%20%26%20Force%20%26%20Current%20calibration_Closures" target="_blank">
                         Flux MOs
                     </a>
                 
@@ -315,6 +382,468 @@
         <tr>
             <td class="index-cell" style="background-color: #92d6a6; color: #fff;">
                 3
+            </td>
+            <td>
+                BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_FRM1+FRM2+RSP
+                
+                
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                
+                
+            </td>
+            <td>
+                
+                    N/A
+                
+            </td>
+            <td>2</td>
+            <td>
+                
+                
+                    
+                        
+                    
+                
+                    
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                Marvin Bienek, Bilgehan Berk Unsal
+            </td>
+            <td>90</td>
+            <td class="prio-a">
+                A
+            </td>
+            <td>5</td>
+            <td>
+                
+                    
+                    <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name=BIW_PM_RSW_8%20Weekly_Visual%20checks%20%2B%20Mastering%20%26%20Force%20%26%20Current%20calibration_FRM1%2BFRM2%2BRSP" target="_blank">
+                        Flux MOs
+                    </a>
+                
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="index-cell" style="background-color: #f343cb; color: #fff;">
+                4
+            </td>
+            <td>
+                BiW_PM_SPR_Wöchentlich
+                
+                
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                
+                
+            </td>
+            <td>
+                
+                    N/A
+                
+            </td>
+            <td>1</td>
+            <td>
+                
+                
+                    
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                Kiril Martinez Tamayo (PLC)
+            </td>
+            <td>60</td>
+            <td class="prio-a">
+                A
+            </td>
+            <td>5</td>
+            <td>
+                
+                    
+                    <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name=BiW_PM_SPR_W%C3%B6chentlich" target="_blank">
+                        Flux MOs
+                    </a>
+                
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="index-cell" style="background-color: #8c78f0; color: #fff;">
+                5
+            </td>
+            <td>
+                BIW_PM_TUCKER_SPR_Wöchentlich
+                
+                
+                
+                    
+                    
+                    
+                
+                
+                
+            </td>
+            <td>
+                
+                    N/A
+                
+            </td>
+            <td>1</td>
+            <td>
+                
+                
+                    
+                        
+                    
+                
+                Marvin Bienek
+            </td>
+            <td>60</td>
+            <td class="prio-a">
+                A
+            </td>
+            <td>1</td>
+            <td>
+                
+                    
+                    <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name=BIW_PM_TUCKER_SPR_W%C3%B6chentlich" target="_blank">
+                        Flux MOs
+                    </a>
+                
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="index-cell" style="background-color: #edad4d; color: #fff;">
+                6
+            </td>
+            <td>
+                BIW_PM_Fanuc_Roboter 18 Monatlich
+                
+                
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                
+                
+            </td>
+            <td>
+                
+                    RHD
+                
+            </td>
+            <td>2</td>
+            <td>
+                
+                
+                    
+                        
+                    
+                
+                    
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                József Szőke (PLC), Khanh Nguyen
+            </td>
+            <td>20</td>
+            <td class="prio-b">
+                B
+            </td>
+            <td>6</td>
+            <td>
+                
+                    
+                    <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name=BIW_PM_Fanuc_Roboter%2018%20Monatlich" target="_blank">
+                        Flux MOs
+                    </a>
+                
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="index-cell" style="background-color: #86e272; color: #fff;">
+                7
+            </td>
+            <td>
+                BiW_PM_MDS_RPC_zweiwöchentlich
+                
+                
+                
+                    
+                    
+                    
+                
+                
+                
+            </td>
+            <td>
+                
+                    N/A
+                
+            </td>
+            <td>2</td>
+            <td>
+                
+                
+                    
+                        
+                    
+                
+                    
+                        
+                    
+                
+                Gaurav Rawal, Mohamed Ali Loummir
+            </td>
+            <td>60</td>
+            <td class="prio-b">
+                B
+            </td>
+            <td>1</td>
+            <td>
+                
+                    
+                    <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name=BiW_PM_MDS_RPC_zweiw%C3%B6chentlich" target="_blank">
+                        Flux MOs
+                    </a>
+                
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="index-cell" style="background-color: #e74f97; color: #fff;">
+                8
+            </td>
+            <td>
+                BiW_PM_WEBER_wöchentlich
+                
+                
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                
+                
+            </td>
+            <td>
+                
+                    All needs to be finished
+                
+            </td>
+            <td>2</td>
+            <td>
+                
+                
+                    
+                        
+                    
+                
+                    
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                Moritz Kipper, Robert Rakowski
+            </td>
+            <td>60</td>
+            <td class="prio-b">
+                B
+            </td>
+            <td>3</td>
+            <td>
+                
+                    
+                    <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name=BiW_PM_WEBER_w%C3%B6chentlich" target="_blank">
+                        Flux MOs
+                    </a>
+                
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="index-cell" style="background-color: #8084bc; color: #fff;">
+                9
+            </td>
+            <td>
+                BiW_PM_Werkzeugwechsler_Monatlich
+                
+                
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                
+                
+            </td>
+            <td>
+                
+                    N/A
+                
+            </td>
+            <td>2</td>
+            <td>
+                
+                
+                    
+                        
+                    
+                
+                    
+                        
+                    
+                
+                    
+                
+                    
+                
+                Rafael Crispim, Phannic Phiri (PLC)
+            </td>
+            <td>40</td>
+            <td class="prio-b">
+                B
+            </td>
+            <td>2</td>
+            <td>
+                
+                    
+                    <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name=BiW_PM_Werkzeugwechsler_Monatlich" target="_blank">
+                        Flux MOs
+                    </a>
+                
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="index-cell" style="background-color: #e1b9e1; color: #fff;">
+                10
             </td>
             <td>
                 BIW_Rebuild_RSW_Pivot Exchange
@@ -332,13 +861,29 @@
                 
                 
             </td>
-            <td>PM</td>
             <td>
                 
                     RHD/LHD has to be finished
                 
             </td>
             <td>2</td>
+            <td>
+                
+                
+                    
+                        
+                    
+                
+                    
+                        
+                    
+                
+                    
+                
+                    
+                
+                Tom Grage, Rafael Crispim
+            </td>
             <td>150</td>
             <td class="prio-b">
                 B
@@ -355,8 +900,8 @@
         </tr>
         
         <tr>
-            <td class="index-cell" style="background-color: #f343cb; color: #fff;">
-                4
+            <td class="index-cell" style="background-color: #7aee3e; color: #fff;">
+                11
             </td>
             <td>
                 BiW_PM_Kappenfräser_3 monatlich_Alle
@@ -367,21 +912,41 @@
                     
                     
                 
+                    
+                    
+                    
+                
                 
                 
             </td>
-            <td>PM</td>
             <td>
                 
                     N/A
                 
             </td>
             <td>2</td>
+            <td>
+                
+                
+                    
+                        
+                    
+                
+                    
+                        
+                    
+                
+                    
+                
+                    
+                
+                Keegan Goeda, Robert Rakowski
+            </td>
             <td>40</td>
             <td class="prio-c">
                 C
             </td>
-            <td>1</td>
+            <td>2</td>
             <td>
                 
                     
@@ -393,8 +958,8 @@
         </tr>
         
         <tr>
-            <td class="index-cell" style="background-color: #8c78f0; color: #fff;">
-                5
+            <td class="index-cell" style="background-color: #db5b63; color: #fff;">
+                12
             </td>
             <td>
                 BiW_PM_Leitungspaket
@@ -441,33 +1006,69 @@
                     
                     
                 
-                    
-                    
-                    
-                
-                    
-                    
-                    
-                
-                    
-                    
-                    
-                
                 
                 
             </td>
-            <td>PM</td>
             <td>
                 
                     N/A
                 
             </td>
             <td>2</td>
+            <td>
+                
+                
+                    
+                        
+                    
+                
+                    
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                Sophia - Annabell Wagner, Gaurav Rawal
+            </td>
             <td>15</td>
             <td class="prio-b">
                 B
             </td>
-            <td>13</td>
+            <td>10</td>
             <td>
                 
                     
@@ -479,8 +1080,8 @@
         </tr>
         
         <tr>
-            <td class="index-cell" style="background-color: #edad4d; color: #fff;">
-                6
+            <td class="index-cell" style="background-color: #749088; color: #fff;">
+                13
             </td>
             <td>
                 BIW_PdM_RSW_C-Factor
@@ -491,21 +1092,49 @@
                     
                     
                 
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
                 
                 
             </td>
-            <td>PM</td>
             <td>
                 
                     N/A
                 
             </td>
             <td>2</td>
+            <td>
+                
+                
+                    
+                        
+                    
+                
+                    
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                Keegan Goeda, Lukasz Brach
+            </td>
             <td>90</td>
             <td class="prio-a">
                 A
             </td>
-            <td>1</td>
+            <td>3</td>
             <td>
                 
                     
@@ -517,13 +1146,29 @@
         </tr>
         
         <tr>
-            <td class="index-cell" style="background-color: #e74f97; color: #fff;">
-                8
+            <td class="index-cell" style="background-color: #d5c5ad; color: #fff;">
+                14
             </td>
             <td>
-                Luft leakage
+                BIW_PdM_RSW_Feedback Cable
                 
                 
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
+                
+                    
+                    
+                    
                 
                     
                     
@@ -532,181 +1177,72 @@
                 
                 
             </td>
-            <td>REP</td>
             <td>
                 
-                    RUO 660 
+                    N/A
                 
             </td>
             <td>2</td>
-            <td>90</td>
+            <td>
+                
+                
+                    
+                        
+                    
+                
+                    
+                        
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+                Khanh Nguyen, Phannic Phiri (PLC)
+            </td>
+            <td>20</td>
             <td class="prio-b">
                 B
             </td>
-            <td>1</td>
+            <td>5</td>
             <td>
                 
                     
-                        <a href="https://flux-gfb.tesla.com/app/issues/view/25158" target="_blank">25158</a>
-                    
+                    <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name=BIW_PdM_RSW_Feedback%20Cable" target="_blank">
+                        Flux MOs
+                    </a>
                 
             </td>
         </tr>
         
-        <tr>
-            <td class="index-cell" style="background-color: #8084bc; color: #fff;">
-                9
-            </td>
-            <td>
-                die Schraube fällt beim einsetzen in die Linie am vorderen Sidesill
-                
-                
-                
-                    
-                    
-                    
-                
-                
-                
-            </td>
-            <td>REP</td>
-            <td>
-                
-                    UBM 50 tl07
-                
-            </td>
-            <td>2</td>
-            <td>120</td>
-            <td class="prio-b">
-                B
-            </td>
-            <td>1</td>
-            <td>
-                
-                    
-                        <a href="https://flux-gfb.tesla.com/app/issues/view/25127" target="_blank">25127</a>
-                    
-                
+        
+
+        <!-- REP Section -->
+        
+        <tr style="background-color: #d3d3d3;">
+            <td colspan="9" style="text-align: left; font-weight: bold; padding: 8px 16px;">
+                Tickets/MOs/Engineering Requests
             </td>
         </tr>
         
         <tr>
-            <td class="index-cell" style="background-color: #e1b9e1; color: #fff;">
-                10
+            <td class="index-cell" style="background-color: #6efad2; color: #fff;">
+                15
             </td>
-            <td>
-                Die Schienen an OP80 deformiert
-                
-                
-                
-                    
-                    
-                    
-                
-                
-                
-            </td>
-            <td>REP</td>
-            <td>
-                
-                    FNL 80
-                
-            </td>
-            <td>2</td>
-            <td>150</td>
-            <td class="prio-b">
-                B
-            </td>
-            <td>1</td>
-            <td>
-                
-                    
-                        <a href="https://flux-gfb.tesla.com/app/issues/view/24585" target="_blank">24585</a>
-                    
-                
-            </td>
-        </tr>
-        
-        <tr>
-            <td class="index-cell" style="background-color: #7aee3e; color: #fff;">
-                11
-            </td>
-            <td>
-                undicht
-                
-                
-                
-                    
-                    
-                    
-                
-                
-                
-            </td>
-            <td>REP</td>
-            <td>
-                
-                    LGT2 260 tl01
-                
-            </td>
-            <td>2</td>
-            <td>90</td>
-            <td class="prio-c">
-                C
-            </td>
-            <td>1</td>
-            <td>
-                
-                    
-                        <a href="https://flux-gfb.tesla.com/app/issues/view/25134" target="_blank">25134</a>
-                    
-                
-            </td>
-        </tr>
-        
-        <tr>
-            <td class="index-cell" style="background-color: #db5b63; color: #fff;">
-                12
-            </td>
-            <td>
-                undicht
-                
-                
-                
-                    
-                    
-                    
-                
-                
-                
-            </td>
-            <td>REP</td>
-            <td>
-                
-                    LHD 180
-                
-            </td>
-            <td>2</td>
-            <td>90</td>
-            <td class="prio-c">
-                C
-            </td>
-            <td>1</td>
-            <td>
-                
-                    
-                        <a href="https://flux-gfb.tesla.com/app/issues/view/25135" target="_blank">25135</a>
-                    
-                
-            </td>
-        </tr>
-        
-        <tr>
-            <td class="index-cell" style="background-color: #749088; color: #fff;">
-                13
-            </td>
-            <td>
-                undicht
+            <td style="background-color: #e6e6e6;">
+                cabinet for special fine metal particles necessary next to our laser cell.
                 
                 
                 
@@ -723,36 +1259,324 @@
                 
                 
             </td>
-            <td>REP</td>
-            <td>
+            <td style="background-color: #e6e6e6;">
                 
-                    LHD 180
+                    N/A
                 
             </td>
-            <td>2</td>
-            <td>90</td>
-            <td class="prio-c">
-                C
+            <td style="background-color: #e6e6e6;">1</td>
+            <td style="background-color: #e6e6e6;">
+                
+                
+                
             </td>
-            <td>1</td>
-            <td>
+            <td style="background-color: #e6e6e6;">240</td>
+            <td class="prio-b">
+                B
+            </td>
+            <td style="background-color: #e6e6e6;">1</td>
+            <td style="background-color: #e6e6e6;">
                 
                     
-                        <a href="https://flux-gfb.tesla.com/app/issues/view/25135" target="_blank">25135</a>
+                        <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?ids=5f17428" target="_blank">5f17428</a>
                     
                 
             </td>
         </tr>
         
+        <tr>
+            <td class="index-cell" style="background-color: #cf67f7; color: #fff;">
+                16
+            </td>
+            <td style="background-color: #e6e6e6;">
+                Install addtional Heating Box
+                
+                
+                
+                    
+                    
+                        
+                    
+                    
+                
+                
+                    <br><span style="color: red;" title="Instances 1 could not be scheduled due to no eligible technicians or time slots.">
+                        Unassigned: 1
+                    </span>
+                
+                
+            </td>
+            <td style="background-color: #e6e6e6;">
+                
+                    FRM1 16
+                
+            </td>
+            <td style="background-color: #e6e6e6;">1</td>
+            <td style="background-color: #e6e6e6;">
+                
+                
+                
+            </td>
+            <td style="background-color: #e6e6e6;">60</td>
+            <td class="prio-b">
+                B
+            </td>
+            <td style="background-color: #e6e6e6;">1</td>
+            <td style="background-color: #e6e6e6;">
+                
+                    
+                        <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?ids=419faf4" target="_blank">419faf4</a>
+                    
+                
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="index-cell" style="background-color: #689c54; color: #fff;">
+                17
+            </td>
+            <td style="background-color: #e6e6e6;">
+                cap water leakage
+                
+                
+                
+                    
+                    
+                        
+                    
+                    
+                
+                
+                    <br><span style="color: red;" title="Instances 1 could not be scheduled due to no eligible technicians or time slots.">
+                        Unassigned: 1
+                    </span>
+                
+                
+            </td>
+            <td style="background-color: #e6e6e6;">
+                
+                    RSP 30 rb04
+                
+            </td>
+            <td style="background-color: #e6e6e6;">2</td>
+            <td style="background-color: #e6e6e6;">
+                
+                
+                
+            </td>
+            <td style="background-color: #e6e6e6;">120</td>
+            <td class="prio-b">
+                B
+            </td>
+            <td style="background-color: #e6e6e6;">1</td>
+            <td style="background-color: #e6e6e6;">
+                
+                    
+                        <a href="https://flux-gfb.tesla.com/app/issues/view/25214" target="_blank">25214</a>
+                    
+                
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="index-cell" style="background-color: #c9d179; color: #fff;">
+                18
+            </td>
+            <td style="background-color: #e6e6e6;">
+                RB bleibt in Home Position stehen
+                
+                
+                
+                    
+                    
+                        
+                    
+                    
+                
+                
+                    <br><span style="color: red;" title="Instances 1 could not be scheduled due to no eligible technicians or time slots.">
+                        Unassigned: 1
+                    </span>
+                
+                
+            </td>
+            <td style="background-color: #e6e6e6;">
+                
+                    LGT2 390 rb01
+                
+            </td>
+            <td style="background-color: #e6e6e6;">2</td>
+            <td style="background-color: #e6e6e6;">
+                
+                
+                
+            </td>
+            <td style="background-color: #e6e6e6;">120</td>
+            <td class="prio-b">
+                B
+            </td>
+            <td style="background-color: #e6e6e6;">1</td>
+            <td style="background-color: #e6e6e6;">
+                
+                    
+                        <a href="https://flux-gfb.tesla.com/app/issues/view/25210" target="_blank">25210</a>
+                    
+                
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="index-cell" style="background-color: #623e9e; color: #fff;">
+                19
+            </td>
+            <td style="background-color: #e6e6e6;">
+                Die Signalleuchte für Logistik funktioniert nicht
+                
+                
+                
+                    
+                    
+                        
+                    
+                    
+                
+                
+                    <br><span style="color: red;" title="Instances 1 could not be scheduled due to no eligible technicians or time slots.">
+                        Unassigned: 1
+                    </span>
+                
+                
+            </td>
+            <td style="background-color: #e6e6e6;">
+                
+                    RPC 005
+                
+            </td>
+            <td style="background-color: #e6e6e6;">2</td>
+            <td style="background-color: #e6e6e6;">
+                
+                
+                
+            </td>
+            <td style="background-color: #e6e6e6;">90</td>
+            <td class="prio-b">
+                B
+            </td>
+            <td style="background-color: #e6e6e6;">1</td>
+            <td style="background-color: #e6e6e6;">
+                
+                    
+                        <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?ids=1ead172" target="_blank">1ead172</a>
+                    
+                
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="index-cell" style="background-color: #c373c3; color: #fff;">
+                20
+            </td>
+            <td style="background-color: #e6e6e6;">
+                Manipulator anpassen/ instandsetzen
+                
+                
+                
+                    
+                    
+                        
+                    
+                    
+                
+                
+                    <br><span style="color: red;" title="Instances 1 could not be scheduled due to no eligible technicians or time slots.">
+                        Unassigned: 1
+                    </span>
+                
+                
+            </td>
+            <td style="background-color: #e6e6e6;">
+                
+                    LGT2 470 
+                
+            </td>
+            <td style="background-color: #e6e6e6;">2</td>
+            <td style="background-color: #e6e6e6;">
+                
+                
+                
+            </td>
+            <td style="background-color: #e6e6e6;">120</td>
+            <td class="prio-b">
+                B
+            </td>
+            <td style="background-color: #e6e6e6;">1</td>
+            <td style="background-color: #e6e6e6;">
+                
+                    
+                        <a href="https://flux-gfb.tesla.com/app/issues/view/24422" target="_blank">24422</a>
+                    
+                
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="index-cell" style="background-color: #5ca8e8; color: #fff;">
+                21
+            </td>
+            <td style="background-color: #e6e6e6;">
+                Deinstallation Kleberdecke
+                
+                
+                
+                    
+                    
+                        
+                    
+                    
+                
+                
+                    <br><span style="color: red;" title="Instances 1 could not be scheduled due to no eligible technicians or time slots.">
+                        Unassigned: 1
+                    </span>
+                
+                
+            </td>
+            <td style="background-color: #e6e6e6;">
+                
+                    BSOR 120
+                
+            </td>
+            <td style="background-color: #e6e6e6;">2</td>
+            <td style="background-color: #e6e6e6;">
+                
+                
+                
+            </td>
+            <td style="background-color: #e6e6e6;">150</td>
+            <td class="prio-c">
+                C
+            </td>
+            <td style="background-color: #e6e6e6;">1</td>
+            <td style="background-color: #e6e6e6;">
+                
+                    
+                        <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?ids=fe5dbfa" target="_blank">fe5dbfa</a>
+                    
+                
+            </td>
+        </tr>
+        
+        
     </table>
 
     <!-- Gantt Chart -->
-    <h2>Gantt Chart: 434 min of work</h2>
+    <h2>Gantt Chart: 651 min of work</h2>
     
     <div class="gantt-container">
         <div class="gantt-chart">
             <!-- Time Axis -->
             <div class="time-axis">
+                <div class="time-tick"></div>
                 
                 <div class="time-tick">0-15</div>
                 
@@ -812,16 +1636,43 @@
                 
                 <div class="time-tick">420-435</div>
                 
+                <div class="time-tick">435-450</div>
+                
+                <div class="time-tick">450-465</div>
+                
+                <div class="time-tick">465-480</div>
+                
+                <div class="time-tick">480-495</div>
+                
+                <div class="time-tick">495-510</div>
+                
+                <div class="time-tick">510-525</div>
+                
+                <div class="time-tick">525-540</div>
+                
+                <div class="time-tick">540-555</div>
+                
+                <div class="time-tick">555-570</div>
+                
+                <div class="time-tick">570-585</div>
+                
+                <div class="time-tick">585-600</div>
+                
+                <div class="time-tick">600-615</div>
+                
+                <div class="time-tick">615-630</div>
+                
+                <div class="time-tick">630-645</div>
+                
+                <div class="time-tick">645-660</div>
+                
             </div>
             <!-- Technician Rows -->
             
             <div class="technician-row">
                 <div class="technician-label">Kiril Martinez Tamayo (PLC)</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
-                    
-                    
-                        
                         
                         
                         
@@ -831,19 +1682,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 0.0%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 1 / 5;
+                                background-color: #f343cb;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BiW_PM_Leitungspaket (Instance 1/13) (0-15 min)">
-                            5
+                             title="BiW_PM_SPR_Wöchentlich (Instance 1/5) (0-60 min)">
+                            4
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -853,19 +1699,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 3.46%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 5 / 9;
+                                background-color: #f343cb;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BiW_PM_Leitungspaket (Instance 2/13) (15-30 min)">
-                            5
+                             title="BiW_PM_SPR_Wöchentlich (Instance 2/5) (60-120 min)">
+                            4
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -875,19 +1716,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 6.91%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 9 / 13;
+                                background-color: #f343cb;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BiW_PM_Leitungspaket (Instance 3/13) (30-45 min)">
-                            5
+                             title="BiW_PM_SPR_Wöchentlich (Instance 3/5) (120-180 min)">
+                            4
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -897,19 +1733,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 10.37%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 13 / 17;
+                                background-color: #f343cb;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BiW_PM_Leitungspaket (Instance 4/13) (45-60 min)">
-                            5
+                             title="BiW_PM_SPR_Wöchentlich (Instance 4/5) (180-240 min)">
+                            4
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -919,204 +1750,21 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 13.82%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 17 / 21;
+                                background-color: #f343cb;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BiW_PM_Leitungspaket (Instance 5/13) (60-75 min)">
-                            5
+                             title="BiW_PM_SPR_Wöchentlich (Instance 5/5) (240-300 min)">
+                            4
                         </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 17.28%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_Leitungspaket (Instance 6/13) (75-90 min)">
-                            5
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 20.74%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_Leitungspaket (Instance 7/13) (90-105 min)">
-                            5
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 24.19%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_Leitungspaket (Instance 8/13) (105-120 min)">
-                            5
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 27.65%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_Leitungspaket (Instance 9/13) (120-135 min)">
-                            5
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 31.11%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_Leitungspaket (Instance 10/13) (135-150 min)">
-                            5
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 34.56%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_Leitungspaket (Instance 11/13) (150-165 min)">
-                            5
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 38.02%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_Leitungspaket (Instance 12/13) (165-180 min)">
-                            5
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 41.47%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_Leitungspaket (Instance 13/13) (180-195 min)">
-                            5
-                        </div>
-                        
-                        
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Marvin Bienek</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
-                    
-                    
-                        
                         
                         
                         
@@ -1126,19 +1774,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 0.0%;
-                                width: 20.74%;
-                                background-color: #edad4d;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 1 / 7;
+                                background-color: #92d6a6;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_PdM_RSW_C-Factor (Instance 1/1) (0-90 min)">
-                            6
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_FRM1+FRM2+RSP (Instance 1/5) (0-90 min)">
+                            3
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -1148,19 +1791,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 20.74%;
-                                width: 10.37%;
-                                background-color: #f343cb;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 7 / 13;
+                                background-color: #92d6a6;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BiW_PM_Kappenfräser_3 monatlich_Alle (Instance 1/1) (90-130 min)">
-                            4
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_FRM1+FRM2+RSP (Instance 2/5) (90-180 min)">
+                            3
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -1170,28 +1808,72 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 44.93%;
-                                width: 20.74%;
-                                background-color: #db5b63;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 13 / 19;
+                                background-color: #92d6a6;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="undicht (Instance 1/1) (195-285 min)">
-                            12
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_FRM1+FRM2+RSP (Instance 3/5) (180-270 min)">
+                            3
                         </div>
+                    
                         
                         
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 19 / 25;
+                                background-color: #92d6a6;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_FRM1+FRM2+RSP (Instance 4/5) (270-360 min)">
+                            3
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 25 / 31;
+                                background-color: #92d6a6;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_FRM1+FRM2+RSP (Instance 5/5) (360-450 min)">
+                            3
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 31 / 35;
+                                background-color: #8c78f0;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_TUCKER_SPR_Wöchentlich (Instance 1/1) (450-510 min)">
+                            5
+                        </div>
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Ben Kacem Hicham</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
-                    
-                    
-                        
                         
                         
                         
@@ -1201,28 +1883,123 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 0.0%;
-                                width: 20.74%;
-                                background-color: #edad4d;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 1 / 7;
+                                background-color: #f9a181;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_PdM_RSW_C-Factor (Instance 1/1) (0-90 min)">
-                            6
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 1/11) (0-90 min)">
+                            2
                         </div>
+                    
                         
                         
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 7 / 13;
+                                background-color: #f9a181;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 2/11) (90-180 min)">
+                            2
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 13 / 19;
+                                background-color: #f9a181;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 3/11) (180-270 min)">
+                            2
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 19 / 25;
+                                background-color: #f9a181;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 4/11) (270-360 min)">
+                            2
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 25 / 31;
+                                background-color: #f9a181;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 5/11) (360-450 min)">
+                            2
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 31 / 37;
+                                background-color: #f9a181;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 6/11) (450-540 min)">
+                            2
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 37 / 43;
+                                background-color: #f9a181;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 7/11) (540-630 min)">
+                            2
+                        </div>
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Bilgehan Berk Unsal</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
-                    
-                    
-                        
                         
                         
                         
@@ -1232,151 +2009,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 0.0%;
-                                width: 3.46%;
-                                background-color: #f9a181;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_ADH_Mesamoll Bodysides_wöchentlich (Instance 1/6) (0-10 min)">
-                            2
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 3.46%;
-                                width: 3.46%;
-                                background-color: #f9a181;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_ADH_Mesamoll Bodysides_wöchentlich (Instance 2/6) (15-25 min)">
-                            2
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 6.91%;
-                                width: 3.46%;
-                                background-color: #f9a181;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_ADH_Mesamoll Bodysides_wöchentlich (Instance 3/6) (30-40 min)">
-                            2
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 10.37%;
-                                width: 3.46%;
-                                background-color: #f9a181;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_ADH_Mesamoll Bodysides_wöchentlich (Instance 4/6) (45-55 min)">
-                            2
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 13.82%;
-                                width: 3.46%;
-                                background-color: #f9a181;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_ADH_Mesamoll Bodysides_wöchentlich (Instance 5/6) (60-70 min)">
-                            2
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 17.28%;
-                                width: 3.46%;
-                                background-color: #f9a181;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_ADH_Mesamoll Bodysides_wöchentlich (Instance 6/6) (75-85 min)">
-                            2
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 20.74%;
-                                width: 34.56%;
+                                grid-column: 1 / 7;
                                 background-color: #92d6a6;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_Rebuild_RSW_Pivot Exchange (Instance 1/2) (90-240 min)">
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_FRM1+FRM2+RSP (Instance 1/5) (0-90 min)">
                             3
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -1386,28 +2026,72 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 55.3%;
-                                width: 34.56%;
+                                grid-column: 7 / 13;
                                 background-color: #92d6a6;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_Rebuild_RSW_Pivot Exchange (Instance 2/2) (240-390 min)">
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_FRM1+FRM2+RSP (Instance 2/5) (90-180 min)">
                             3
                         </div>
+                    
                         
                         
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 13 / 19;
+                                background-color: #92d6a6;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_FRM1+FRM2+RSP (Instance 3/5) (180-270 min)">
+                            3
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 19 / 25;
+                                background-color: #92d6a6;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_FRM1+FRM2+RSP (Instance 4/5) (270-360 min)">
+                            3
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 25 / 31;
+                                background-color: #92d6a6;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_FRM1+FRM2+RSP (Instance 5/5) (360-450 min)">
+                            3
+                        </div>
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Codrean Dumitru</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
-                    
-                    
-                        
                         
                         
                         
@@ -1417,19 +2101,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 0.0%;
-                                width: 3.46%;
+                                grid-column: 1 / 7;
                                 background-color: #f9a181;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BiW_PM_ADH_Mesamoll Bodysides_wöchentlich (Instance 1/6) (0-10 min)">
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 1/11) (0-90 min)">
                             2
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -1439,19 +2118,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 3.46%;
-                                width: 3.46%;
+                                grid-column: 7 / 13;
                                 background-color: #f9a181;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BiW_PM_ADH_Mesamoll Bodysides_wöchentlich (Instance 2/6) (15-25 min)">
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 2/11) (90-180 min)">
                             2
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -1461,19 +2135,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 6.91%;
-                                width: 3.46%;
+                                grid-column: 13 / 19;
                                 background-color: #f9a181;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BiW_PM_ADH_Mesamoll Bodysides_wöchentlich (Instance 3/6) (30-40 min)">
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 3/11) (180-270 min)">
                             2
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -1483,19 +2152,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 10.37%;
-                                width: 3.46%;
+                                grid-column: 19 / 25;
                                 background-color: #f9a181;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BiW_PM_ADH_Mesamoll Bodysides_wöchentlich (Instance 4/6) (45-55 min)">
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 4/11) (270-360 min)">
                             2
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -1505,19 +2169,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 13.82%;
-                                width: 3.46%;
+                                grid-column: 25 / 31;
                                 background-color: #f9a181;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BiW_PM_ADH_Mesamoll Bodysides_wöchentlich (Instance 5/6) (60-70 min)">
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 5/11) (360-450 min)">
                             2
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -1527,28 +2186,38 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 17.28%;
-                                width: 3.46%;
+                                grid-column: 31 / 37;
                                 background-color: #f9a181;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BiW_PM_ADH_Mesamoll Bodysides_wöchentlich (Instance 6/6) (75-85 min)">
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 6/11) (450-540 min)">
                             2
                         </div>
+                    
                         
                         
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 37 / 43;
+                                background-color: #f9a181;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 7/11) (540-630 min)">
+                            2
+                        </div>
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Dianka Blick</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
-                    
-                    
-                        
                         
                         
                         
@@ -1558,19 +2227,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 0.0%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 1 / 7;
+                                background-color: #f9a181;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BiW_PM_Leitungspaket (Instance 1/13) (0-15 min)">
-                            5
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 8/11) (0-90 min)">
+                            2
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -1580,19 +2244,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 3.46%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 7 / 13;
+                                background-color: #f9a181;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BiW_PM_Leitungspaket (Instance 2/13) (15-30 min)">
-                            5
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 9/11) (90-180 min)">
+                            2
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -1602,19 +2261,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 6.91%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 13 / 19;
+                                background-color: #f9a181;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BiW_PM_Leitungspaket (Instance 3/13) (30-45 min)">
-                            5
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 10/11) (180-270 min)">
+                            2
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -1624,248 +2278,21 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 10.37%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 19 / 25;
+                                background-color: #f9a181;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BiW_PM_Leitungspaket (Instance 4/13) (45-60 min)">
-                            5
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 11/11) (270-360 min)">
+                            2
                         </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 13.82%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_Leitungspaket (Instance 5/13) (60-75 min)">
-                            5
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 17.28%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_Leitungspaket (Instance 6/13) (75-90 min)">
-                            5
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 20.74%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_Leitungspaket (Instance 7/13) (90-105 min)">
-                            5
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 24.19%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_Leitungspaket (Instance 8/13) (105-120 min)">
-                            5
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 27.65%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_Leitungspaket (Instance 9/13) (120-135 min)">
-                            5
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 31.11%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_Leitungspaket (Instance 10/13) (135-150 min)">
-                            5
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 34.56%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_Leitungspaket (Instance 11/13) (150-165 min)">
-                            5
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 38.02%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_Leitungspaket (Instance 12/13) (165-180 min)">
-                            5
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 41.47%;
-                                width: 3.46%;
-                                background-color: #8c78f0;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BiW_PM_Leitungspaket (Instance 13/13) (180-195 min)">
-                            5
-                        </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 44.93%;
-                                width: 20.74%;
-                                background-color: #db5b63;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="undicht (Instance 1/1) (195-285 min)">
-                            12
-                        </div>
-                        
-                        
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Yeison Berbeci</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
-                    
-                    
-                        
                         
                         
                         
@@ -1875,19 +2302,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 0.0%;
-                                width: 20.74%;
-                                background-color: #986c5c;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 1 / 7;
+                                background-color: #f9a181;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (Instance 1/10) (0-90 min)">
-                            1
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 8/11) (0-90 min)">
+                            2
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -1897,19 +2319,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 20.74%;
-                                width: 20.74%;
-                                background-color: #986c5c;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 7 / 13;
+                                background-color: #f9a181;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (Instance 2/10) (90-180 min)">
-                            1
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 9/11) (90-180 min)">
+                            2
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -1919,19 +2336,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 41.47%;
-                                width: 20.74%;
-                                background-color: #986c5c;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 13 / 19;
+                                background-color: #f9a181;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (Instance 3/10) (180-270 min)">
-                            1
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 10/11) (180-270 min)">
+                            2
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -1941,28 +2353,21 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 62.21%;
-                                width: 20.74%;
-                                background-color: #986c5c;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 19 / 25;
+                                background-color: #f9a181;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (Instance 4/10) (270-360 min)">
-                            1
+                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures (Instance 11/11) (270-360 min)">
+                            2
                         </div>
-                        
-                        
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Tom Grage</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
-                    
-                    
-                        
                         
                         
                         
@@ -1972,19 +2377,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 20.74%;
-                                width: 34.56%;
-                                background-color: #92d6a6;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 7 / 17;
+                                background-color: #e1b9e1;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
                              title="BIW_Rebuild_RSW_Pivot Exchange (Instance 1/2) (90-240 min)">
-                            3
+                            10
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -1994,46 +2394,205 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 55.3%;
-                                width: 34.56%;
-                                background-color: #92d6a6;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 17 / 27;
+                                background-color: #e1b9e1;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
                              title="BIW_Rebuild_RSW_Pivot Exchange (Instance 2/2) (240-390 min)">
-                            3
+                            10
                         </div>
-                        
-                        
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Thiago Nery (PLC)</div>
-                <div class="bars-container">
-                    
-                    
+                <div class="time-grid">
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Sophia - Annabell Wagner</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 5 / 6;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 1/10) (60-75 min)">
+                            12
+                        </div>
                     
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 6 / 7;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 2/10) (75-90 min)">
+                            12
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 7 / 8;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 3/10) (90-105 min)">
+                            12
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 8 / 9;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 4/10) (105-120 min)">
+                            12
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 9 / 10;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 5/10) (120-135 min)">
+                            12
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 10 / 11;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 6/10) (135-150 min)">
+                            12
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 11 / 12;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 7/10) (150-165 min)">
+                            12
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 12 / 13;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 8/10) (165-180 min)">
+                            12
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 13 / 14;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 9/10) (180-195 min)">
+                            12
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 14 / 15;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 10/10) (195-210 min)">
+                            12
+                        </div>
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">József Szőke (PLC)</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
-                    
-                    
-                        
                         
                         
                         
@@ -2043,19 +2602,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 0.0%;
-                                width: 20.74%;
-                                background-color: #e74f97;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 1 / 3;
+                                background-color: #edad4d;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="Luft leakage (Instance 1/1) (0-90 min)">
-                            8
+                             title="BIW_PM_Fanuc_Roboter 18 Monatlich (Instance 1/6) (0-20 min)">
+                            6
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -2065,19 +2619,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 20.74%;
-                                width: 27.65%;
-                                background-color: #8084bc;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 3 / 5;
+                                background-color: #edad4d;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="die Schraube fällt beim einsetzen in die Linie am vorderen Sidesill (Instance 1/1) (90-210 min)">
-                            9
+                             title="BIW_PM_Fanuc_Roboter 18 Monatlich (Instance 2/6) (30-50 min)">
+                            6
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -2087,37 +2636,266 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 48.39%;
-                                width: 34.56%;
-                                background-color: #e1b9e1;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 5 / 7;
+                                background-color: #edad4d;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="Die Schienen an OP80 deformiert (Instance 1/1) (210-360 min)">
-                            10
+                             title="BIW_PM_Fanuc_Roboter 18 Monatlich (Instance 3/6) (60-80 min)">
+                            6
                         </div>
+                    
                         
                         
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 7 / 9;
+                                background-color: #edad4d;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_Fanuc_Roboter 18 Monatlich (Instance 4/6) (90-110 min)">
+                            6
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 9 / 11;
+                                background-color: #edad4d;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_Fanuc_Roboter 18 Monatlich (Instance 5/6) (120-140 min)">
+                            6
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 11 / 13;
+                                background-color: #edad4d;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_Fanuc_Roboter 18 Monatlich (Instance 6/6) (150-170 min)">
+                            6
+                        </div>
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Gaurav Rawal</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 1 / 5;
+                                background-color: #86e272;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_MDS_RPC_zweiwöchentlich (Instance 1/1) (0-60 min)">
+                            7
+                        </div>
                     
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 5 / 6;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 1/10) (60-75 min)">
+                            12
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 6 / 7;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 2/10) (75-90 min)">
+                            12
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 7 / 8;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 3/10) (90-105 min)">
+                            12
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 8 / 9;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 4/10) (105-120 min)">
+                            12
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 9 / 10;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 5/10) (120-135 min)">
+                            12
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 10 / 11;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 6/10) (135-150 min)">
+                            12
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 11 / 12;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 7/10) (150-165 min)">
+                            12
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 12 / 13;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 8/10) (165-180 min)">
+                            12
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 13 / 14;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 9/10) (180-195 min)">
+                            12
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 14 / 15;
+                                background-color: #db5b63;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Leitungspaket (Instance 10/10) (195-210 min)">
+                            12
+                        </div>
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Mohamed Ali Loummir</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
-                    
-                    
-                        
                         
                         
                         
@@ -2127,50 +2905,21 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 0.0%;
-                                width: 20.74%;
-                                background-color: #e74f97;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 1 / 5;
+                                background-color: #86e272;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="Luft leakage (Instance 1/1) (0-90 min)">
-                            8
+                             title="BiW_PM_MDS_RPC_zweiwöchentlich (Instance 1/1) (0-60 min)">
+                            7
                         </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 48.39%;
-                                width: 20.74%;
-                                background-color: #7aee3e;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="undicht (Instance 1/1) (210-300 min)">
-                            11
-                        </div>
-                        
-                        
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Khanh Nguyen</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
-                    
-                    
-                        
                         
                         
                         
@@ -2180,19 +2929,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 20.74%;
-                                width: 27.65%;
-                                background-color: #8084bc;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 1 / 3;
+                                background-color: #edad4d;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="die Schraube fällt beim einsetzen in die Linie am vorderen Sidesill (Instance 1/1) (90-210 min)">
-                            9
+                             title="BIW_PM_Fanuc_Roboter 18 Monatlich (Instance 1/6) (0-20 min)">
+                            6
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -2202,28 +2946,174 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 48.39%;
-                                width: 20.74%;
-                                background-color: #7aee3e;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 3 / 5;
+                                background-color: #edad4d;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="undicht (Instance 1/1) (210-300 min)">
-                            11
+                             title="BIW_PM_Fanuc_Roboter 18 Monatlich (Instance 2/6) (30-50 min)">
+                            6
                         </div>
+                    
                         
                         
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 5 / 7;
+                                background-color: #edad4d;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_Fanuc_Roboter 18 Monatlich (Instance 3/6) (60-80 min)">
+                            6
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 7 / 9;
+                                background-color: #edad4d;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_Fanuc_Roboter 18 Monatlich (Instance 4/6) (90-110 min)">
+                            6
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 9 / 11;
+                                background-color: #edad4d;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_Fanuc_Roboter 18 Monatlich (Instance 5/6) (120-140 min)">
+                            6
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 11 / 13;
+                                background-color: #edad4d;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PM_Fanuc_Roboter 18 Monatlich (Instance 6/6) (150-170 min)">
+                            6
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 13 / 15;
+                                background-color: #d5c5ad;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PdM_RSW_Feedback Cable (Instance 1/5) (180-200 min)">
+                            14
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 15 / 17;
+                                background-color: #d5c5ad;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PdM_RSW_Feedback Cable (Instance 2/5) (210-230 min)">
+                            14
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 17 / 19;
+                                background-color: #d5c5ad;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PdM_RSW_Feedback Cable (Instance 3/5) (240-260 min)">
+                            14
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 19 / 21;
+                                background-color: #d5c5ad;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PdM_RSW_Feedback Cable (Instance 4/5) (270-290 min)">
+                            14
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 21 / 23;
+                                background-color: #d5c5ad;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PdM_RSW_Feedback Cable (Instance 5/5) (300-320 min)">
+                            14
+                        </div>
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Keegan Goeda</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
-                    
-                    
-                        
                         
                         
                         
@@ -2233,19 +3123,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 0.0%;
-                                width: 20.74%;
-                                background-color: #986c5c;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 1 / 7;
+                                background-color: #749088;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (Instance 1/10) (0-90 min)">
-                            1
+                             title="BIW_PdM_RSW_C-Factor (Instance 1/3) (0-90 min)">
+                            13
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -2255,19 +3140,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 20.74%;
-                                width: 20.74%;
-                                background-color: #986c5c;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 7 / 13;
+                                background-color: #749088;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (Instance 2/10) (90-180 min)">
-                            1
+                             title="BIW_PdM_RSW_C-Factor (Instance 2/3) (90-180 min)">
+                            13
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -2277,19 +3157,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 41.47%;
-                                width: 20.74%;
-                                background-color: #986c5c;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 13 / 19;
+                                background-color: #749088;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (Instance 3/10) (180-270 min)">
-                            1
+                             title="BIW_PdM_RSW_C-Factor (Instance 3/3) (180-270 min)">
+                            13
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -2299,28 +3174,38 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 62.21%;
-                                width: 20.74%;
-                                background-color: #986c5c;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 19 / 22;
+                                background-color: #7aee3e;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (Instance 4/10) (270-360 min)">
-                            1
+                             title="BiW_PM_Kappenfräser_3 monatlich_Alle (Instance 1/2) (270-310 min)">
+                            11
                         </div>
+                    
                         
                         
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 22 / 25;
+                                background-color: #7aee3e;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Kappenfräser_3 monatlich_Alle (Instance 2/2) (315-355 min)">
+                            11
+                        </div>
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Moritz Kipper</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
-                    
-                    
-                        
                         
                         
                         
@@ -2330,28 +3215,55 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 48.39%;
-                                width: 34.56%;
-                                background-color: #e1b9e1;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 1 / 5;
+                                background-color: #e74f97;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="Die Schienen an OP80 deformiert (Instance 1/1) (210-360 min)">
-                            10
+                             title="BiW_PM_WEBER_wöchentlich (Instance 1/3) (0-60 min)">
+                            8
                         </div>
+                    
                         
                         
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 5 / 9;
+                                background-color: #e74f97;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_WEBER_wöchentlich (Instance 2/3) (60-120 min)">
+                            8
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 9 / 13;
+                                background-color: #e74f97;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_WEBER_wöchentlich (Instance 3/3) (120-180 min)">
+                            8
+                        </div>
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Lukasz Brach</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
-                    
-                    
-                        
                         
                         
                         
@@ -2361,19 +3273,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 0.0%;
-                                width: 20.74%;
-                                background-color: #986c5c;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 1 / 7;
+                                background-color: #749088;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (Instance 5/10) (0-90 min)">
-                            1
+                             title="BIW_PdM_RSW_C-Factor (Instance 1/3) (0-90 min)">
+                            13
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -2383,19 +3290,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 20.74%;
-                                width: 20.74%;
-                                background-color: #986c5c;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 7 / 13;
+                                background-color: #749088;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (Instance 6/10) (90-180 min)">
-                            1
+                             title="BIW_PdM_RSW_C-Factor (Instance 2/3) (90-180 min)">
+                            13
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -2405,50 +3307,21 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 41.47%;
-                                width: 20.74%;
-                                background-color: #986c5c;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 13 / 19;
+                                background-color: #749088;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (Instance 7/10) (180-270 min)">
-                            1
+                             title="BIW_PdM_RSW_C-Factor (Instance 3/3) (180-270 min)">
+                            13
                         </div>
-                        
-                        
-                    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        <div class="task-bar"
-                             style="
-                                left: 62.21%;
-                                width: 20.74%;
-                                background-color: #986c5c;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
-                             "
-                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (Instance 8/10) (270-360 min)">
-                            1
-                        </div>
-                        
-                        
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Robert Rakowski</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
-                    
-                    
-                        
                         
                         
                         
@@ -2458,28 +3331,89 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 20.74%;
-                                width: 10.37%;
-                                background-color: #f343cb;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 1 / 5;
+                                background-color: #e74f97;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BiW_PM_Kappenfräser_3 monatlich_Alle (Instance 1/1) (90-130 min)">
-                            4
+                             title="BiW_PM_WEBER_wöchentlich (Instance 1/3) (0-60 min)">
+                            8
                         </div>
+                    
                         
                         
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 5 / 9;
+                                background-color: #e74f97;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_WEBER_wöchentlich (Instance 2/3) (60-120 min)">
+                            8
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 9 / 13;
+                                background-color: #e74f97;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_WEBER_wöchentlich (Instance 3/3) (120-180 min)">
+                            8
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 19 / 22;
+                                background-color: #7aee3e;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Kappenfräser_3 monatlich_Alle (Instance 1/2) (270-310 min)">
+                            11
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 22 / 25;
+                                background-color: #7aee3e;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Kappenfräser_3 monatlich_Alle (Instance 2/2) (315-355 min)">
+                            11
+                        </div>
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Rafael Crispim</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
-                    
-                    
-                        
                         
                         
                         
@@ -2489,19 +3423,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 0.0%;
-                                width: 20.74%;
-                                background-color: #986c5c;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 1 / 4;
+                                background-color: #8084bc;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (Instance 5/10) (0-90 min)">
-                            1
+                             title="BiW_PM_Werkzeugwechsler_Monatlich (Instance 1/2) (0-40 min)">
+                            9
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -2511,19 +3440,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 20.74%;
-                                width: 20.74%;
-                                background-color: #986c5c;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 4 / 7;
+                                background-color: #8084bc;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (Instance 6/10) (90-180 min)">
-                            1
+                             title="BiW_PM_Werkzeugwechsler_Monatlich (Instance 2/2) (45-85 min)">
+                            9
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -2533,19 +3457,14 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 41.47%;
-                                width: 20.74%;
-                                background-color: #986c5c;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 7 / 17;
+                                background-color: #e1b9e1;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (Instance 7/10) (180-270 min)">
-                            1
+                             title="BIW_Rebuild_RSW_Pivot Exchange (Instance 1/2) (90-240 min)">
+                            10
                         </div>
-                        
-                        
                     
-                        
                         
                         
                         
@@ -2555,26 +3474,139 @@
                         
                         <div class="task-bar"
                              style="
-                                left: 62.21%;
-                                width: 20.74%;
-                                background-color: #986c5c;
-                                top: 3px; /* Increased spacing to 34px */
-                                z-index: 0;
+                                grid-column: 17 / 27;
+                                background-color: #e1b9e1;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
-                             title="BIW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_New Lines (Instance 8/10) (270-360 min)">
-                            1
+                             title="BIW_Rebuild_RSW_Pivot Exchange (Instance 2/2) (240-390 min)">
+                            10
                         </div>
-                        
-                        
                     
                 </div>
             </div>
             
             <div class="technician-row">
                 <div class="technician-label">Phannic Phiri (PLC)</div>
-                <div class="bars-container">
+                <div class="time-grid">
                     
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 1 / 4;
+                                background-color: #8084bc;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Werkzeugwechsler_Monatlich (Instance 1/2) (0-40 min)">
+                            9
+                        </div>
                     
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 4 / 7;
+                                background-color: #8084bc;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BiW_PM_Werkzeugwechsler_Monatlich (Instance 2/2) (45-85 min)">
+                            9
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 13 / 15;
+                                background-color: #d5c5ad;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PdM_RSW_Feedback Cable (Instance 1/5) (180-200 min)">
+                            14
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 15 / 17;
+                                background-color: #d5c5ad;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PdM_RSW_Feedback Cable (Instance 2/5) (210-230 min)">
+                            14
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 17 / 19;
+                                background-color: #d5c5ad;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PdM_RSW_Feedback Cable (Instance 3/5) (240-260 min)">
+                            14
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 19 / 21;
+                                background-color: #d5c5ad;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PdM_RSW_Feedback Cable (Instance 4/5) (270-290 min)">
+                            14
+                        </div>
+                    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="task-bar"
+                             style="
+                                grid-column: 21 / 23;
+                                background-color: #d5c5ad;
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
+                             "
+                             title="BIW_PdM_RSW_Feedback Cable (Instance 5/5) (300-320 min)">
+                            14
+                        </div>
                     
                 </div>
             </div>
@@ -2582,5 +3614,23 @@
         </div>
     </div>
     
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const ganttChart = document.querySelector('.gantt-chart');
+            const timeTicks = document.querySelectorAll('.time-tick:not(:first-child)');
+            if (ganttChart && timeTicks.length) {
+                function updateGrid() {
+                    const chartWidth = ganttChart.offsetWidth - 200;
+                    const tickWidth = chartWidth / 44;
+                    timeTicks.forEach(tick => {
+                        tick.style.minWidth = `${tickWidth}px`;
+                    });
+                }
+                updateGrid();
+                window.addEventListener('resize', updateGrid);
+            }
+        });
+    </script>
 </body>
 </html>

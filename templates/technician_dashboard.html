@@ -81,8 +81,16 @@
             grid-template-columns: 200px minmax(0, 1fr);
             align-items: center;
             min-height: 40px;
-            border-bottom: 1px solid #eee;
             position: relative;
+        }
+        .technician-row::after {
+            content: "";
+            display: block;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 1960px;
+            border-bottom: 1px solid #eee;
         }
         .technician-label {
             width: 200px;
@@ -103,12 +111,20 @@
         .time-axis {
             display: grid;
             grid-template-columns: 200px repeat({{ num_intervals | default(1) }}, minmax(40px, 1fr));
-            border-bottom: 1px solid #ddd;
             height: 30px;
             position: sticky;
             top: 0;
             background-color: #fff;
             z-index: 1;
+        }
+        .time-axis::after {
+            content: "";
+            display: block;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 1960px;
+            border-bottom: 1px solid #ddd;
         }
         .time-tick {
             text-align: center;
