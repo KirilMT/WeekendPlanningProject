@@ -129,7 +129,7 @@
             bottom: 0;
             height: 100vh;
             border-left: 1px solid #c0c0c0;
-            z-index: 0;
+            z-index: -1; /* Set to -1 to ensure grid lines are behind task bars */
         }
         .time-tick:first-child {
             width: 200px;
@@ -349,7 +349,6 @@
             <div class="technician-row">
                 <div class="technician-label">{{ technician }}</div>
                 <div class="time-grid">
-                    {% set bar_index = 0 %}
                     {% for assignment in assignments if assignment.technician == technician %}
                         {% set task_id = assignment.instance_id.split('_')[0] if assignment.instance_id and '_' in assignment.instance_id else '0' %}
                         {% set slot_start = ((assignment.start | float / 15) | round(0, 'floor') | int) %}
@@ -362,12 +361,11 @@
                              style="
                                 grid-column: {{ slot_start + 1 }} / {{ slot_end + 1 }};
                                 background-color: #{{ '%02x%02x%02x' % (color_r, color_g, color_b) }};
-                                z-index: {{ bar_index }};
+                                z-index: 1; /* Fixed z-index to 1 for all task bars */
                              "
                              title="{{ assignment.task_name | default('Unknown') }} ({{ assignment.start | default(0) }}-{{ (assignment.start | default(0)) + (assignment.duration | default(0)) }} min{% if assignment.is_incomplete %}, capped from {{ assignment.original_duration | default(0) }} min{% endif %})">
                             {{ task_id | default('0') }}
                         </div>
-                        {% set bar_index = bar_index + 1 %}
                     {% endfor %}
                 </div>
             </div>
