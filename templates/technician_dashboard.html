@@ -66,13 +66,15 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             border-radius: 8px;
             box-sizing: border-box;
+            overflow: hidden;
         }
         .gantt-chart {
             position: relative;
             overflow-x: auto;
-            overflow-y: visible;
+            overflow-y: hidden;
             display: flex;
             flex-direction: column;
+            min-height: 0;
         }
         .technician-row {
             display: grid;
@@ -80,6 +82,7 @@
             align-items: center;
             min-height: 40px;
             border-bottom: 1px solid #eee;
+            position: relative;
         }
         .technician-label {
             width: 200px;
@@ -95,12 +98,17 @@
             grid-template-columns: repeat({{ num_intervals | default(1) }}, minmax(40px, 1fr));
             position: relative;
             height: 40px;
+            background: transparent;
         }
         .time-axis {
             display: grid;
             grid-template-columns: 200px repeat({{ num_intervals | default(1) }}, minmax(40px, 1fr));
             border-bottom: 1px solid #ddd;
             height: 30px;
+            position: sticky;
+            top: 0;
+            background-color: #fff;
+            z-index: 1;
         }
         .time-tick {
             text-align: center;
@@ -118,8 +126,10 @@
             position: absolute;
             top: 0;
             left: 0;
-            height: var(--chart-height, 100%);
+            bottom: 0;
+            height: 100vh;
             border-left: 1px solid #c0c0c0;
+            z-index: 0;
         }
         .time-tick:first-child {
             width: 200px;
@@ -370,12 +380,10 @@
         document.addEventListener('DOMContentLoaded', () => {
             const ganttChart = document.querySelector('.gantt-chart');
             const timeTicks = document.querySelectorAll('.time-tick:not(:first-child)');
-            const timeGrids = document.querySelectorAll('.time-grid');
             if (ganttChart && timeTicks.length) {
                 function updateGrid() {
                     const chartWidth = ganttChart.offsetWidth - 200;
                     const tickWidth = chartWidth / {{ num_intervals | default(1) }};
-                    ganttChart.style.setProperty('--chart-height', `${ganttChart.offsetHeight}px`);
                     timeTicks.forEach(tick => {
                         tick.style.minWidth = `${tickWidth}px`;
                     });
