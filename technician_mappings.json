@@ -3,16 +3,7 @@
     "Kiril Martinez Tamayo (PLC)": {
       "sattelite_point": "Aquarium",
       "technician_lines": [1, 2, 3],
-      "task_assignments": [
-        {"task": "BiW_PM_Floor scanner_6 monatlich", "prio": 2},
-        {"task": "BiW_PM_Bosch Spindel kalibrieren_jährlich", "prio": 6},
-        {"task": "BiW_PM_ADH Backup Steuerung_monatlich", "prio": 1},
-        {"task": "BiW_PM_Aufzüge Comau_3 monatlich", "prio": 8},
-        {"task": "BiW_PM_Leitungspaket_FUB/RUB Gr.1_Mo.", "prio": 3},
-        {"task": "BiW_PM_Leitungspaket_FUB2_Mo.", "prio": 4},
-        {"task": "BiW_PM_SPR_Wöchentlich", "prio": 5},
-        {"task": "BiW_PM_APC Comau_5 wöchentlich", "prio": 7}
-      ]
+      "task_assignments": []
     },
     "Marvin Bienek": {
       "sattelite_point": "Aquarium",
@@ -227,11 +218,7 @@
     "József Szőke (PLC)": {
       "sattelite_point": "Fuchsbau",
       "technician_lines": [3, 4],
-      "task_assignments": [
-        {"task": "BiW_PM_Leitungspaket", "prio": 3},
-        {"task": "BiW_PM_Floor scanner_6 monatlich", "prio": 1},
-        {"task": "BiW_PM_FANUC_Roboter 18 Monatlich", "prio": 2}
-      ]
+      "task_assignments": []
     },
     "Gaurav Rawal": {
       "sattelite_point": "Fuchsbau",
@@ -468,35 +455,7 @@
     "Phannic Phiri (PLC)": {
       "sattelite_point": "Closures",
       "technician_lines": [1, 4],
-      "task_assignments": [
-        {"task": "BiW_PM_Bolting ZvG/Crowfoot_Monatlich", "prio": 20},
-        {"task": "BiW_PM_Lübbering", "prio": 19},
-        {"task": "BiW_PM_ADH_Wartung Dosierer_jährlich", "prio": 17},
-        {"task": "BiW_PM_Leitungspaket", "prio": 5},
-        {"task": "BiW_PM_WEBER_wöchentlich", "prio": 11},
-        {"task": "BIW_PdM_RSW_C-Factor", "prio": 4},
-        {"task": "BiW_PM_DGUV preparation", "prio": 27},
-        {"task": "BiW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_Closures", "prio": 3},
-        {"task": "BiW_PM_Leitungspaket_LHD/RHD Gr.4_Mo.", "prio": 6},
-        {"task": "BiW_PM_Leitungspaket_LHD/RHD Gr.2_Mo.", "prio": 7},
-        {"task": "BiW_PM_RSW_8 Weekly_Visual checks + Mastering & Force & Current calibration_UBM Subs", "prio": 8},
-        {"task": "BiW_PM_WEBER_monatlich", "prio": 12},
-        {"task": "BiW_PM_ADH_Mesamoll Bodysides_wöchentlich", "prio": 16},
-        {"task": "BiW_PM_Laser_Wöchentlich", "prio": 18},
-        {"task": "BiW_PM_ADH_Spindle Schmierung manuell_wöchentlich", "prio": 13},
-        {"task": "BiW_PM_Leitungspaket_BSI/BSO Gr.4_Mo.", "prio": 9},
-        {"task": "BiW_PM_Leitungspaket_BSI/BSO Gr.3_Mo.", "prio": 10},
-        {"task": "BiW_PM_Tooling and gripper_yearly", "prio": 26},
-        {"task": "BiW_PM_Sync unit_monatlich", "prio": 25},
-        {"task": "BiW_PM_Manipulatoren", "prio": 24},
-        {"task": "BIW_PdM_RSW_Feedback Cable", "prio": 1},
-        {"task": "BiW_PM_ADH_Mesamoll Closures_wöchentlich", "prio": 15},
-        {"task": "BiW_PM_TipDresser (Horizontal) Replacement_Door Lines", "prio": 23},
-        {"task": "BiW_PM_Werkzeugwechsler_Monatlich", "prio": 21},
-        {"task": "BiW_PM_FNL_Schmierung_monatlich", "prio": 22},
-        {"task": "BiW_PM_ADH_Mesamoll BEN/BTC_wöchentlich", "prio": 14},
-        {"task": "BiW_PM_PDP_jährlich", "prio": 2}
-      ]
+      "task_assignments": []
     }
   }
 }
