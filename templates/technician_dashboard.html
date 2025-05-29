@@ -79,7 +79,7 @@
         .technician-row {
             display: grid;
             grid-template-columns: 200px minmax(0, 1fr);
-            align-items: center;
+            align-items: flex-start; /* Changed from center for stable vertical alignment */
             min-height: 40px;
             position: relative;
         }
@@ -89,7 +89,7 @@
             position: absolute;
             bottom: 0;
             left: 0;
-            width: 1960px;
+            width: 1960px; /* Should match or exceed gantt chart width */
             border-bottom: 1px solid #eee;
         }
         .technician-label {
@@ -100,12 +100,16 @@
             box-sizing: border-box;
             background-color: #f9f9f9;
             text-align: left;
+            word-wrap: break-word; /* Helps if technician names are long */
         }
         .time-grid {
             display: grid;
             grid-template-columns: repeat({{ num_intervals | default(1) }}, minmax(40px, 1fr));
+            grid-template-rows: 40px; /* Explicitly define one row of 40px height */
+            grid-auto-rows: 0;      /* Prevent the creation of implicit rows */
+            overflow: hidden;        /* Hide any content that might still try to overflow */
             position: relative;
-            height: 40px;
+            height: 40px;            /* Enforce the height */
             background: transparent;
         }
         .time-axis {
@@ -115,7 +119,7 @@
             position: sticky;
             top: 0;
             background-color: #fff;
-            z-index: 1;
+            z-index: 1; /* Ensure time axis is above grid lines and task bars */
         }
         .time-axis::after {
             content: "";
@@ -123,7 +127,7 @@
             position: absolute;
             bottom: 0;
             left: 0;
-            width: 1960px;
+            width: 100%; /* Changed from fixed width to 100% for responsiveness */
             border-bottom: 1px solid #ddd;
         }
         .time-tick {
@@ -137,21 +141,21 @@
             justify-content: center;
             box-sizing: border-box;
         }
-        .time-tick:not(:first-child)::after {
+        .time-tick:not(:first-child)::after { /* Vertical grid lines */
             content: '';
             position: absolute;
             top: 0;
             left: 0;
-            bottom: 0;
-            height: 100vh;
-            border-left: 1px solid #c0c0c0;
-            z-index: -1; /* Set to -1 to ensure grid lines are behind task bars */
+            height: 100vh; /* Extend well beyond typical content height */
+            border-left: 1px solid #e0e0e0; /* Lighter grid lines */
+            z-index: -1; /* Behind task bars */
         }
         .time-tick:first-child {
             width: 200px;
             background-color: #f9f9f9;
         }
         .task-bar {
+            grid-row: 1 / 2; /* Explicitly place task bars in the first (and only) row of the time-grid */
             height: 24px;
             border-radius: 4px;
             display: flex;
@@ -166,7 +170,9 @@
             text-overflow: ellipsis;
             white-space: nowrap;
             text-align: center;
-            margin: 8px 2px;
+            margin: 8px 2px; /* (40px row height - 24px bar height) / 2 = 8px top/bottom margin */
+            position: relative; /* For z-index stacking context */
+            z-index: 2; /* Ensure task bars are above the grid lines */
         }
     </style>
 </head>
@@ -180,7 +186,7 @@
             <th>Tasks</th>
             <th>Lines</th>
             <th>Technicians</th>
-            <th>Assigned Technicians</th>
+            <th>Assigned Technicians (prio index)</th>
             <th>Time [min]</th>
             <th>Prio</th>
             <th>Qty</th>
@@ -234,13 +240,19 @@
             </td>
             <td>{{ task.mitarbeiter_pro_aufgabe | default('1') }}</td>
             <td>
-                {% set assigned_techs = [] %}
-                {% for assignment in assignments if assignment.instance_id.startswith(task.id ~ '_') %}
-                    {% if assignment.technician not in assigned_techs %}
-                        {% set _ = assigned_techs.append(assignment.technician) %}
+                {% set tech_assignments_for_task = {} %}
+                {% for assignment in assignments %}
+                    {% if assignment.instance_id.startswith(task.id ~ '_') %}
+                        {% if assignment.technician not in tech_assignments_for_task %}
+                            {% set _ = tech_assignments_for_task.update({assignment.technician: assignment.get('technician_task_priority', 'N/A')}) %}
+                        {% endif %}
                     {% endif %}
                 {% endfor %}
-                {{ assigned_techs | join(', ') | default('None') }}
+                {% set assigned_tech_details = [] %}
+                {% for tech_name, tech_prio in tech_assignments_for_task.items() | sort %}
+                    {% set _ = assigned_tech_details.append("%s (%s)" | format(tech_name, tech_prio)) %}
+                {% endfor %}
+                {{ assigned_tech_details | join(', ') if assigned_tech_details else 'None' }}
             </td>
             <td>{{ task.planned_worktime_min | default('0') }}</td>
             <td class="{% if task.priority == 'A' %}prio-a{% elif task.priority == 'B' %}prio-b{% elif task.priority == 'C' %}prio-c{% endif %}">
@@ -312,13 +324,13 @@
             </td>
             <td style="background-color: #e6e6e6;">{{ task.mitarbeiter_pro_aufgabe | default('1') }}</td>
             <td style="background-color: #e6e6e6;">
-                {% set assigned_techs = [] %}
+                {% set assigned_techs_for_rep = [] %}
                 {% for assignment in assignments if assignment.instance_id.startswith(task.id ~ '_') %}
-                    {% if assignment.technician not in assigned_techs %}
-                        {% set _ = assigned_techs.append(assignment.technician) %}
+                    {% if assignment.technician not in assigned_techs_for_rep %}
+                        {% set _ = assigned_techs_for_rep.append(assignment.technician) %}
                     {% endif %}
                 {% endfor %}
-                {{ assigned_techs | join(', ') | default('None') }}
+                {{ assigned_techs_for_rep | sort | join(', ') | default('None') }}
             </td>
             <td style="background-color: #e6e6e6;">{{ task.planned_worktime_min | default('0') }}</td>
             <td class="{% if task.priority == 'A' %}prio-a{% elif task.priority == 'B' %}prio-b{% elif task.priority == 'C' %}prio-c{% endif %}">
@@ -355,7 +367,7 @@
         <div class="gantt-chart">
             <!-- Time Axis -->
             <div class="time-axis">
-                <div class="time-tick"></div>
+                <div class="time-tick"></div> <!-- Empty cell for technician labels -->
                 {% for i in range(num_intervals | default(0)) %}
                 <div class="time-tick">{{ i * 15 }}-{{ (i + 1) * 15 }}</div>
                 {% endfor %}
@@ -365,23 +377,27 @@
             <div class="technician-row">
                 <div class="technician-label">{{ technician }}</div>
                 <div class="time-grid">
-                    {% for assignment in assignments if assignment.technician == technician %}
-                        {% set task_id = assignment.instance_id.split('_')[0] if assignment.instance_id and '_' in assignment.instance_id else '0' %}
-                        {% set slot_start = ((assignment.start | float / 15) | round(0, 'floor') | int) %}
-                        {% set slot_end = (((assignment.start | float + assignment.duration | float) / 15) | round(0, 'ceil') | int) %}
-                        {% set num_slots = slot_end - slot_start %}
-                        {% set color_r = ((task_id | int | default(1)) * 97 % 200 + 55) %}
-                        {% set color_g = ((task_id | int | default(1)) * 53 % 200 + 55) %}
-                        {% set color_b = ((task_id | int | default(1)) * 37 % 200 + 55) %}
-                        <div class="task-bar"
-                             style="
-                                grid-column: {{ slot_start + 1 }} / {{ slot_end + 1 }};
-                                background-color: #{{ '%02x%02x%02x' % (color_r, color_g, color_b) }};
-                                z-index: 1; /* Fixed z-index to 1 for all task bars */
-                             "
-                             title="{{ assignment.task_name | default('Unknown') }} ({{ assignment.start | default(0) }}-{{ (assignment.start | default(0)) + (assignment.duration | default(0)) }} min{% if assignment.is_incomplete %}, capped from {{ assignment.original_duration | default(0) }} min{% endif %})">
-                            {{ task_id | default('0') }}
-                        </div>
+                    {% for assignment in assignments %}
+                        {% if assignment.technician == technician %}
+                            {% set task_id = assignment.instance_id.split('_')[0] if assignment.instance_id and '_' in assignment.instance_id else '0' %}
+                            {% set slot_start = ((assignment.start | float / 15) | round(0, 'floor') | int) %}
+                            {% set slot_end = (((assignment.start | float + assignment.duration | float) / 15) | round(0, 'ceil') | int) %}
+                            {# Ensure slot_end is at least slot_start + 1 for span calculation #}
+                            {% if slot_end <= slot_start %}{% set slot_end = slot_start + 1 %}{% endif %}
+                            {% set num_slots_span = slot_end - slot_start %}
+
+                            {% set color_r = ((task_id | int | default(1)) * 97 % 200 + 55) %}
+                            {% set color_g = ((task_id | int | default(1)) * 53 % 200 + 55) %}
+                            {% set color_b = ((task_id | int | default(1)) * 37 % 200 + 55) %}
+                            <div class="task-bar"
+                                 style="
+                                    grid-column: {{ slot_start + 1 }} / span {{ num_slots_span if num_slots_span > 0 else 1 }};
+                                    background-color: #{{ '%02x%02x%02x' % (color_r, color_g, color_b) }};
+                                 "
+                                 title="{{ assignment.task_name | default('Unknown') }} ({{ assignment.start | default(0) }}-{{ (assignment.start | default(0)) + (assignment.duration | default(0)) }} min{% if assignment.is_incomplete %}, capped from {{ assignment.original_duration | default(0) }} min{% endif %})">
+                                {{ task_id | default('0') }}
+                            </div>
+                        {% endif %}
                     {% endfor %}
                 </div>
             </div>
@@ -396,7 +412,7 @@
             const timeTicks = document.querySelectorAll('.time-tick:not(:first-child)');
             if (ganttChart && timeTicks.length) {
                 function updateGrid() {
-                    const chartWidth = ganttChart.offsetWidth - 200;
+                    const chartWidth = ganttChart.offsetWidth - 200; // 200px for technician labels
                     const tickWidth = chartWidth / {{ num_intervals | default(1) }};
                     timeTicks.forEach(tick => {
                         tick.style.minWidth = `${tickWidth}px`;

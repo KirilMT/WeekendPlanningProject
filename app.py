@@ -27,7 +27,7 @@ try:
     if 'technicians' not in mappings:
         raise ValueError("Error: 'technicians' key missing in technician_mappings.json")
     technicians_data = mappings['technicians']
-    TECHNICIAN_TASKS = {}
+    TECHNICIAN_TASKS = {}  # Stores {'tech_name': [{'task': 'task_str', 'prio': 1}, ...]}
     TECHNICIAN_LINES = {}
     TECHNICIANS = list(technicians_data.keys())
     valid_groups = {"Fuchsbau", "Closures", "Aquarium"}
@@ -36,9 +36,25 @@ try:
             raise ValueError(f"Error: Invalid data for technician '{tech}'")
         if 'sattelite_point' not in data or data['sattelite_point'] not in valid_groups:
             raise ValueError(f"Error: Invalid 'sattelite_point' for technician '{tech}'")
-        if 'technician_lines' not in data or 'technician_tasks' not in data:
-            raise ValueError(f"Error: Missing 'technician_lines' or 'technician_tasks' for technician '{tech}'")
-        TECHNICIAN_TASKS[tech] = data['technician_tasks']
+        # Changed 'technician_tasks' to 'task_assignments'
+        if 'technician_lines' not in data or 'task_assignments' not in data:
+            raise ValueError(f"Error: Missing 'technician_lines' or 'task_assignments' for technician '{tech}'")
+
+        # Validate task_assignments structure
+        if not isinstance(data['task_assignments'], list):
+            raise ValueError(f"Error: 'task_assignments' for technician '{tech}' must be a list.")
+        for task_assignment in data['task_assignments']:
+            if not isinstance(task_assignment, dict) or 'task' not in task_assignment or 'prio' not in task_assignment:
+                raise ValueError(
+                    f"Error: Invalid item in 'task_assignments' for technician '{tech}'. Expected {{'task': ..., 'prio': ...}}.")
+            if not isinstance(task_assignment['prio'], int) or task_assignment['prio'] < 1:
+                if not (isinstance(task_assignment['prio'], float) and task_assignment['prio'].is_integer() and
+                        task_assignment['prio'] >= 1):  # allow float if it's an int
+                    raise ValueError(
+                        f"Error: Invalid 'prio' value '{task_assignment['prio']}' in 'task_assignments' for technician '{tech}'. Must be a positive integer.")
+            task_assignment['prio'] = int(task_assignment['prio'])
+
+        TECHNICIAN_TASKS[tech] = data['task_assignments']
         TECHNICIAN_LINES[tech] = data['technician_lines']
     TECHNICIAN_GROUPS = {"Fuchsbau": [], "Closures": [], "Aquarium": []}
     for tech, data in technicians_data.items():
@@ -163,8 +179,8 @@ def validate_assignments(assignments):
                     print(
                         f"Warning: Invalid instance_id='{assignment['instance_id']}' in assignment at index {idx}: {assignment}")
                     continue
-                task_id = assignment['instance_id'].split('_')[0]
-                int(task_id)  # Ensure task_id is a valid integer
+                task_id_part = assignment['instance_id'].split('_')[0]
+                int(task_id_part)  # Ensure task_id is a valid integer
                 valid_assignments.append(assignment)
             except (ValueError, TypeError) as e:
                 print(f"Warning: Invalid assignment at index {idx}: {str(e)} - {assignment}")
@@ -192,7 +208,7 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
 
     # Process PM tasks
     for task in pm_tasks:
-        task_name = task.get('name', 'Unknown')
+        task_name = task.get('name', 'Unknown')  # This is the name from the Excel sheet
         task_id = task['id']
         print(f"Processing PM task: {task_name} (ID: {task_id})")
 
@@ -218,25 +234,58 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
         except (ValueError, TypeError):
             print(f"Warning: Invalid lines format for task {task_name}")
 
-        eligible_technicians = [
-            tech for tech in present_technicians
-            if any(normalize_string(tech_task) in normalized_task_name or normalized_task_name in normalize_string(
-                tech_task)
-                   for tech_task in TECHNICIAN_TASKS.get(tech, []))
-               and (not task_lines or any(line in TECHNICIAN_LINES.get(tech, []) for line in task_lines))
-        ]
+        eligible_technicians_details = []
+        for tech_candidate in present_technicians:
+            tech_specific_tasks_list = TECHNICIAN_TASKS.get(tech_candidate, [])  # List of {'task': '...', 'prio': ...}
+            for tech_task_obj in tech_specific_tasks_list:
+                normalized_tech_task_str = normalize_string(tech_task_obj['task'])
+                if (normalized_task_name in normalized_tech_task_str or \
+                        normalized_tech_task_str in normalized_task_name):
+                    if not task_lines or any(line in TECHNICIAN_LINES.get(tech_candidate, []) for line in task_lines):
+                        eligible_technicians_details.append({
+                            'name': tech_candidate,
+                            'prio_for_task': tech_task_obj['prio']
+                        })
+                        break  # Found matching task for this tech
 
-        if len(eligible_technicians) < num_technicians_needed:
-            print(
-                f"Task {task_name}: insufficient eligible technicians ({len(eligible_technicians)}/{num_technicians_needed})")
+        if not eligible_technicians_details:
+            print(f"Task {task_name}: no eligible technicians based on task name/lines/priority.")
             for i in range(quantity):
                 unassigned_tasks.append(f"{task_id}_{i + 1}")
             continue
 
-        viable_groups = [list(group) for r in range(num_technicians_needed, len(eligible_technicians) + 1)
-                         for group in combinations(eligible_technicians, r)]
-        viable_groups.sort(key=lambda group: (len(group), sum(
-            sum(end - start for start, end, _ in technician_schedules[tech]) for tech in group)))
+        eligible_technicians_details.sort(key=lambda x: x['prio_for_task'])
+        eligible_technicians = [detail['name'] for detail in eligible_technicians_details]
+        tech_prio_map = {detail['name']: detail['prio_for_task'] for detail in eligible_technicians_details}
+
+        if len(eligible_technicians) < num_technicians_needed:
+            print(
+                f"Task {task_name}: insufficient eligible technicians ({len(eligible_technicians)}/{num_technicians_needed}) after priority sort")
+            for i in range(quantity):
+                unassigned_tasks.append(f"{task_id}_{i + 1}")
+            continue
+
+        viable_groups_with_scores = []
+        for r in range(num_technicians_needed, len(eligible_technicians) + 1):
+            for group_tuple in combinations(eligible_technicians, r):
+                group = list(group_tuple)
+                avg_prio = sum(tech_prio_map.get(tech_name, float('inf')) for tech_name in group) / len(
+                    group) if group else float('inf')
+                current_workload = sum(
+                    sum(end - start for start, end, _ in technician_schedules[tech_name]) for tech_name in group)
+                viable_groups_with_scores.append({
+                    'group': group,
+                    'len': len(group),
+                    'avg_prio': avg_prio,
+                    'workload': current_workload
+                })
+
+        viable_groups_with_scores.sort(key=lambda x: (
+            x['len'],
+            x['avg_prio'],
+            x['workload']
+        ))
+        viable_groups = [item['group'] for item in viable_groups_with_scores]
 
         for instance_num in range(1, quantity + 1):
             instance_id = f"{task_id}_{instance_num}"
@@ -263,6 +312,7 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                             incomplete_tasks.append(instance_id)
 
                         for tech in group:
+                            tech_priority_for_this_task = tech_prio_map.get(tech, "N/A")
                             technician_schedules[tech].append(
                                 (start_time, start_time + task_duration, instance_task_name))
                             assignments.append({
@@ -272,9 +322,11 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                                 'duration': task_duration,
                                 'is_incomplete': is_incomplete,
                                 'original_duration': original_task_duration,
-                                'instance_id': instance_id
+                                'instance_id': instance_id,
+                                'technician_task_priority': tech_priority_for_this_task  # Added for PM
                             })
-                        print(f"Assigned {instance_task_name} to {group} at {start_time}")
+                        print(
+                            f"Assigned {instance_task_name} to {group} at {start_time} (Priorities: {[tech_prio_map.get(t, 'N/A') for t in group]})")
                         assigned = True
                         break
                     start_time += 15
@@ -286,7 +338,7 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                 print(f"Could not schedule {instance_task_name}")
                 unassigned_tasks.append(instance_id)
 
-    # Process REP tasks
+    # Process REP tasks (logic remains largely the same, no technician_task_priority needed in assignment dict)
     available_time = calculate_available_time(assignments, present_technicians, total_work_minutes)
     for task in rep_tasks:
         task_name = task.get('name', 'Unknown')
@@ -312,28 +364,33 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
         except (ValueError, TypeError):
             print(f"Warning: Invalid lines format for task {task_name}")
 
-        eligible_technicians = []
+        eligible_rep_technicians_for_task = []  # Renamed to avoid confusion
         if task_id in rep_assignments_dict and not rep_assignments_dict[task_id].get('skipped'):
             selected_techs = rep_assignments_dict[task_id]['technicians']
             for tech in selected_techs:
                 if tech in present_technicians and available_time.get(tech, 0) >= base_duration:
+                    # For REP tasks, general eligibility is based on selection and availability
+                    # Task string matching for REP is not based on TECHNICIAN_TASKS like PM
+                    # Line matching is still important
                     if not task_lines or any(line in TECHNICIAN_LINES.get(tech, []) for line in task_lines):
-                        eligible_technicians.append(tech)
+                        eligible_rep_technicians_for_task.append(tech)
         else:
-            print(f"Task {task_name} skipped or unassigned")
+            print(f"Task {task_name} skipped or unassigned in REP pre-assignment phase")
             for i in range(quantity):
                 unassigned_tasks.append(f"{task_id}_{i + 1}")
             continue
 
-        if len(eligible_technicians) < num_technicians_needed:
+        if len(eligible_rep_technicians_for_task) < num_technicians_needed:
             print(
-                f"Task {task_name}: insufficient eligible technicians ({len(eligible_technicians)}/{num_technicians_needed})")
+                f"Task {task_name}: insufficient eligible/selected technicians for REP ({len(eligible_rep_technicians_for_task)}/{num_technicians_needed})")
             for i in range(quantity):
                 unassigned_tasks.append(f"{task_id}_{i + 1}")
             continue
 
-        viable_groups = [list(group) for r in range(num_technicians_needed, len(eligible_technicians) + 1)
-                         for group in combinations(eligible_technicians, r)]
+        # For REP tasks, viable_groups are formed from the pre-selected eligible_rep_technicians_for_task
+        # Sorting of these groups can still be by workload.
+        viable_groups = [list(group) for r in range(num_technicians_needed, len(eligible_rep_technicians_for_task) + 1)
+                         for group in combinations(eligible_rep_technicians_for_task, r)]
         viable_groups.sort(key=lambda group: (len(group), sum(
             sum(end - start for start, end, _ in technician_schedules[tech]) for tech in group)))
 
@@ -374,6 +431,7 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                                 'instance_id': instance_id,
                                 'ticket_mo': task.get('ticket_mo', ''),
                                 'ticket_url': task.get('ticket_url', '')
+                                # No 'technician_task_priority' for REP tasks
                             })
                             available_time[tech] -= task_duration
 
@@ -518,7 +576,10 @@ def upload_file():
                 rep_assignments_list = json.loads(request.form['repAssignments'])
                 available_time = generate_html_files(sanitized_data, present_technicians, rep_assignments_list)
                 if session_id in uploaded_files:
-                    del uploaded_files[session_id]
+                    try:  # Attempt to delete, but don't fail hard if it's already gone
+                        del uploaded_files[session_id]
+                    except KeyError:
+                        print(f"Session ID {session_id} already removed from uploaded_files.")
                 return jsonify({
                     "message": "Technician dashboard generated successfully! Check the output folder for technician_dashboard.html.",
                     "availableTime": available_time
@@ -526,47 +587,60 @@ def upload_file():
 
             current_day = get_current_day()
             total_work_minutes = calculate_work_time(current_day)
-            pm_tasks = [task for task in sanitized_data if task.get('task_type', '').upper() == 'PM']
-            pm_tasks = [
-                {
-                    "id": str(idx + 1),
+            # Create task objects for assign_tasks, including an ID
+            tasks_for_pm_processing = []
+            for idx, row in enumerate(sanitized_data):
+                tasks_for_pm_processing.append({
+                    "id": str(idx + 1),  # Unique ID for processing
                     "name": row.get("scheduler_group_task", "Unknown"),
                     "lines": row.get("lines", ""),
                     "mitarbeiter_pro_aufgabe": row.get("mitarbeiter_pro_aufgabe", "1"),
                     "planned_worktime_min": row.get("planned_worktime_min", "0"),
-                    "start": "2025-04-21",
-                    "end": "2025-04-22",
-                    "progress": 100 if str(row.get("quantity", "1")).lower() == "done" else 0,
-                    "priority": row.get("priority", "C"),
+                    "priority": row.get("priority", "C"),  # Excel priority A, B, C
                     "quantity": row.get("quantity", "1"),
                     "task_type": row.get("task_type", ""),
                     "ticket_mo": row.get("ticket_mo", ""),
                     "ticket_url": row.get("ticket_url", "")
-                } for idx, row in enumerate(pm_tasks)
+                })
+
+            pm_tasks_only = [task for task in tasks_for_pm_processing if task.get('task_type', '').upper() == 'PM']
+
+            # Assign PM tasks first to calculate available time for REP tasks
+            pm_assignments, _, _, available_time_after_pm = assign_tasks(pm_tasks_only,
+                                                                         present_technicians,
+                                                                         total_work_minutes,
+                                                                         [])  # No rep_assignments yet
+
+            rep_tasks_for_selection = [
+                # Use original sanitized_data to build rep_tasks with their original index as ID
+                # but ensure the ID is consistent with how REP tasks are identified later
+                task_data | {'id': str(s_idx + 1)}  # s_idx is from enumerate(sanitized_data)
+                for s_idx, task_data in enumerate(sanitized_data)
+                if task_data.get('task_type', '').upper() == 'REP'
+                and task_data.get('ticket_mo') and str(task_data.get('ticket_mo')) != 'nan'
             ]
-            assignments, unassigned_tasks, incomplete_tasks, available_time = assign_tasks(pm_tasks,
-                                                                                           present_technicians,
-                                                                                           total_work_minutes, [])
-            rep_tasks = [
-                task | {'id': str(idx + 1)}
-                for idx, task in enumerate(sanitized_data)
-                if task.get('task_type', '').upper() == 'REP' and task.get('ticket_mo') and str(
-                    task.get('ticket_mo')) != 'nan'
-            ]
+
             eligible_rep_technicians = {}
-            for task in rep_tasks:
-                base_duration = int(task.get('planned_worktime_min', 0)) if is_valid_number(
-                    task.get('planned_worktime_min')) else 0
-                eligible_technicians = [
-                    {"name": tech, "available_time": time}
-                    for tech, time in available_time.items()
-                    if time >= base_duration and tech in present_technicians
+            for task_rep in rep_tasks_for_selection:
+                base_duration = int(task_rep.get('planned_worktime_min', 0)) if is_valid_number(
+                    task_rep.get('planned_worktime_min')) else 0
+
+                current_tech_availability = {}
+                # Recalculate available time based on PM assignments for each technician
+                # This available_time_after_pm is crucial
+                for tech_name in present_technicians:
+                    current_tech_availability[tech_name] = available_time_after_pm.get(tech_name, total_work_minutes)
+
+                eligible_technicians_for_this_rep_task = [
+                    {"name": tech, "available_time": time_val}
+                    for tech, time_val in current_tech_availability.items()  # Use the time after PMs
+                    if time_val >= base_duration and tech in present_technicians
                 ]
-                eligible_rep_technicians[task['id']] = eligible_technicians
+                eligible_rep_technicians[task_rep['id']] = eligible_technicians_for_this_rep_task
 
             return jsonify({
                 "message": "PM tasks processed. Please assign technicians for REP tasks.",
-                "repTasks": rep_tasks,
+                "repTasks": rep_tasks_for_selection,  # Send REP tasks that need selection
                 "eligibleTechnicians": eligible_rep_technicians,
                 "filename": os.path.basename(file_path),
                 "session_id": session_id
