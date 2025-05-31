@@ -305,52 +305,46 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
     rep_assignments_dict = {item['task_id']: item for item in rep_assignments} if rep_assignments else {}
 
     technician_schedules = {tech: [] for tech in present_technicians}
-    all_task_assignments = []
-    unassigned_tasks_ids = []
+    all_task_assignments = []  # This will store flat assignment dicts
+    unassigned_tasks_reasons = {}
     incomplete_tasks_ids = []
 
     all_pm_tasks_from_excel_normalized_names_set = {
         normalize_string(TASK_NAME_MAPPING.get(t['name'], t['name'])) for t in pm_tasks
     }
 
+    # --- PM Task Assignment (using your latest working version for PMs) ---
     for task in pm_tasks:
         task_name_from_excel = task.get('name', 'Unknown')
         task_id = task['id']
-        print(f"\nProcessing PM Task: {task_name_from_excel} (ID: {task_id})")
-
         base_duration = int(task.get('planned_worktime_min', 0))
         num_technicians_needed = int(task.get('mitarbeiter_pro_aufgabe', 1))
         quantity = int(task.get('quantity', 1))
 
-        if num_technicians_needed <= 0:  # Base duration can be 0 for some tasks
-            print(f"  Skipping task {task_name_from_excel}: Invalid num_technicians_needed: {num_technicians_needed}")
-            for i in range(quantity):
-                unassigned_tasks_ids.append(f"{task_id}_{i + 1}")
+        if num_technicians_needed <= 0:
+            reason = f"Skipped (PM): Invalid 'Mitarbeiter pro Aufgabe' ({num_technicians_needed})."
+            for i in range(quantity): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
             continue
         if quantity <= 0:
-            print(f"  Skipping task {task_name_from_excel}: Invalid quantity: {quantity}")
-            # No instances to mark as unassigned if quantity is zero or negative
+            reason = f"Skipped (PM): Invalid 'Quantity' ({quantity})."
             continue
 
         json_task_name_lookup = TASK_NAME_MAPPING.get(task_name_from_excel, task_name_from_excel)
         normalized_current_excel_task_name = normalize_string(json_task_name_lookup)
-
         task_lines_str = str(task.get('lines', ''))
         task_lines = []
         if task_lines_str and task_lines_str.lower() != 'nan' and task_lines_str.strip() != '':
             try:
                 task_lines = [int(line.strip()) for line in task_lines_str.split(',') if line.strip().isdigit()]
             except ValueError:
-                print(f"  Warning: Invalid line format '{task_lines_str}' for task {task_name_from_excel}")
+                print(f"  Warning (PM): Invalid line format '{task_lines_str}' for task {task_name_from_excel}")
 
         eligible_technicians_details = []
         for tech_candidate in present_technicians:
             tech_task_definitions_for_candidate = TECHNICIAN_TASKS.get(tech_candidate, [])
             tech_lines_for_candidate = TECHNICIAN_LINES.get(tech_candidate, [])
-
             candidate_stated_prio_for_current_task = None
             can_do_current_task_flag = False
-
             for tech_task_obj in tech_task_definitions_for_candidate:
                 normalized_tech_task_string = normalize_string(tech_task_obj['task'])
                 if (normalized_current_excel_task_name in normalized_tech_task_string or
@@ -359,31 +353,23 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                         can_do_current_task_flag = True
                         candidate_stated_prio_for_current_task = tech_task_obj['prio']
                         break
-
             if can_do_current_task_flag and candidate_stated_prio_for_current_task is not None:
                 active_task_prios_for_tech = []
                 for tech_json_task_def in tech_task_definitions_for_candidate:
                     norm_tech_json_task_name = normalize_string(tech_json_task_def['task'])
-                    is_this_json_task_active = False
-                    for excel_task_norm_name_iter in all_pm_tasks_from_excel_normalized_names_set:
-                        if norm_tech_json_task_name in excel_task_norm_name_iter or \
-                                excel_task_norm_name_iter in norm_tech_json_task_name:
-                            is_this_json_task_active = True
-                            break
+                    is_this_json_task_active = any(
+                        norm_tech_json_task_name in excel_task_norm_name_iter or
+                        excel_task_norm_name_iter in norm_tech_json_task_name
+                        for excel_task_norm_name_iter in all_pm_tasks_from_excel_normalized_names_set
+                    )
                     if is_this_json_task_active:
                         active_task_prios_for_tech.append(tech_json_task_def['prio'])
-
                 effective_prio = candidate_stated_prio_for_current_task
                 if active_task_prios_for_tech:
                     sorted_unique_active_prios = sorted(list(set(active_task_prios_for_tech)))
                     if candidate_stated_prio_for_current_task in sorted_unique_active_prios:
-                        effective_prio = sorted_unique_active_prios.index(candidate_stated_prio_for_current_task) + 1
-                    else:
-                        print(
-                            f"  Warning: Stated prio {candidate_stated_prio_for_current_task} for {tech_candidate} on {task_name_from_excel} "
-                            f"not found in their calculated active prios {sorted_unique_active_prios}. Using stated prio {candidate_stated_prio_for_current_task} as effective.")
-                        # effective_prio remains candidate_stated_prio_for_current_task
-
+                        effective_prio = sorted_unique_active_prios.index(
+                            candidate_stated_prio_for_current_task) + 1
                 eligible_technicians_details.append({
                     'name': tech_candidate,
                     'prio_for_task': effective_prio,
@@ -391,38 +377,26 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                 })
 
         if not eligible_technicians_details:
-            print(f"  Task {task_name_from_excel}: No eligible technicians found.")
-            for i in range(quantity):
-                unassigned_tasks_ids.append(f"{task_id}_{i + 1}")
+            reason = "No technicians are eligible for this PM task (check skills/lines configuration)."
+            for i in range(quantity): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
             continue
 
         eligible_technicians_details.sort(key=lambda x: x['prio_for_task'])
-
         tech_prio_map = {
-            detail['name']: {
-                'effective': detail['prio_for_task'],
-                'stated': detail['original_stated_prio']
-            } for detail in eligible_technicians_details
+            detail['name']: {'effective': detail['prio_for_task'], 'stated': detail['original_stated_prio']}
+            for detail in eligible_technicians_details
         }
         sorted_eligible_tech_names = [detail['name'] for detail in eligible_technicians_details]
 
-        if len(sorted_eligible_tech_names) < num_technicians_needed:
-            print(
-                f"  Task {task_name_from_excel}: Insufficient eligible technicians ({len(sorted_eligible_tech_names)}/{num_technicians_needed}).")
-            for i in range(quantity):
-                unassigned_tasks_ids.append(f"{task_id}_{i + 1}")
-            continue
-
         viable_groups_with_scores = []
-        for r in range(num_technicians_needed, len(sorted_eligible_tech_names) + 1):
-            for group_tuple in combinations(sorted_eligible_tech_names, r):
+        for r_group_size in range(1, len(sorted_eligible_tech_names) + 1):
+            for group_tuple in combinations(sorted_eligible_tech_names, r_group_size):
                 group = list(group_tuple)
                 avg_effective_prio = sum(
                     tech_prio_map.get(tech, {}).get('effective', float('inf')) for tech in group) / len(
                     group) if group else float('inf')
                 current_workload = sum(
                     sum(end - start for start, end, _ in technician_schedules[tech_name]) for tech_name in group)
-
                 viable_groups_with_scores.append({
                     'group': group,
                     'len': len(group),
@@ -433,275 +407,312 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
         viable_groups_with_scores.sort(key=lambda x: (
             abs(x['len'] - num_technicians_needed),
             x['avg_prio'],
-            random.random(),
-            x['workload']
+            x['workload'],
+            random.random()
         ))
-
         viable_groups_sorted = [item['group'] for item in viable_groups_with_scores]
 
         for instance_num in range(1, quantity + 1):
             instance_id = f"{task_id}_{instance_num}"
             instance_task_name = f"{task_name_from_excel} (Instance {instance_num}/{quantity})"
             assigned_this_instance = False
-            instance_assignments = []
+            last_known_failure_reason = "Could not find a suitable time slot for any eligible group (PM)."
 
             for group in viable_groups_sorted:
-                missing_technicians = max(0, num_technicians_needed - len(group))
-                # If base_duration is 0, task_duration_for_group will also be 0.
-                # This is acceptable if it represents a check-off task or similar.
-                task_duration_for_group = base_duration * (1 + missing_technicians) if base_duration > 0 else 0
+                actual_num_assigned_technicians = len(group)
+                current_task_duration_for_group = base_duration
+                if base_duration > 0 and num_technicians_needed > 0 and actual_num_assigned_technicians > 0:
+                    current_task_duration_for_group = (
+                                                                  base_duration * num_technicians_needed) / actual_num_assigned_technicians
+                elif base_duration == 0:
+                    current_task_duration_for_group = 0
+                else:
+                    current_task_duration_for_group = float('inf')
+
+                resource_mismatch_info = None
+                if actual_num_assigned_technicians != num_technicians_needed:
+                    resource_mismatch_info = f"Requires {num_technicians_needed}, assigned to {actual_num_assigned_technicians} (PM)"
 
                 start_time = 0
-                # Allow scheduling even if task_duration_for_group is 0
-                while start_time <= total_work_minutes - (
-                task_duration_for_group if task_duration_for_group > 0 else 0):
+                while start_time <= total_work_minutes:
+                    if current_task_duration_for_group > 0 and start_time >= total_work_minutes:
+                        last_known_failure_reason = "No time remaining in shift to start PM task."
+                        break
+                    if current_task_duration_for_group == 0 and start_time > total_work_minutes:
+                        last_known_failure_reason = "No time remaining in shift to start 0-duration PM task."
+                        break
+
+                    duration_to_check_availability = 1 if current_task_duration_for_group == 0 else current_task_duration_for_group
                     all_available_in_group = all(
-                        all(sch_end <= start_time or sch_start >= start_time + task_duration_for_group
+                        all(sch_end <= start_time or sch_start >= start_time + duration_to_check_availability
                             for sch_start, sch_end, _ in technician_schedules[tech_in_group])
                         for tech_in_group in group
                     )
 
                     if all_available_in_group:
-                        is_incomplete = False
-                        current_instance_duration = task_duration_for_group
+                        assigned_duration_for_gantt = current_task_duration_for_group
+                        is_incomplete_flag = False
+                        if current_task_duration_for_group > 0 and (
+                                start_time + current_task_duration_for_group > total_work_minutes):
+                            remaining_time_in_shift = total_work_minutes - start_time
+                            min_acceptable_duration = current_task_duration_for_group * 0.75
+                            if remaining_time_in_shift >= min_acceptable_duration and remaining_time_in_shift > 0:
+                                assigned_duration_for_gantt = remaining_time_in_shift
+                                is_incomplete_flag = True
+                                if instance_id not in incomplete_tasks_ids:
+                                    incomplete_tasks_ids.append(instance_id)
+                            else:
+                                last_known_failure_reason = f"Insufficient time for 75% completion (PM). Ideal for group: {current_task_duration_for_group:.0f}min, Remaining: {remaining_time_in_shift:.0f}min, Min 75% needed: {min_acceptable_duration:.0f}min."
+                                start_time += 15
+                                continue
+                        elif current_task_duration_for_group == 0 and start_time > total_work_minutes:
+                            last_known_failure_reason = "Cannot schedule 0-duration PM task after shift end."
+                            start_time += 15
+                            continue
 
-                        # Handle capping only if duration is positive
-                        if task_duration_for_group > 0 and start_time + task_duration_for_group > total_work_minutes:
-                            current_instance_duration = total_work_minutes - start_time
-                            is_incomplete = True
-                            incomplete_tasks_ids.append(instance_id)
-
-                        technicians_for_assignment = group[:num_technicians_needed]
-
-                        for tech_assigned in technicians_for_assignment:
+                        for tech_assigned in group:  # PM tasks are assigned to all in the chosen group
                             technician_schedules[tech_assigned].append(
-                                (start_time, start_time + current_instance_duration, instance_task_name))
-
+                                (start_time, start_time + assigned_duration_for_gantt, instance_task_name))
+                            technician_schedules[tech_assigned].sort()
                             original_stated_prio_for_display = tech_prio_map.get(tech_assigned, {}).get('stated', 'N/A')
-
                             assignment_detail = {
                                 'technician': tech_assigned,
                                 'task_name': instance_task_name,
                                 'start': start_time,
-                                'duration': current_instance_duration,
-                                'is_incomplete': is_incomplete,
-                                'original_duration': task_duration_for_group,
+                                'duration': assigned_duration_for_gantt,
+                                'is_incomplete': is_incomplete_flag,
+                                'original_duration': current_task_duration_for_group,
                                 'instance_id': instance_id,
-                                'technician_task_priority': original_stated_prio_for_display
+                                'technician_task_priority': original_stated_prio_for_display,
+                                'resource_mismatch_info': resource_mismatch_info
                             }
-                            instance_assignments.append(assignment_detail)
-
-                        assigned_tech_names_with_display_prio = [
-                            f"{tech_assigned} (Prio: {tech_prio_map.get(tech_assigned, {}).get('stated', 'N/A')})"
-                            for tech_assigned in technicians_for_assignment
-                        ]
-                        print(
-                            f"  Assigned {instance_task_name} to {', '.join(assigned_tech_names_with_display_prio)} at {start_time} for {current_instance_duration}min.")
+                            all_task_assignments.append(assignment_detail)  # Append directly
                         assigned_this_instance = True
                         break
-
-                    if start_time >= total_work_minutes and task_duration_for_group == 0:  # Special case for 0 duration task at end of shift
-                        if all_available_in_group:  # Check availability at the very end
-                            # (Logic for 0-duration task assignment as above)
-                            is_incomplete = False  # 0 duration task cannot be incomplete due to time
-                            current_instance_duration = 0
-                            technicians_for_assignment = group[:num_technicians_needed]
-                            for tech_assigned in technicians_for_assignment:
-                                technician_schedules[tech_assigned].append(
-                                    (start_time, start_time + current_instance_duration, instance_task_name))
-                                original_stated_prio_for_display = tech_prio_map.get(tech_assigned, {}).get('stated',
-                                                                                                            'N/A')
-                                assignment_detail = {
-                                    'technician': tech_assigned, 'task_name': instance_task_name,
-                                    'start': start_time, 'duration': current_instance_duration,
-                                    'is_incomplete': is_incomplete, 'original_duration': 0,
-                                    'instance_id': instance_id,
-                                    'technician_task_priority': original_stated_prio_for_display
-                                }
-                                instance_assignments.append(assignment_detail)
-                            assigned_tech_names_with_display_prio = [
-                                f"{tech_assigned} (Prio: {tech_prio_map.get(tech_assigned, {}).get('stated', 'N/A')})"
-                                for tech_assigned in technicians_for_assignment]
-                            print(
-                                f"  Assigned 0-duration {instance_task_name} to {', '.join(assigned_tech_names_with_display_prio)} at {start_time} for {current_instance_duration}min.")
-                            assigned_this_instance = True
-                        break  # Break from while loop after checking the end of shift for 0-duration task
-
+                    else:
+                        last_known_failure_reason = f"Technician(s) in group '{', '.join(group)}' not available at {start_time}min for {duration_to_check_availability:.0f}min (PM)."
                     start_time += 15
-                    if start_time > total_work_minutes:  # Ensure loop terminates if no slot found
-                        break
-
                 if assigned_this_instance:
-                    all_task_assignments.append(instance_assignments)
                     break
-
             if not assigned_this_instance:
-                print(f"  Could not schedule {instance_task_name}")
-                unassigned_tasks_ids.append(instance_id)
-                all_task_assignments.append([])
+                print(f"  Could not schedule PM {instance_task_name}. Reason: {last_known_failure_reason}")
+                unassigned_tasks_reasons[instance_id] = last_known_failure_reason
 
-    flat_pm_assignments_for_rep_time_calc = [item for sublist in all_task_assignments for item in sublist]
-    available_time_for_rep = {tech: total_work_minutes for tech in present_technicians}
-    for assignment_detail in flat_pm_assignments_for_rep_time_calc:
-        tech = assignment_detail['technician']
-        duration = assignment_detail['duration']
-        if tech in available_time_for_rep:
-            available_time_for_rep[tech] -= duration
+    # Calculate available time after PM tasks for REP tasks initial filtering
+    available_time_after_pm = {tech: total_work_minutes for tech in present_technicians}
+    for tech_name_sched, schedule_items_list in technician_schedules.items():
+        current_tech_workload = sum(end - start for start, end, _ in schedule_items_list)
+        available_time_after_pm[tech_name_sched] -= current_tech_workload
 
+    # --- REP Task Assignment (Incorporating "Old Code" Philosophy) ---
     for task in rep_tasks:
         task_name = task.get('name', 'Unknown')
-        task_id = task['id']
-        print(f"Processing REP task: {task_name} (ID: {task_id})")
+        task_id = task['id'] # Original task ID from Excel data
+        # print(f"Processing REP task: {task_name} (ID: {task_id})") # Less verbose
 
-        base_duration = int(task.get('planned_worktime_min', 0))
-        num_technicians_needed = int(task.get('mitarbeiter_pro_aufgabe', 1))
-        quantity = int(task.get('quantity', 1))
+        # Use base_duration_rep for clarity, this is the fixed time for one instance
+        base_duration_rep = int(task.get('planned_worktime_min', 0))
+        num_technicians_needed_rep = int(task.get('mitarbeiter_pro_aufgabe', 1))
+        quantity_rep = int(task.get('quantity', 1))
 
-        if num_technicians_needed <= 0:
-            print(f"Skipping REP task {task_name}: invalid num_technicians_needed={num_technicians_needed}")
-            for i in range(quantity): unassigned_tasks_ids.append(f"{task_id}_{i + 1}")
+        if num_technicians_needed_rep <= 0:
+            reason = f"Skipped (REP): Invalid 'Mitarbeiter pro Aufgabe' ({num_technicians_needed_rep})."
+            for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
             continue
-        if quantity <= 0:
-            print(f"Skipping REP task {task_name}: invalid quantity={quantity}")
+        if quantity_rep <= 0:
+            reason = f"Skipped (REP): Invalid 'Quantity' ({quantity_rep})."
             continue
+        if base_duration_rep <= 0 and num_technicians_needed_rep > 0 : # Allow 0 duration if 0 techs needed (though odd)
+             pass # Allow 0 duration tasks to proceed if num_technicians_needed_rep is also 0 or 1.
+        elif base_duration_rep <= 0 : # If duration is 0 but techs > 0, this is fine.
+             pass
+        # If base_duration_rep is > 0, it's a normal task.
 
         task_lines_str_rep = str(task.get('lines', ''))
-        task_lines = []
+        task_lines_rep = []
         if task_lines_str_rep and task_lines_str_rep.lower() != 'nan' and task_lines_str_rep.strip() != '':
             try:
-                task_lines = [int(line.strip()) for line in task_lines_str_rep.split(',') if line.strip().isdigit()]
+                task_lines_rep = [int(line.strip()) for line in task_lines_str_rep.split(',') if line.strip().isdigit()]
             except (ValueError, TypeError):
-                print(f"Warning: Invalid lines format for REP task {task_name}")
+                print(f"  Warning (REP): Invalid lines format '{task_lines_str_rep}' for task {task_name}")
 
-        eligible_rep_technicians_for_task = []
+        # 1. Determine the pool of ELIGIBLE technicians based on user selection AND availability
+        eligible_technicians_for_this_rep_task = []
+        raw_user_selection_count = 0 # How many did the user pick in UI
         if task_id in rep_assignments_dict and not rep_assignments_dict[task_id].get('skipped'):
-            selected_techs = rep_assignments_dict[task_id]['technicians']
-            for tech in selected_techs:
-                if tech in present_technicians and available_time_for_rep.get(tech, 0) >= (
-                base_duration if base_duration > 0 else 0):  # Allow 0 duration tasks
-                    if not task_lines or any(line in TECHNICIAN_LINES.get(tech, []) for line in task_lines):
-                        eligible_rep_technicians_for_task.append(tech)
+            selected_techs_from_ui = rep_assignments_dict[task_id].get('technicians', [])
+            raw_user_selection_count = len(selected_techs_from_ui)
+            for tech_name_from_ui in selected_techs_from_ui:
+                if tech_name_from_ui in present_technicians:
+                    if not task_lines_rep or any(line in TECHNICIAN_LINES.get(tech_name_from_ui, []) for line in task_lines_rep):
+                        # Check if technician has enough *gross* time after PMs
+                        if available_time_after_pm.get(tech_name_from_ui, 0) >= (base_duration_rep if base_duration_rep > 0 else 0):
+                            eligible_technicians_for_this_rep_task.append(tech_name_from_ui)
+                        # else: print(f"  REP Info: {tech_name_from_ui} (user-selected for {task_name}) lacks gross time.")
+                    # else: print(f"  REP Info: {tech_name_from_ui} (user-selected for {task_name}) fails line check.")
+                # else: print(f"  REP Info: {tech_name_from_ui} (user-selected for {task_name}) not present.")
         else:
-            print(f"REP Task {task_name} skipped or unassigned in pre-assignment phase")
-            for i in range(quantity): unassigned_tasks_ids.append(f"{task_id}_{i + 1}")
+            reason = "Skipped (REP): Task not in user selections or explicitly skipped."
+            for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
             continue
 
-        if len(eligible_rep_technicians_for_task) < num_technicians_needed:
-            print(
-                f"REP Task {task_name}: insufficient eligible/selected technicians ({len(eligible_rep_technicians_for_task)}/{num_technicians_needed})")
-            for i in range(quantity): unassigned_tasks_ids.append(f"{task_id}_{i + 1}")
+        if not eligible_technicians_for_this_rep_task:
+            reason = "Skipped (REP): None of the user-selected technicians are eligible (present, lines, gross time after PMs)."
+            for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
             continue
 
-        viable_groups = [list(group_comb) for r_comb in
-                         range(num_technicians_needed, len(eligible_rep_technicians_for_task) + 1)
-                         for group_comb in combinations(eligible_rep_technicians_for_task, r_comb)]
-        viable_groups.sort(key=lambda group_rep: (
-            abs(len(group_rep) - num_technicians_needed),
-            sum(sum(end - start for start, end, _ in technician_schedules[tech_in_group]) for tech_in_group in
-                group_rep)
-        ))
+        # If not enough eligible from user selection to meet num_technicians_needed_rep,
+        # we cannot proceed with the "old code's" group formation logic which expects enough candidates.
+        # We will assign to the (smaller than ideal) group of eligible user-selected techs.
+        if len(eligible_technicians_for_this_rep_task) < num_technicians_needed_rep:
+            print(f"  Info (REP): For task '{task_name}', only {len(eligible_technicians_for_this_rep_task)} of the user-selected technicians are eligible, but task needs {num_technicians_needed_rep}. Will attempt to assign to this smaller group.")
+            # The final_assignment_group_rep will be eligible_technicians_for_this_rep_task
+            # The resource_mismatch_info will be important.
+            # Fall through to the instance loop with this smaller group.
+            pass
 
-        for instance_num in range(1, quantity + 1):
-            instance_id = f"{task_id}_{instance_num}"
-            instance_task_name = f"{task_name} (Instance {instance_num}/{quantity})"
-            assigned = False
-            instance_assignments_rep = []
 
-            for group in viable_groups:
-                missing_technicians = max(0, num_technicians_needed - len(group))
-                task_duration = base_duration * (1 + missing_technicians) if base_duration > 0 else 0
-                start_time = 0
+        # 2. Form viable groups from the eligible_technicians_for_this_rep_task
+        #    The "old code" tried to form groups of size num_technicians_needed up to len(eligible).
+        #    For REP, we should primarily target groups of EXACTLY num_technicians_needed_rep.
+        #    If user selected fewer, we use that smaller group.
+        #    If user selected more, we pick the best num_technicians_needed_rep from them.
 
-                while start_time <= total_work_minutes - (task_duration if task_duration > 0 else 0):
-                    all_available = all(
-                        all(end <= start_time or start >= start_time + task_duration
-                            for start, end, _ in technician_schedules[tech_in_group_rep])  # Use distinct var
-                        for tech_in_group_rep in group  # Use distinct var
-                    )
-                    if all_available:
-                        is_incomplete = False
-                        original_task_duration = task_duration
-                        current_instance_duration_rep = task_duration
+        target_assignment_group_rep = []
+        if len(eligible_technicians_for_this_rep_task) < num_technicians_needed_rep:
+            target_assignment_group_rep = list(eligible_technicians_for_this_rep_task)
+        elif len(eligible_technicians_for_this_rep_task) == num_technicians_needed_rep:
+            target_assignment_group_rep = list(eligible_technicians_for_this_rep_task)
+        else: # len(eligible_technicians_for_this_rep_task) > num_technicians_needed_rep
+            # User selected more eligible people than the task ideally needs.
+            # Pick the 'num_technicians_needed_rep' with the most available time from the eligible user selection.
+            sorted_eligible_user_selected = sorted(
+                eligible_technicians_for_this_rep_task,
+                key=lambda tech_name: available_time_after_pm.get(tech_name, 0), # Sort by most available time
+                reverse=True
+            )
+            target_assignment_group_rep = sorted_eligible_user_selected[:num_technicians_needed_rep]
 
-                        if task_duration > 0 and start_time + task_duration > total_work_minutes:
-                            current_instance_duration_rep = total_work_minutes - start_time
-                            is_incomplete = True
-                            incomplete_tasks_ids.append(instance_id)
 
-                        technicians_for_assignment_rep = group[:num_technicians_needed]
+        if not target_assignment_group_rep: # Should be caught by "if not eligible_technicians_for_this_rep_task"
+            reason = f"Skipped (REP): Could not form a target assignment group for '{task_name}' from user selection."
+            for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
+            continue
 
-                        for tech_assigned_rep_final in technicians_for_assignment_rep:  # Use distinct var
-                            technician_schedules[tech_assigned_rep_final].append(
-                                (start_time, start_time + current_instance_duration_rep, instance_task_name))
-                            assignment_detail_rep = {
-                                'technician': tech_assigned_rep_final,
-                                'task_name': instance_task_name,
-                                'start': start_time,
-                                'duration': current_instance_duration_rep,
-                                'is_incomplete': is_incomplete,
-                                'original_duration': original_task_duration,
-                                'instance_id': instance_id,
-                                'ticket_mo': task.get('ticket_mo', ''),
-                                'ticket_url': task.get('ticket_url', '')
-                            }
-                            instance_assignments_rep.append(assignment_detail_rep)
-                            available_time_for_rep[tech_assigned_rep_final] -= current_instance_duration_rep
+        actual_num_assigned_rep = len(target_assignment_group_rep)
+        # IMPORTANT: For REP tasks, the duration is fixed as per 'base_duration_rep'.
+        # The "old code" had a scaling `task_duration = base_duration * (1 + missing_technicians)`.
+        # We will NOT use this scaling for REP tasks. The duration is what's in the Excel.
+        current_task_duration_rep = base_duration_rep
 
-                        print(
-                            f"Assigned REP {instance_task_name} to {', '.join(technicians_for_assignment_rep)} at {start_time}")
-                        assigned = True
-                        break
+        resource_mismatch_info_rep = None
+        if actual_num_assigned_rep != num_technicians_needed_rep:
+            resource_mismatch_info_rep = f"Task requires {num_technicians_needed_rep}. Assigned to {actual_num_assigned_rep} (User selected {raw_user_selection_count}, {len(eligible_technicians_for_this_rep_task)} eligible)."
+        elif raw_user_selection_count != num_technicians_needed_rep and len(eligible_technicians_for_this_rep_task) >= num_technicians_needed_rep:
+             resource_mismatch_info_rep = f"Task requires {num_technicians_needed_rep}. User selected {raw_user_selection_count} ({len(eligible_technicians_for_this_rep_task)} eligible). Assigned to {actual_num_assigned_rep}."
 
-                    if start_time >= total_work_minutes and task_duration == 0:  # Special case for 0 duration task at end of shift
-                        if all_available:
-                            current_instance_duration_rep = 0
-                            technicians_for_assignment_rep = group[:num_technicians_needed]
-                            for tech_assigned_rep_final in technicians_for_assignment_rep:
-                                technician_schedules[tech_assigned_rep_final].append(
-                                    (start_time, start_time, instance_task_name))
-                                assignment_detail_rep = {
-                                    'technician': tech_assigned_rep_final, 'task_name': instance_task_name,
-                                    'start': start_time, 'duration': 0, 'is_incomplete': False,
-                                    'original_duration': 0, 'instance_id': instance_id,
-                                    'ticket_mo': task.get('ticket_mo', ''), 'ticket_url': task.get('ticket_url', '')
-                                }
-                                instance_assignments_rep.append(assignment_detail_rep)
-                                # No time deduction for 0-duration task
-                            print(
-                                f"Assigned 0-duration REP {instance_task_name} to {', '.join(technicians_for_assignment_rep)} at {start_time}")
-                            assigned = True
-                        break  # Break from while loop
 
-                    start_time += 15
-                    if start_time > total_work_minutes:
-                        break
+        for instance_num_rep in range(1, quantity_rep + 1):
+            instance_id_rep = f"{task_id}_{instance_num_rep}"
+            instance_task_name_rep = f"{task_name} (Instance {instance_num_rep}/{quantity_rep})"
+            assigned_this_instance_rep = False
+            last_known_failure_reason_rep = f"Could not find a suitable time slot for the target group for '{task_name}' (REP)."
 
-                if assigned:
-                    all_task_assignments.append(instance_assignments_rep)
+            # Try to assign to the target_assignment_group_rep
+            group_to_schedule = target_assignment_group_rep # This is the specific group we try to schedule
+
+            start_time_rep = 0
+            while start_time_rep <= total_work_minutes:
+                duration_to_check_availability_rep = 1 if current_task_duration_rep == 0 else current_task_duration_rep
+
+                if current_task_duration_rep > 0 and start_time_rep >= total_work_minutes:
+                    last_known_failure_reason_rep = "No time remaining in shift to start REP task."
+                    break
+                if current_task_duration_rep == 0 and start_time_rep > total_work_minutes:
+                    last_known_failure_reason_rep = "No time remaining in shift to start 0-duration REP task."
                     break
 
-            if not assigned:
-                print(f"Could not schedule REP {instance_task_name}")
-                unassigned_tasks_ids.append(instance_id)
-                all_task_assignments.append([])
+                all_available_in_group_to_schedule = all(
+                    all(sch_end <= start_time_rep or sch_start >= start_time_rep + duration_to_check_availability_rep
+                        for sch_start, sch_end, _ in technician_schedules[tech_in_group_to_schedule])
+                    for tech_in_group_to_schedule in group_to_schedule
+                )
 
-    final_assignments_flat = [item for sublist in all_task_assignments for item in sublist]
+                if all_available_in_group_to_schedule:
+                    assigned_duration_for_gantt_rep = current_task_duration_rep
+                    is_incomplete_flag_rep = False
+
+                    if current_task_duration_rep > 0 and (
+                            start_time_rep + current_task_duration_rep > total_work_minutes):
+                        remaining_time_in_shift_rep = total_work_minutes - start_time_rep
+                        min_acceptable_duration_rep = current_task_duration_rep * 0.75
+                        if remaining_time_in_shift_rep >= min_acceptable_duration_rep and remaining_time_in_shift_rep > 0:
+                            assigned_duration_for_gantt_rep = remaining_time_in_shift_rep
+                            is_incomplete_flag_rep = True
+                            if instance_id_rep not in incomplete_tasks_ids:
+                                incomplete_tasks_ids.append(instance_id_rep)
+                        else:
+                            last_known_failure_reason_rep = f"Insufficient time for 75% completion (REP) for '{task_name}'. Task duration: {current_task_duration_rep:.0f}min, Remaining in slot: {remaining_time_in_shift_rep:.0f}min, Min 75% needed: {min_acceptable_duration_rep:.0f}min."
+                            start_time_rep += 15
+                            continue
+                    elif current_task_duration_rep == 0 and start_time_rep > total_work_minutes:
+                        last_known_failure_reason_rep = "Cannot schedule 0-duration REP task after shift end."
+                        start_time_rep += 15
+                        continue
+
+                    for tech_assigned_rep in group_to_schedule: # Assign to everyone in this specific group
+                        technician_schedules[tech_assigned_rep].append(
+                            (start_time_rep, start_time_rep + assigned_duration_for_gantt_rep, instance_task_name_rep))
+                        technician_schedules[tech_assigned_rep].sort()
+                        # available_time_after_pm[tech_assigned_rep] -= assigned_duration_for_gantt_rep # Update for subsequent REP tasks if needed, though technician_schedules is the primary check
+
+                        assignment_detail_rep = {
+                            'technician': tech_assigned_rep,
+                            'task_name': instance_task_name_rep,
+                            'start': start_time_rep,
+                            'duration': assigned_duration_for_gantt_rep,
+                            'is_incomplete': is_incomplete_flag_rep,
+                            'original_duration': current_task_duration_rep, # This is base_duration_rep
+                            'instance_id': instance_id_rep,
+                            'ticket_mo': task.get('ticket_mo', ''),
+                            'ticket_url': task.get('ticket_url', ''),
+                            'resource_mismatch_info': resource_mismatch_info_rep,
+                            'technician_task_priority': 'N/A'
+                        }
+                        all_task_assignments.append(assignment_detail_rep)
+
+                    print(
+                        f"  Assigned REP {instance_task_name_rep} to {', '.join(group_to_schedule)} at {start_time_rep} for {assigned_duration_for_gantt_rep}min "
+                        f"(Task duration: {current_task_duration_rep}min). Incomplete: {is_incomplete_flag_rep}. Mismatch: {resource_mismatch_info_rep}")
+                    assigned_this_instance_rep = True
+                    break # Slot found for this group and instance
+                else:
+                    last_known_failure_reason_rep = f"Technician(s) in group '{', '.join(group_to_schedule)}' not available at {start_time_rep}min for {duration_to_check_availability_rep:.0f}min (REP for '{task_name}')."
+                start_time_rep += 15
+            # End of while loop for start_time_rep
+
+            if not assigned_this_instance_rep:
+                print(f"  Could not schedule REP {instance_task_name_rep}. Reason: {last_known_failure_reason_rep}")
+                unassigned_tasks_reasons[instance_id_rep] = last_known_failure_reason_rep
+        # End of for loop for instances
+
+    # Final calculation of available time
     final_available_time = {tech: total_work_minutes for tech in present_technicians}
-    for assignment_detail in final_assignments_flat:
+    for assignment_detail in all_task_assignments:
         tech = assignment_detail['technician']
         duration = assignment_detail['duration']
         if tech in final_available_time:
             final_available_time[tech] -= duration
+            if final_available_time[tech] < 0:
+                print(f"Warning: Technician {tech} has negative available time: {final_available_time[tech]}")
+                final_available_time[tech] = 0
 
-    return final_assignments_flat, unassigned_tasks_ids, incomplete_tasks_ids, final_available_time
+    return all_task_assignments, unassigned_tasks_reasons, incomplete_tasks_ids, final_available_time
 
 
 def generate_html_files(data, present_technicians, rep_assignments=None):
     try:
-        print("Starting generate_html_files")
-        sanitized_data = sanitize_data(data)  # Data from Excel
-        print(f"Sanitized data: {len(sanitized_data)} tasks")
-
+        sanitized_data = sanitize_data(data)
         tasks_for_processing = []
         for idx, row in enumerate(sanitized_data, start=1):
             tasks_for_processing.append({
@@ -716,44 +727,35 @@ def generate_html_files(data, present_technicians, rep_assignments=None):
                 "ticket_mo": row.get("ticket_mo", ""),
                 "ticket_url": row.get("ticket_url", "")
             })
-        print(f"Created {len(tasks_for_processing)} task objects for assignment processing.")
 
         current_day = get_current_day()
         total_work_minutes = calculate_work_time(current_day)
         num_intervals = ceil(total_work_minutes / 15) if total_work_minutes > 0 else 1
-        print(f"Total work minutes: {total_work_minutes}, Num intervals: {num_intervals}")
 
-        assignments_flat, unassigned_tasks, incomplete_tasks, available_time = assign_tasks(
+        assignments_flat, unassigned_reasons_dict, incomplete_ids, available_time = assign_tasks(
             tasks_for_processing,
             present_technicians,
             total_work_minutes,
             rep_assignments
         )
         print(
-            f"Generated {len(assignments_flat)} assignment entries, {len(unassigned_tasks)} unassigned instances, {len(incomplete_tasks)} incomplete instances.")
+            f"Generated {len(assignments_flat)} assignment entries, {len(unassigned_reasons_dict)} unassigned instances (with reasons), {len(incomplete_ids)} incomplete instances.")
 
         validated_assignments_to_render = validate_assignments_flat_input(assignments_flat)
-
-        print("Loading technician_dashboard.html template")
         technician_template = env.get_template('technician_dashboard.html')
-        print("Rendering template")
-
         technician_html = technician_template.render(
             tasks=tasks_for_processing,
             technicians=present_technicians,
             total_work_minutes=total_work_minutes,
             num_intervals=num_intervals,
             assignments=validated_assignments_to_render,
-            unassigned_tasks=unassigned_tasks,
-            incomplete_tasks=incomplete_tasks
+            unassigned_tasks=unassigned_reasons_dict,
+            incomplete_tasks=incomplete_ids
         )
-        print("Template rendered successfully")
-
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], "technician_dashboard.html")
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(technician_html)
         print(f"Written output to {output_path}")
-
         return available_time
     except Exception as e:
         print(f"Error in generate_html_files: {str(e)}")

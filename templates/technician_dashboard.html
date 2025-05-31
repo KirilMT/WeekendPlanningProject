@@ -207,29 +207,58 @@
             <td class="index-cell" style="background-color: #{{ '%02x%02x%02x' % ((task.id | int | default(1)) * 97 % 200 + 55, (task.id | int | default(1)) * 53 % 200 + 55, (task.id | int | default(1)) * 37 % 200 + 55) }}; color: #fff;">
                 {{ task.id }}
             </td>
-            <td>
+            <td> <!-- This is the cell for Task Name and its status messages -->
                 {{ task.name }}
-                {% set unassigned_instances = [] %}
-                {% set incomplete_instances = [] %}
+                {% set unassigned_instance_details = [] %}
+                {% set incomplete_instances_list = [] %}
+                {# {% set resource_mismatch_messages_for_task = namespace(texts=[]) %} #} <!-- REMOVED for PM -->
+
                 {% for i in range(task.quantity | int | default(1)) %}
-                    {% set instance_id = task.id ~ '_' ~ (i + 1) %}
-                    {% if instance_id in unassigned_tasks %}
-                        {% set _ = unassigned_instances.append(i + 1) %}
+                    {% set current_instance_id = task.id ~ '_' ~ (i + 1) %}
+
+                    {% if unassigned_tasks[current_instance_id] %}
+                        {% set _ = unassigned_instance_details.append({'num': i + 1, 'reason': unassigned_tasks[current_instance_id]}) %}
                     {% endif %}
-                    {% if instance_id in incomplete_tasks %}
-                        {% set _ = incomplete_instances.append(i + 1) %}
+
+                    {% if current_instance_id in incomplete_tasks %}
+                        {% set _ = incomplete_instances_list.append(i + 1) %}
                     {% endif %}
+
+                    {#
+                    {% for assign_item in assignments %}
+                        {% if assign_item.instance_id == current_instance_id and assign_item.resource_mismatch_info %}
+                            {% if assign_item.resource_mismatch_info not in resource_mismatch_messages_for_task.texts %}
+                                {% set _ = resource_mismatch_messages_for_task.texts.append(assign_item.resource_mismatch_info) %}
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                    #} <!-- REMOVED for PM -->
                 {% endfor %}
-                {% if unassigned_instances %}
-                    <br><span style="color: red;" title="Instances {{ unassigned_instances | join(', ') }} could not be scheduled due to no eligible technicians or time slots.">
-                        Unassigned: {{ unassigned_instances | join(', ') }}
+
+                {% if unassigned_instance_details %}
+                    {% set unassigned_numbers = unassigned_instance_details | map(attribute='num') | list %}
+                    {% set unassigned_reasons_tooltip_lines = [] %}
+                    {% for detail in unassigned_instance_details %}
+                        {% set _ = unassigned_reasons_tooltip_lines.append("Instance " ~ detail.num ~ ": " ~ detail.reason) %}
+                    {% endfor %}
+                    <br><span style="color: red;" title="{{ unassigned_reasons_tooltip_lines | join('\n') }}">
+                        Unassigned: {{ unassigned_numbers | join(', ') }}
                     </span>
                 {% endif %}
-                {% if incomplete_instances %}
-                    <br><span style="color: orange;" title="Instances {{ incomplete_instances | join(', ') }} were capped due to insufficient time.">
-                        Incomplete: {{ incomplete_instances | join(', ') }}
+
+                {% if incomplete_instances_list %}
+                    <br><span style="color: orange;" title="Instances {{ incomplete_instances_list | join(', ') }} were partially assigned due to shift end.">
+                        Partially Assigned: {{ incomplete_instances_list | join(', ') }}
                     </span>
                 {% endif %}
+
+                {#
+                {% if resource_mismatch_messages_for_task.texts %}
+                    <br><span style="color: red;" title="Resource allocation adjustments made for some instances.">
+                        Note: {{ resource_mismatch_messages_for_task.texts | unique | join('; ') }}
+                    </span>
+                {% endif %}
+                #} <!-- REMOVED for PM -->
             </td>
             <td>
                 {% if task.lines is none or task.lines == 'nan' %}
@@ -291,29 +320,58 @@
             <td class="index-cell" style="background-color: #{{ '%02x%02x%02x' % ((task.id | int | default(1)) * 97 % 200 + 55, (task.id | int | default(1)) * 53 % 200 + 55, (task.id | int | default(1)) * 37 % 200 + 55) }}; color: #fff;">
                 {{ task.id }}
             </td>
-            <td style="background-color: #e6e6e6;">
+            <td style="background-color: #e6e6e6;"> <!-- This is the cell for Task Name and its status messages -->
                 {{ task.name }}
-                {% set unassigned_instances = [] %}
-                {% set incomplete_instances = [] %}
+                {% set unassigned_instance_details_rep = [] %}
+                {% set incomplete_instances_list_rep = [] %}
+                {# {% set resource_mismatch_messages_for_task_rep = namespace(texts=[]) %} #} <!-- REMOVED for REP -->
+
                 {% for i in range(task.quantity | int | default(1)) %}
-                    {% set instance_id = task.id ~ '_' ~ (i + 1) %}
-                    {% if instance_id in unassigned_tasks %}
-                        {% set _ = unassigned_instances.append(i + 1) %}
+                    {% set current_instance_id = task.id ~ '_' ~ (i + 1) %}
+
+                    {% if unassigned_tasks[current_instance_id] %}
+                        {% set _ = unassigned_instance_details_rep.append({'num': i + 1, 'reason': unassigned_tasks[current_instance_id]}) %}
                     {% endif %}
-                    {% if instance_id in incomplete_tasks %}
-                        {% set _ = incomplete_instances.append(i + 1) %}
+
+                    {% if current_instance_id in incomplete_tasks %}
+                        {% set _ = incomplete_instances_list_rep.append(i + 1) %}
                     {% endif %}
+
+                    {#
+                    {% for assign_item in assignments %}
+                        {% if assign_item.instance_id == current_instance_id and assign_item.resource_mismatch_info %}
+                            {% if assign_item.resource_mismatch_info not in resource_mismatch_messages_for_task_rep.texts %}
+                                {% set _ = resource_mismatch_messages_for_task_rep.texts.append(assign_item.resource_mismatch_info) %}
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                    #} <!-- REMOVED for REP -->
                 {% endfor %}
-                {% if unassigned_instances %}
-                    <br><span style="color: red;" title="Instances {{ unassigned_instances | join(', ') }} could not be scheduled due to no eligible technicians or time slots.">
-                        Unassigned: {{ unassigned_instances | join(', ') }}
+
+                {% if unassigned_instance_details_rep %}
+                    {% set unassigned_numbers_rep = unassigned_instance_details_rep | map(attribute='num') | list %}
+                    {% set unassigned_reasons_tooltip_lines_rep = [] %}
+                    {% for detail in unassigned_instance_details_rep %}
+                        {% set _ = unassigned_reasons_tooltip_lines_rep.append("Instance " ~ detail.num ~ ": " ~ detail.reason) %}
+                    {% endfor %}
+                    <br><span style="color: red;" title="{{ unassigned_reasons_tooltip_lines_rep | join('\n') }}">
+                        Unassigned: {{ unassigned_numbers_rep | join(', ') }}
                     </span>
                 {% endif %}
-                {% if incomplete_instances %}
-                    <br><span style="color: orange;" title="Instances {{ incomplete_instances | join(', ') }} were capped due to insufficient time.">
-                        Incomplete: {{ incomplete_instances | join(', ') }}
+
+                {% if incomplete_instances_list_rep %}
+                    <br><span style="color: orange;" title="Instances {{ incomplete_instances_list_rep | join(', ') }} were partially assigned due to shift end.">
+                        Partially Assigned: {{ incomplete_instances_list_rep | join(', ') }}
                     </span>
                 {% endif %}
+
+                {#
+                {% if resource_mismatch_messages_for_task_rep.texts %}
+                    <br><span style="color: red;" title="Resource allocation adjustments made for some instances.">
+                        Note: {{ resource_mismatch_messages_for_task_rep.texts | unique | join('; ') }}
+                    </span>
+                {% endif %}
+                #} <!-- REMOVED for REP -->
             </td>
             <td style="background-color: #e6e6e6;">
                 {% if task.lines is none or task.lines == 'nan' %}
@@ -393,8 +451,9 @@
                                  style="
                                     grid-column: {{ slot_start + 1 }} / span {{ num_slots_span if num_slots_span > 0 else 1 }};
                                     background-color: #{{ '%02x%02x%02x' % (color_r, color_g, color_b) }};
+                                    {% if assignment.is_incomplete %}border: 2px solid red;{% endif %}
                                  "
-                                 title="{{ assignment.task_name | default('Unknown') }} ({{ assignment.start | default(0) }}-{{ (assignment.start | default(0)) + (assignment.duration | default(0)) }} min{% if assignment.is_incomplete %}, capped from {{ assignment.original_duration | default(0) }} min{% endif %})">
+                                 title="{{ assignment.task_name | default('Unknown') }} ({{ assignment.start | default(0) }}-{{ (assignment.start | default(0)) + (assignment.duration | default(0)) }} min{% if assignment.is_incomplete %} - Partially assigned, full ideal duration for group: {{ assignment.original_duration | default(0) }} min{% endif %}{% if assignment.resource_mismatch_info %} - {{ assignment.resource_mismatch_info }}{% endif %})">
                                 {{ task_id | default('0') }}
                             </div>
                         {% endif %}
