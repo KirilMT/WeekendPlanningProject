@@ -25,7 +25,7 @@
             overflow: hidden;
         }
         .task-table th {
-            background-color: #e3f2fd;
+            background-color: #e3f2fd; /* Base color for header cells */
             font-weight: 600;
             color: #333;
             padding: 12px 16px;
@@ -35,21 +35,23 @@
         .task-table td {
             padding: 12px 16px;
             border-bottom: 1px solid #eee;
-            color: #333;
+            color: #333; /* Default text color for td cells */
         }
         .task-table tr:last-child td {
             border-bottom: none;
         }
-        .task-table tr:hover {
-            background-color: #f9f9f9;
-        }
+        /* .task-table tr:hover {
+            background-color: #f9f9f9; /* OLD RULE - REMOVED/COMMENTED OUT */
+        } */
         .task-table .index-cell {
             text-align: center;
             font-weight: 500;
         }
-        .prio-a { background-color: #ff4d4d; color: #fff; }
-        .prio-b { background-color: #ffd700; }
-        .prio-c { background-color: #d2b48c; }
+        /* Base Prio Styles - MODIFIED for explicit color */
+        .prio-a { background-color: #ff4d4d; color: #333; } /* MODIFIED: Prio A text color to black */
+        .prio-b { background-color: #ffd700; color: #333; } /* Explicitly set default color */
+        .prio-c { background-color: #d2b48c; color: #333; } /* Explicitly set default color */
+
         a {
             color: #007bff;
             text-decoration: none;
@@ -79,7 +81,7 @@
         .technician-row {
             display: grid;
             grid-template-columns: 200px minmax(0, 1fr);
-            align-items: center; /* MODIFIED: Was flex-start, changed to center */
+            align-items: center;
             min-height: 40px;
             position: relative;
         }
@@ -89,7 +91,7 @@
             position: absolute;
             bottom: 0;
             left: 0;
-            width: 1960px; /* Should match or exceed gantt chart width */
+            width: 1960px; /* This might need to be dynamic or 100% if the container is constrained */
             border-bottom: 1px solid #eee;
         }
         .technician-label {
@@ -100,16 +102,16 @@
             box-sizing: border-box;
             background-color: #f9f9f9;
             text-align: left;
-            word-wrap: break-word; /* Helps if technician names are long */
+            word-wrap: break-word;
         }
         .time-grid {
             display: grid;
             grid-template-columns: repeat({{ num_intervals | default(1) }}, minmax(40px, 1fr));
-            grid-template-rows: 40px; /* Explicitly define one row of 40px height */
-            grid-auto-rows: 0;      /* Prevent the creation of implicit rows */
-            overflow: hidden;        /* Hide any content that might still try to overflow */
+            grid-template-rows: 40px;
+            grid-auto-rows: 0;
+            overflow: hidden;
             position: relative;
-            height: 40px;            /* Enforce the height */
+            height: 40px;
             background: transparent;
         }
         .time-axis {
@@ -119,7 +121,7 @@
             position: sticky;
             top: 0;
             background-color: #fff;
-            z-index: 1; /* Ensure time axis is above grid lines and task bars */
+            z-index: 1;
         }
         .time-axis::after {
             content: "";
@@ -127,7 +129,7 @@
             position: absolute;
             bottom: 0;
             left: 0;
-            width: 100%; /* Changed from fixed width to 100% for responsiveness */
+            width: 100%;
             border-bottom: 1px solid #ddd;
         }
         .time-tick {
@@ -141,21 +143,21 @@
             justify-content: center;
             box-sizing: border-box;
         }
-        .time-tick:not(:first-child)::after { /* Vertical grid lines */
+        .time-tick:not(:first-child)::after {
             content: '';
             position: absolute;
             top: 0;
             left: 0;
-            height: 100vh; /* Extend well beyond typical content height */
-            border-left: 1px solid #e0e0e0; /* Lighter grid lines */
-            z-index: -1; /* Behind task bars */
+            height: 100vh; /* Extends grid lines down */
+            border-left: 1px solid #e0e0e0;
+            z-index: -1;
         }
         .time-tick:first-child {
             width: 200px;
             background-color: #f9f9f9;
         }
         .task-bar {
-            grid-row: 1 / 2; /* Explicitly place task bars in the first (and only) row of the time-grid */
+            grid-row: 1 / 2;
             height: 24px;
             border-radius: 4px;
             display: flex;
@@ -170,10 +172,71 @@
             text-overflow: ellipsis;
             white-space: nowrap;
             text-align: center;
-            margin: 8px 2px; /* (40px row height - 24px bar height) / 2 = 8px top/bottom margin */
-            position: relative; /* For z-index stacking context */
-            z-index: 2; /* Ensure task bars are above the grid lines */
+            margin: 8px 2px;
+            position: relative;
+            z-index: 2;
         }
+
+        /* --- START: Modified CSS for Hover Effects and Prio Display --- */
+
+        /* NO hover for table header cells (th) */
+        /* The base style for th is .task-table th { background-color: #e3f2fd; ... } and will be retained. */
+
+        /* General hover for data cells (td) in regular PM task rows (default white background),
+           EXCLUDING prio cells. */
+        .task-table tr:not(.section-header):not(.task-row-rep):hover td:not(.prio-a):not(.prio-b):not(.prio-c) {
+            background-color: #e9e9e9;
+        }
+
+        /* Section Header Rows (PMs & PdMs, Tickets/MOs...) - Base Style */
+        /* NO hover for section headers */
+        .task-table tr.section-header td {
+            background-color: #d3d3d3;
+            text-align: left;
+            font-weight: bold;
+            padding: 8px 16px;
+        }
+
+        /* REP Task Data Rows - Base Style for general cells */
+        .task-table tr.task-row-rep td {
+            background-color: #e6e6e6;
+        }
+
+        /* MODIFIED/ADDED: Prio cells within REP rows - Base Style Override */
+        /* This ensures Prio A, B, C cells in REP rows show their specific colors by default */
+        .task-table tr.task-row-rep td.prio-a {
+            background-color: #ff4d4d;
+            color: #333; /* MODIFIED: Prio A text color to black */
+        }
+        .task-table tr.task-row-rep td.prio-b {
+            background-color: #ffd700;
+            color: #333;
+        }
+        .task-table tr.task-row-rep td.prio-c {
+            background-color: #d2b48c;
+            color: #333;
+        }
+
+        /* REP Task Data Rows - Hover Style for general cells, EXCLUDING prio cells */
+        .task-table tr.task-row-rep:hover td:not(.prio-a):not(.prio-b):not(.prio-c) {
+            background-color: #d1d1d1;
+        }
+
+        /* Ensure Prio cells (in ANY row type) maintain their specific background and font color on hover. */
+        .task-table tr:hover td.prio-a {
+            background-color: #ff4d4d; /* Match .prio-a base style */
+            color: #333;             /* MODIFIED: Prio A text color to black */
+        }
+        .task-table tr:hover td.prio-b {
+            background-color: #ffd700; /* Match .prio-b base style */
+            color: #333;             /* Explicitly set to inherited non-hover color */
+        }
+        .task-table tr:hover td.prio-c {
+            background-color: #d2b48c; /* Match .prio-c base style */
+            color: #333;             /* Explicitly set to inherited non-hover color */
+        }
+        /* --- END: Modified CSS for Hover Effects and Prio Display --- */
+
     </style>
 </head>
 <body>
@@ -197,43 +260,30 @@
 
         <!-- PM Section -->
         {% if pm_tasks %}
-        <tr style="background-color: #d3d3d3;">
-            <td colspan="9" style="text-align: left; font-weight: bold; padding: 8px 16px;">
+        {# MODIFIED: Added class="section-header" to tr, removed inline style from tr and td #}
+        <tr class="section-header">
+            <td colspan="9">
                 PMs & PdMs
             </td>
         </tr>
         {% for task in pm_tasks if not task.ticket_mo is none and task.ticket_mo != 'nan' %}
-        <tr>
+        <tr> {# This is a regular PM data row, hover handled by :not(.section-header):not(.task-row-rep) #}
             <td class="index-cell" style="background-color: #{{ '%02x%02x%02x' % ((task.id | int | default(1)) * 97 % 200 + 55, (task.id | int | default(1)) * 53 % 200 + 55, (task.id | int | default(1)) * 37 % 200 + 55) }}; color: #fff;">
                 {{ task.id }}
             </td>
             <td> <!-- This is the cell for Task Name and its status messages -->
                 {{ task.name }}
-                {# THIS IS WHERE THE LOGIC YOU ASKED ABOUT STARTS FOR PM TASKS #}
                 {% set unassigned_instance_details = [] %}
                 {% set incomplete_instances_list = [] %}
-                {# {% set resource_mismatch_messages_for_task = namespace(texts=[]) %} #} <!-- REMOVED for PM -->
 
                 {% for i in range(task.quantity | int | default(1)) %}
                     {% set current_instance_id = task.id ~ '_' ~ (i + 1) %}
-
                     {% if unassigned_tasks[current_instance_id] %}
                         {% set _ = unassigned_instance_details.append({'num': i + 1, 'reason': unassigned_tasks[current_instance_id]}) %}
                     {% endif %}
-
                     {% if current_instance_id in incomplete_tasks %}
                         {% set _ = incomplete_instances_list.append(i + 1) %}
                     {% endif %}
-
-                    {#
-                    {% for assign_item in assignments %}
-                        {% if assign_item.instance_id == current_instance_id and assign_item.resource_mismatch_info %}
-                            {% if assign_item.resource_mismatch_info not in resource_mismatch_messages_for_task.texts %}
-                                {% set _ = resource_mismatch_messages_for_task.texts.append(assign_item.resource_mismatch_info) %}
-                            {% endif %}
-                        {% endif %}
-                    {% endfor %}
-                    #} <!-- REMOVED for PM -->
                 {% endfor %}
 
                 {% if unassigned_instance_details %}
@@ -246,21 +296,12 @@
                         Unassigned: {{ unassigned_numbers | join(', ') }}
                     </span>
                 {% endif %}
-                {# THIS IS WHERE THE LOGIC YOU ASKED ABOUT ENDS FOR PM TASKS (before incomplete_instances_list display) #}
 
                 {% if incomplete_instances_list %}
                     <br><span style="color: orange;" title="Instances {{ incomplete_instances_list | join(', ') }} were partially assigned due to shift end.">
                         Partially Assigned: {{ incomplete_instances_list | join(', ') }}
                     </span>
                 {% endif %}
-
-                {#
-                {% if resource_mismatch_messages_for_task.texts %}
-                    <br><span style="color: red;" title="Resource allocation adjustments made for some instances.">
-                        Note: {{ resource_mismatch_messages_for_task.texts | unique | join('; ') }}
-                    </span>
-                {% endif %}
-                #} <!-- REMOVED for PM -->
             </td>
             <td>
                 {% if task.lines is none or task.lines == 'nan' %}
@@ -312,43 +353,31 @@
 
         <!-- REP Section -->
         {% if rep_tasks %}
-        <tr style="background-color: #d3d3d3;">
-            <td colspan="9" style="text-align: left; font-weight: bold; padding: 8px 16px;">
+        {# MODIFIED: Added class="section-header" to tr, removed inline style from tr and td #}
+        <tr class="section-header">
+            <td colspan="9">
                 Tickets/MOs/Engineering Requests
             </td>
         </tr>
         {% for task in rep_tasks if not task.ticket_mo is none and task.ticket_mo != 'nan' %}
-        <tr>
+        {# MODIFIED: Added class="task-row-rep" to tr, removed inline background-color styles from child tds #}
+        <tr class="task-row-rep">
             <td class="index-cell" style="background-color: #{{ '%02x%02x%02x' % ((task.id | int | default(1)) * 97 % 200 + 55, (task.id | int | default(1)) * 53 % 200 + 55, (task.id | int | default(1)) * 37 % 200 + 55) }}; color: #fff;">
                 {{ task.id }}
             </td>
-            <td style="background-color: #e6e6e6;"> <!-- This is the cell for Task Name and its status messages -->
+            <td> <!-- This is the cell for Task Name and its status messages -->
                 {{ task.name }}
-                {# THIS IS WHERE THE LOGIC YOU ASKED ABOUT STARTS FOR REP TASKS #}
                 {% set unassigned_instance_details_rep = [] %}
                 {% set incomplete_instances_list_rep = [] %}
-                {# {% set resource_mismatch_messages_for_task_rep = namespace(texts=[]) %} #} <!-- REMOVED for REP -->
 
                 {% for i in range(task.quantity | int | default(1)) %}
                     {% set current_instance_id = task.id ~ '_' ~ (i + 1) %}
-
                     {% if unassigned_tasks[current_instance_id] %}
                         {% set _ = unassigned_instance_details_rep.append({'num': i + 1, 'reason': unassigned_tasks[current_instance_id]}) %}
                     {% endif %}
-
                     {% if current_instance_id in incomplete_tasks %}
                         {% set _ = incomplete_instances_list_rep.append(i + 1) %}
                     {% endif %}
-
-                    {#
-                    {% for assign_item in assignments %}
-                        {% if assign_item.instance_id == current_instance_id and assign_item.resource_mismatch_info %}
-                            {% if assign_item.resource_mismatch_info not in resource_mismatch_messages_for_task_rep.texts %}
-                                {% set _ = resource_mismatch_messages_for_task_rep.texts.append(assign_item.resource_mismatch_info) %}
-                            {% endif %}
-                        {% endif %}
-                    {% endfor %}
-                    #} <!-- REMOVED for REP -->
                 {% endfor %}
 
                 {% if unassigned_instance_details_rep %}
@@ -361,31 +390,22 @@
                         Unassigned: {{ unassigned_numbers_rep | join(', ') }}
                     </span>
                 {% endif %}
-                {# THIS IS WHERE THE LOGIC YOU ASKED ABOUT ENDS FOR REP TASKS (before incomplete_instances_list_rep display) #}
 
                 {% if incomplete_instances_list_rep %}
                     <br><span style="color: orange;" title="Instances {{ incomplete_instances_list_rep | join(', ') }} were partially assigned due to shift end.">
                         Partially Assigned: {{ incomplete_instances_list_rep | join(', ') }}
                     </span>
                 {% endif %}
-
-                {#
-                {% if resource_mismatch_messages_for_task_rep.texts %}
-                    <br><span style="color: red;" title="Resource allocation adjustments made for some instances.">
-                        Note: {{ resource_mismatch_messages_for_task_rep.texts | unique | join('; ') }}
-                    </span>
-                {% endif %}
-                #} <!-- REMOVED for REP -->
             </td>
-            <td style="background-color: #e6e6e6;">
+            <td>
                 {% if task.lines is none or task.lines == 'nan' %}
                     N/A
                 {% else %}
                     {{ task.lines }}
                 {% endif %}
             </td>
-            <td style="background-color: #e6e6e6;">{{ task.mitarbeiter_pro_aufgabe | default('1') }}</td>
-            <td style="background-color: #e6e6e6;">
+            <td>{{ task.mitarbeiter_pro_aufgabe | default('1') }}</td>
+            <td>
                 {% set assigned_techs_for_rep = [] %}
                 {% for assignment in assignments if assignment.instance_id.startswith(task.id ~ '_') %}
                     {% if assignment.technician not in assigned_techs_for_rep %}
@@ -394,12 +414,12 @@
                 {% endfor %}
                 {{ assigned_techs_for_rep | sort | join(', ') | default('None') }}
             </td>
-            <td style="background-color: #e6e6e6;">{{ task.planned_worktime_min | default('0') }}</td>
+            <td>{{ task.planned_worktime_min | default('0') }}</td>
             <td class="{% if task.priority == 'A' %}prio-a{% elif task.priority == 'B' %}prio-b{% elif task.priority == 'C' %}prio-c{% endif %}">
                 {{ task.priority }}
             </td>
-            <td style="background-color: #e6e6e6;">{{ task.quantity | default('1') }}</td>
-            <td style="background-color: #e6e6e6;">
+            <td>{{ task.quantity | default('1') }}</td>
+            <td>
                 {% if task.task_type.upper() == 'REP' and task.ticket_mo %}
                     {% if task.ticket_url %}
                         <a href="{{ task.ticket_url }}" target="_blank">{{ task.ticket_mo }}</a>
