@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Technician Mappings</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .header-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        h1, h2 { color: #333; margin-top: 0; }
+        label { display: block; margin-top: 10px; }
+        input[type="text"], input[type="number"], select {
+            width: 95%; /* Adjusted for better layout with more buttons */
+            padding: 8px;
+            margin-top: 5px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        button, .button-link {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            text-decoration: none;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        button:hover, .button-link:hover { background-color: #0056b3; }
+
+        .task-item {
+            border: 1px solid #eee;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+            display: flex;
+            align-items: center;
+            flex-wrap: nowrap;
+        }
+        .task-item > label {
+            margin-right: 5px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .task-item input[type="text"].task-name-input {
+            flex-grow: 1;
+            min-width: 150px;
+            margin-right: 10px;
+        }
+        .task-item input[type="number"].task-prio-input {
+            width: 70px;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+        .task-item .task-action-btn { /* Common class for action buttons */
+            margin-right: 5px; /* Reduced margin for more buttons */
+            flex-shrink: 0;
+            padding: 6px 10px; /* Smaller padding for action buttons */
+            font-size: 14px;
+        }
+        .task-item .delete-task-btn {
+            background-color: #dc3545;
+        }
+        .task-item .make-unique-btn {
+            background-color: #17a2b8; /* Bootstrap info color */
+        }
+        .task-item .pm-link {
+            font-size: 0.9em;
+            white-space: nowrap;
+            margin-left: 5px; /* Adjusted margin */
+            flex-shrink: 0;
+        }
+
+        #statusMessage { margin-top: 15px; padding: 10px; border-radius: 4px; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb;}
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;}
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-controls">
+            <h1>Manage Technician Mappings</h1>
+            <button id="backToDashboardBtn" class="button-link">Back to Dashboard Upload</button>
+        </div>
+
+        <label for="technicianSelect">Select Technician:</label>
+        <select id="technicianSelect"></select>
+
+        <div id="technicianDetails" style="margin-top: 20px; display: none;">
+            <h2 id="currentTechName"></h2>
+            <label for="techSattelitePoint">Sattelite Point:</label>
+            <input type="text" id="techSattelitePoint">
+
+            <label for="techLines">Lines (comma-separated):</label>
+            <input type="text" id="techLines">
+
+            <h3>Task Assignments:</h3>
+            <div id="taskList"></div>
+            <button id="addTaskBtn">Add Task</button>
+        </div>
+
+        <hr style="margin: 20px 0;">
+        <button id="saveChangesBtn">Save All Changes</button>
+        <div id="statusMessage"></div>
+    </div>
+
+    <script>
+        let currentMappings = {};
+        let selectedTechnician = null;
+        let unsavedChanges = false;
+        let changesSummary = new Set();
+
+        const technicianSelect = document.getElementById('technicianSelect');
+        const currentTechNameDisplay = document.getElementById('currentTechName');
+        const techSattelitePointInput = document.getElementById('techSattelitePoint');
+        const techLinesInput = document.getElementById('techLines');
+        const taskListDiv = document.getElementById('taskList');
+        const addTaskBtn = document.getElementById('addTaskBtn');
+        const saveChangesBtn = document.getElementById('saveChangesBtn');
+        const statusMessageDiv = document.getElementById('statusMessage');
+        const backToDashboardBtn = document.getElementById('backToDashboardBtn');
+
+        function recordChange(description) {
+            unsavedChanges = true;
+            changesSummary.add(description);
+            // console.log("Change recorded:", description); // Removed
+        }
+
+        function clearUnsavedChanges() {
+            unsavedChanges = false;
+            changesSummary.clear();
+        }
+
+        /**
+         * Calculates and assigns display_prio (rank) to tasks.
+         * Assumes tasksArrayToProcess is already sorted by user_prio and a secondary key.
+         * Mutates the task objects in tasksArrayToProcess.
+         */
+        function calculateAndAssignDisplayPriorities(tasksArrayToProcess) {
+            if (!tasksArrayToProcess || tasksArrayToProcess.length === 0) {
+                return;
+            }
+            let currentDisplayPrioValue = 0;
+            let previousUserPrioForGrouping = -Infinity; // Sentinel
+
+            tasksArrayToProcess.forEach(task => {
+                if (task.user_prio !== previousUserPrioForGrouping) {
+                    currentDisplayPrioValue++;
+                }
+                task.display_prio = currentDisplayPrioValue;
+                previousUserPrioForGrouping = task.user_prio;
+            });
+        }
+
+        /**
+         * Sorts tasks by user_prio (then task name) and recalculates display_prio.
+         * Mutates the tasksArray.
+         */
+        function sortAndRecalculatePriorities(tasksArray) {
+            if (!tasksArray) return;
+
+            // Ensure all tasks have a user_prio (should be set on load/creation)
+            tasksArray.forEach((task, index) => {
+                if (typeof task.user_prio === 'undefined' || task.user_prio === null) {
+                    // console.warn("Task found without user_prio during sortAndRecalculate. Defaulting.", task); // Removed
+                    task.user_prio = (task.prio !== undefined && task.prio !== null) ? task.prio : index + 1000; // Fallback
+                }
+            });
+
+            tasksArray.sort((a, b) => {
+                const prioA = a.user_prio;
+                const prioB = b.user_prio;
+                if (prioA === prioB) {
+                    return (a.task || "").localeCompare(b.task || ""); // Secondary sort for stability
+                }
+                return prioA - prioB;
+            });
+
+            calculateAndAssignDisplayPriorities(tasksArray);
+        }
+
+
+        async function fetchMappings(technicianToSelectAfterLoad = null) {
+            try {
+                const response = await fetch('/api/get_technician_mappings');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                currentMappings = await response.json();
+
+                for (const techName in currentMappings.technicians) {
+                    if (currentMappings.technicians.hasOwnProperty(techName) && currentMappings.technicians[techName].task_assignments) {
+                        const tasks = currentMappings.technicians[techName].task_assignments;
+                        tasks.forEach((task, index) => {
+                            if (typeof task.user_prio === 'undefined' || task.user_prio === null) {
+                                task.user_prio = (task.prio !== undefined && task.prio !== null) ? task.prio : index + 1;
+                            }
+                        });
+                        sortAndRecalculatePriorities(tasks);
+                    }
+                }
+
+                populateTechnicianSelect();
+                const defaultSelection = technicianToSelectAfterLoad || (technicianSelect.options.length > 1 ? technicianSelect.options[1].value : "");
+                technicianSelect.value = defaultSelection;
+                loadTechnicianDetails(technicianSelect.value);
+                clearUnsavedChanges();
+            } catch (error) {
+                displayMessage(`Error fetching mappings: ${error.message}`, 'error');
+                console.error('Error fetching mappings:', error); // Kept console.error for actual errors
+            }
+        }
+
+        function populateTechnicianSelect() {
+            const currentVal = technicianSelect.value;
+            technicianSelect.innerHTML = '<option value="">-- Select Technician --</option>';
+            if (currentMappings && currentMappings.technicians) {
+                Object.keys(currentMappings.technicians).sort().forEach(techName => {
+                    const option = document.createElement('option');
+                    option.value = techName;
+                    option.textContent = techName;
+                    technicianSelect.appendChild(option);
+                });
+            }
+            if (Array.from(technicianSelect.options).some(opt => opt.value === currentVal)) {
+                technicianSelect.value = currentVal;
+            }
+        }
+
+        function loadTechnicianDetails(techName) {
+            selectedTechnician = techName;
+            taskListDiv.innerHTML = '';
+
+            if (!techName || !currentMappings.technicians || !currentMappings.technicians[techName]) {
+                currentTechNameDisplay.textContent = 'No Technician Selected';
+                techSattelitePointInput.value = '';
+                techLinesInput.value = '';
+                document.getElementById('technicianDetails').style.display = 'none';
+                return;
+            }
+            document.getElementById('technicianDetails').style.display = 'block';
+
+            const techData = currentMappings.technicians[techName];
+            currentTechNameDisplay.textContent = techName;
+            techSattelitePointInput.value = techData.sattelite_point || '';
+            techLinesInput.value = (techData.technician_lines || []).join(', ');
+
+            const tasksToRender = (techData.task_assignments || []).slice().sort((a, b) => {
+                const prioA = a.display_prio || Infinity;
+                const prioB = b.display_prio || Infinity;
+                if (prioA === prioB) {
+                    return (a.task || "").localeCompare(b.task || "");
+                }
+                return prioA - prioB;
+            });
+
+            tasksToRender.forEach((task) => {
+                renderTaskItem(task, techName);
+            });
+        }
+
+        function renderTaskItem(task, techNameForId) {
+            const taskDiv = document.createElement('div');
+            taskDiv.classList.add('task-item');
+            const taskDomIdSuffix = Math.random().toString(36).substr(2, 9);
+
+            const taskNameInputId = `task-name-${techNameForId}-${taskDomIdSuffix}`;
+            const prioInputId = `prio-input-${techNameForId}-${taskDomIdSuffix}`;
+
+            const nameLabel = document.createElement('label');
+            nameLabel.textContent = "Task:";
+            nameLabel.setAttribute('for', taskNameInputId);
+            taskDiv.appendChild(nameLabel);
+
+            const taskNameInput = document.createElement('input');
+            taskNameInput.type = 'text';
+            taskNameInput.className = 'task-name-input';
+            taskNameInput.id = taskNameInputId;
+            taskNameInput.value = escapeHtml(task.task || '');
+            taskNameInput.addEventListener('change', () => {
+                if (!selectedTechnician) return;
+                const oldName = task.task;
+                task.task = taskNameInput.value;
+                recordChange(`Task name for '${selectedTechnician}' changed from '${oldName}' to '${task.task}' (Group Prio: ${task.user_prio})`);
+            });
+            taskDiv.appendChild(taskNameInput);
+
+            const prioLabel = document.createElement('label');
+            prioLabel.setAttribute('for', prioInputId);
+            prioLabel.textContent = `Prio (Rank ${task.display_prio || 'N/A'}):`;
+            taskDiv.appendChild(prioLabel);
+
+            const prioInput = document.createElement('input');
+            prioInput.type = 'number';
+            prioInput.className = 'task-prio-input';
+            prioInput.id = prioInputId;
+            // console.log(`[DEBUG] Task "${task.task}": Attempting to set prioInput.value. Current task.user_prio: ${task.user_prio} (Type: ${typeof task.user_prio})`); // Removed
+            prioInput.value = Number(task.user_prio);
+            // console.log(`[DEBUG] Task "${task.task}": prioInput.value AFTER assignment: "${prioInput.value}" (Type: ${typeof prioInput.value})`); // Removed
+            prioInput.min = "1";
+            prioInput.addEventListener('change', (e) => {
+                if (!selectedTechnician) return;
+                const newGroupPrio = parseInt(e.target.value);
+
+                if (isNaN(newGroupPrio) || newGroupPrio < 1) {
+                    displayMessage('Priority must be a number greater than or equal to 1.', 'error');
+                    e.target.value = task.user_prio;
+                    return;
+                }
+
+                const tasksForTech = currentMappings.technicians[selectedTechnician].task_assignments;
+                const oldGroupPrio = task.user_prio;
+
+                if (newGroupPrio === oldGroupPrio) return;
+
+                recordChange(`Group Prio for tasks at ${oldGroupPrio} (triggered by '${task.task}') changed to ${newGroupPrio} for '${selectedTechnician}'`);
+
+                tasksForTech.forEach(t => {
+                    if (t.user_prio === oldGroupPrio) {
+                        t.user_prio = newGroupPrio;
+                    }
+                });
+
+                sortAndRecalculatePriorities(tasksForTech);
+                loadTechnicianDetails(selectedTechnician);
+            });
+            taskDiv.appendChild(prioInput);
+
+            const makeUniqueBtn = document.createElement('button');
+            makeUniqueBtn.className = 'task-action-btn make-unique-btn';
+            makeUniqueBtn.textContent = 'Set Unique';
+            makeUniqueBtn.title = 'Assign a new unique priority to this task, separating it from its current group.';
+            makeUniqueBtn.addEventListener('click', () => {
+                if (!selectedTechnician) return;
+                const tasksForTech = currentMappings.technicians[selectedTechnician].task_assignments;
+                const currentGroupPrio = task.user_prio;
+                const tasksInSameGroup = tasksForTech.filter(t => t.user_prio === currentGroupPrio);
+
+                if (tasksInSameGroup.length <= 1) {
+                    displayMessage(`Task '${task.task}' is already in its own priority group (${currentGroupPrio}).`, 'info');
+                    return;
+                }
+
+                let maxUserPrio = 0;
+                tasksForTech.forEach(t => {
+                    const currentUserPrio = Number(t.user_prio);
+                    if (!isNaN(currentUserPrio) && currentUserPrio > maxUserPrio) {
+                        maxUserPrio = currentUserPrio;
+                    }
+                });
+                const newUniqueUserPrio = maxUserPrio + 1;
+
+                recordChange(`Task '${task.task}' from group ${currentGroupPrio} made unique with new prio ${newUniqueUserPrio} for '${selectedTechnician}'`);
+                task.user_prio = newUniqueUserPrio;
+
+                sortAndRecalculatePriorities(tasksForTech);
+                loadTechnicianDetails(selectedTechnician);
+            });
+            taskDiv.appendChild(makeUniqueBtn);
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'task-action-btn delete-task-btn';
+            removeBtn.textContent = 'Remove';
+            removeBtn.addEventListener('click', () => {
+                if (!selectedTechnician) return;
+                const tasksArray = currentMappings.technicians[selectedTechnician].task_assignments;
+                const taskIndexToRemove = tasksArray.findIndex(t => t === task);
+
+                if (taskIndexToRemove > -1) {
+                    recordChange(`Task '${tasksArray[taskIndexToRemove].task}' (Group Prio: ${tasksArray[taskIndexToRemove].user_prio}) removed from '${selectedTechnician}'`);
+                    tasksArray.splice(taskIndexToRemove, 1);
+                    sortAndRecalculatePriorities(tasksArray);
+                    loadTechnicianDetails(selectedTechnician);
+                }
+            });
+            taskDiv.appendChild(removeBtn);
+
+            const fluxLink = document.createElement('a');
+            fluxLink.className = 'pm-link';
+            fluxLink.href = `https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?assetViewIds=2642&name=${encodeURIComponent(task.task || '')}`;
+            fluxLink.textContent = "PM Link";
+            fluxLink.target = "_blank";
+            taskDiv.appendChild(fluxLink);
+
+            taskListDiv.appendChild(taskDiv);
+        }
+
+        function escapeHtml(unsafe) {
+            if (unsafe === null || typeof unsafe === 'undefined') return '';
+            return String(unsafe).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        techSattelitePointInput.addEventListener('change', (e) => recordChange(`Sattelite point for '${selectedTechnician}' changed to '${e.target.value}'`));
+        techLinesInput.addEventListener('change', (e) => recordChange(`Lines for '${selectedTechnician}' changed to '${e.target.value}'`));
+
+        technicianSelect.addEventListener('change', (event) => {
+            if (unsavedChanges && selectedTechnician) {
+                let changesMessage = "You have unsaved changes:\n";
+                if (changesSummary.size > 0) {
+                    changesSummary.forEach(change => changesMessage += `- ${change}\n`);
+                } else {
+                    changesMessage += "- General modifications made.\n";
+                }
+                changesMessage += "\nDiscard changes and switch technician?";
+                if (!confirm(changesMessage)) {
+                    event.target.value = selectedTechnician;
+                    return;
+                }
+            }
+            clearUnsavedChanges();
+            loadTechnicianDetails(event.target.value);
+        });
+
+        addTaskBtn.addEventListener('click', () => {
+            if (!selectedTechnician || !currentMappings.technicians[selectedTechnician]) {
+                displayMessage('Please select a technician first.', 'error');
+                return;
+            }
+            const tasksArray = currentMappings.technicians[selectedTechnician].task_assignments || [];
+            currentMappings.technicians[selectedTechnician].task_assignments = tasksArray;
+
+            let maxUserPrio = 0;
+            tasksArray.forEach(t => {
+                if (t.user_prio !== undefined && t.user_prio !== null && t.user_prio > maxUserPrio) {
+                    maxUserPrio = t.user_prio;
+                }
+            });
+            const newUserPrioForNewTask = tasksArray.length === 0 ? 1 : maxUserPrio + 1;
+            const newTaskName = "New Task";
+            const newTask = { task: newTaskName, user_prio: newUserPrioForNewTask };
+            tasksArray.push(newTask);
+            recordChange(`Task '${newTaskName}' added with Group Prio ${newUserPrioForNewTask} for '${selectedTechnician}'`);
+
+            sortAndRecalculatePriorities(tasksArray);
+            loadTechnicianDetails(selectedTechnician);
+        });
+
+        function saveUIDataToCurrentMappings(techName) {
+            if (!techName || !currentMappings.technicians || !currentMappings.technicians[techName]) return;
+            const techData = currentMappings.technicians[techName];
+            techData.sattelite_point = techSattelitePointInput.value.trim();
+            techData.technician_lines = techLinesInput.value.split(',')
+                                          .map(line => parseInt(line.trim()))
+                                          .filter(line => !isNaN(line) && line !== null);
+        }
+
+        saveChangesBtn.addEventListener('click', async () => {
+            const technicianToPreserve = selectedTechnician;
+            if (selectedTechnician) {
+                saveUIDataToCurrentMappings(selectedTechnician);
+            }
+
+            if (Object.keys(currentMappings).length === 0 || !currentMappings.technicians) {
+                displayMessage('No mappings data loaded to save.', 'error');
+                return;
+            }
+
+            for (const techName in currentMappings.technicians) {
+                if (currentMappings.technicians.hasOwnProperty(techName)) {
+                    if (currentMappings.technicians[techName].task_assignments) {
+                       const tasksForSave = currentMappings.technicians[techName].task_assignments;
+                       sortAndRecalculatePriorities(tasksForSave);
+                       tasksForSave.forEach(task => {
+                           task.prio = task.display_prio;
+                       });
+                    }
+                }
+            }
+
+            try {
+                const response = await fetch('/api/save_technician_mappings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentMappings),
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    displayMessage(result.message || 'Mappings saved successfully!', 'success');
+                    clearUnsavedChanges();
+                    await fetchMappings(technicianToPreserve);
+                } else {
+                    displayMessage(result.message || `Error saving mappings: ${response.statusText}`, 'error');
+                }
+            } catch (error) {
+                displayMessage(`Error saving mappings: ${error.message}`, 'error');
+                console.error('Error saving mappings:', error); // Kept console.error for actual errors
+            }
+        });
+
+        backToDashboardBtn.addEventListener('click', (event) => {
+            if (unsavedChanges) {
+                let changesMessage = "You have the following unsaved changes:\n";
+                if (changesSummary.size > 0) {
+                    changesSummary.forEach(change => changesMessage += `- ${change}\n`);
+                } else {
+                    changesMessage += "- General modifications made.\n";
+                }
+                changesMessage += "\nAre you sure you want to leave without saving?";
+
+                if (!confirm(changesMessage)) {
+                    event.preventDefault();
+                    return;
+                }
+            }
+            window.location.href = "/";
+        });
+
+        function displayMessage(message, type) {
+            statusMessageDiv.textContent = message;
+            statusMessageDiv.className = type;
+            setTimeout(() => {
+                statusMessageDiv.textContent = '';
+                statusMessageDiv.className = '';
+            }, 5000);
+        }
+
+        // Initial load
+        fetchMappings();
+    </script>
+</body>
+</html>

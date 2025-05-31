@@ -98,6 +98,25 @@
             border: 2px solid #ff6f61;
             color: #ff6f61;
         }
+        #manageMappingsBtn {
+            position: fixed; /* Position relative to the viewport */
+            top: 20px;       /* Distance from the top */
+            right: 20px;      /* Distance from the right */
+            padding: 8px 15px;
+            background-color: #6c757d; /* A neutral, secondary button color */
+            color: white;
+            border: none;
+            border-radius: 5px; /* Consistent with some other secondary buttons */
+            font-size: 14px;   /* Slightly smaller font */
+            cursor: pointer;
+            text-decoration: none;
+            z-index: 1001;     /* Ensure it's above most other content (modals are 1000) */
+            transition: background-color 0.3s, transform 0.1s;
+        }
+        #manageMappingsBtn:hover {
+            background-color: #5a6268; /* Darken on hover */
+            transform: scale(1.05);   /* Slight zoom effect on hover */
+        }
         .modal {
             display: none;
             position: fixed;
@@ -231,6 +250,9 @@
         <div id="message"></div>
         <button id="openDashboardButton" onclick="window.location.href='/output/technician_dashboard.html'">Open Technician Dashboard</button>
     </div>
+
+    <!-- Button to Manage Technician Mappings -->
+    <button id="manageMappingsBtn" onclick="window.location.href='/manage_mappings_ui'">Manage Mappings</button>
 
     <!-- Absent Technicians Modal -->
     <div id="absentModal" class="modal">
