@@ -327,7 +327,10 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
             continue
         if quantity <= 0:
             reason = f"Skipped (PM): Invalid 'Quantity' ({quantity})."
-            continue
+            # No loop needed here as the task itself is skipped, not instances
+            # For consistency, if you want to mark all potential instances:
+            # for i in range(1): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason # Assuming quantity=0 means 0 instances
+            continue # Skip this task
 
         json_task_name_lookup = TASK_NAME_MAPPING.get(task_name_from_excel, task_name_from_excel)
         normalized_current_excel_task_name = normalize_string(json_task_name_lookup)
@@ -426,8 +429,8 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                                                                   base_duration * num_technicians_needed) / actual_num_assigned_technicians
                 elif base_duration == 0:
                     current_task_duration_for_group = 0
-                else:
-                    current_task_duration_for_group = float('inf')
+                else: # Should not happen if num_technicians_needed > 0 and actual_num_assigned_technicians > 0
+                    current_task_duration_for_group = float('inf') # Or handle as error
 
                 resource_mismatch_info = None
                 if actual_num_assigned_technicians != num_technicians_needed:
@@ -438,7 +441,7 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                     if current_task_duration_for_group > 0 and start_time >= total_work_minutes:
                         last_known_failure_reason = "No time remaining in shift to start PM task."
                         break
-                    if current_task_duration_for_group == 0 and start_time > total_work_minutes:
+                    if current_task_duration_for_group == 0 and start_time > total_work_minutes: # For 0-min tasks, allow scheduling at total_work_minutes
                         last_known_failure_reason = "No time remaining in shift to start 0-duration PM task."
                         break
 
@@ -465,7 +468,7 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                                 last_known_failure_reason = f"Insufficient time for 75% completion (PM). Ideal for group: {current_task_duration_for_group:.0f}min, Remaining: {remaining_time_in_shift:.0f}min, Min 75% needed: {min_acceptable_duration:.0f}min."
                                 start_time += 15
                                 continue
-                        elif current_task_duration_for_group == 0 and start_time > total_work_minutes:
+                        elif current_task_duration_for_group == 0 and start_time > total_work_minutes: # This case should be caught by the earlier check
                             last_known_failure_reason = "Cannot schedule 0-duration PM task after shift end."
                             start_time += 15
                             continue
@@ -486,7 +489,7 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                                 'technician_task_priority': original_stated_prio_for_display,
                                 'resource_mismatch_info': resource_mismatch_info
                             }
-                            all_task_assignments.append(assignment_detail)  # Append directly
+                            all_task_assignments.append(assignment_detail)
                         assigned_this_instance = True
                         break
                     else:
@@ -504,29 +507,26 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
         current_tech_workload = sum(end - start for start, end, _ in schedule_items_list)
         available_time_after_pm[tech_name_sched] -= current_tech_workload
 
-    # --- REP Task Assignment (Incorporating "Old Code" Philosophy) ---
+    # --- REP Task Assignment ---
     for task in rep_tasks:
         task_name = task.get('name', 'Unknown')
-        task_id = task['id'] # Original task ID from Excel data
-        # print(f"Processing REP task: {task_name} (ID: {task_id})") # Less verbose
+        task_id = task['id']
 
-        # Use base_duration_rep for clarity, this is the fixed time for one instance
         base_duration_rep = int(task.get('planned_worktime_min', 0))
         num_technicians_needed_rep = int(task.get('mitarbeiter_pro_aufgabe', 1))
         quantity_rep = int(task.get('quantity', 1))
 
-        if num_technicians_needed_rep <= 0:
-            reason = f"Skipped (REP): Invalid 'Mitarbeiter pro Aufgabe' ({num_technicians_needed_rep})."
-            for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
-            continue
+        if num_technicians_needed_rep <= 0: # Allow 0 if task duration is also 0 (no work, no techs)
+            if base_duration_rep == 0:
+                num_technicians_needed_rep = 0 # Explicitly set for clarity
+            else:
+                reason = f"Skipped (REP): Invalid 'Mitarbeiter pro Aufgabe' ({num_technicians_needed_rep}) for non-zero duration task."
+                for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
+                continue
         if quantity_rep <= 0:
             reason = f"Skipped (REP): Invalid 'Quantity' ({quantity_rep})."
+            # for i in range(1): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason # Assuming quantity=0 means 0 instances
             continue
-        if base_duration_rep <= 0 and num_technicians_needed_rep > 0 : # Allow 0 duration if 0 techs needed (though odd)
-             pass # Allow 0 duration tasks to proceed if num_technicians_needed_rep is also 0 or 1.
-        elif base_duration_rep <= 0 : # If duration is 0 but techs > 0, this is fine.
-             pass
-        # If base_duration_rep is > 0, it's a normal task.
 
         task_lines_str_rep = str(task.get('lines', ''))
         task_lines_rep = []
@@ -536,8 +536,7 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
             except (ValueError, TypeError):
                 print(f"  Warning (REP): Invalid lines format '{task_lines_str_rep}' for task {task_name}")
 
-        # 1. Determine the pool of ELIGIBLE technicians based on user selection AND availability (>=75% time)
-        eligible_technicians_for_this_rep_task = [] # Technicians who user selected AND meet >=75% time criteria
+        eligible_technicians_for_this_rep_task = []
         raw_user_selection_count = 0
         if task_id in rep_assignments_dict and not rep_assignments_dict[task_id].get('skipped'):
             selected_techs_from_ui = rep_assignments_dict[task_id].get('technicians', [])
@@ -545,67 +544,111 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
             for tech_name_from_ui in selected_techs_from_ui:
                 if tech_name_from_ui in present_technicians:
                     if not task_lines_rep or any(line in TECHNICIAN_LINES.get(tech_name_from_ui, []) for line in task_lines_rep):
-                        # Check if technician has enough *gross* time (>=75% of task duration)
                         min_acceptable_time_for_eligibility = base_duration_rep * 0.75
                         if (base_duration_rep > 0 and available_time_after_pm.get(tech_name_from_ui, 0) >= min_acceptable_time_for_eligibility) or \
-                           (base_duration_rep == 0): # If task is 0 min, time is not a constraint for eligibility
+                           (base_duration_rep == 0):
                             eligible_technicians_for_this_rep_task.append(tech_name_from_ui)
         else:
             reason = "Skipped (REP): Task not in user selections or explicitly skipped."
             for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
             continue
 
-        if not eligible_technicians_for_this_rep_task:
+        if not eligible_technicians_for_this_rep_task and num_technicians_needed_rep > 0 : # If task needs techs but none eligible from selection
             reason = "Skipped (REP): None of the user-selected technicians are eligible (present, lines, >=75% gross time after PMs)."
             for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
             continue
+        elif not eligible_technicians_for_this_rep_task and num_technicians_needed_rep == 0 and base_duration_rep == 0:
+            # Task needs 0 techs and is 0 duration, effectively a placeholder, mark as "assigned" to no one.
+            # This might need special handling if you want to see it in the table.
+            # For now, let's assume it doesn't create Gantt entries.
+            # Or, if you want to represent it, you could add a special type of assignment.
+            # For simplicity, we'll let it pass through and it won't create assignments if target_assignment_group_rep is empty.
+            pass
 
-        # 2. Form the actual assignment group, prioritizing 100% capable technicians
+
         target_assignment_group_rep = []
+        if num_technicians_needed_rep == 0 and base_duration_rep == 0:
+            # For a 0-duration, 0-tech task, the target group is empty.
+            # It won't be scheduled in the Gantt but won't be "unassigned" in the typical sense.
+            target_assignment_group_rep = []
+            print(f"  REP Info for '{task_name}': Task is 0 duration and needs 0 technicians. No assignment group formed.")
+        elif eligible_technicians_for_this_rep_task: # Only proceed if there are eligible techs and task needs them
+            techs_100_percent_capable = [
+                tech_name for tech_name in eligible_technicians_for_this_rep_task
+                if available_time_after_pm.get(tech_name, 0) >= base_duration_rep or base_duration_rep == 0
+            ]
 
-        # Attempt 1: Find a group of 100% capable technicians from the eligible user selection
-        techs_100_percent_capable = [
-            tech_name for tech_name in eligible_technicians_for_this_rep_task # Start with those already deemed >=75% eligible
-            if available_time_after_pm.get(tech_name, 0) >= base_duration_rep # Check for 100% capability
-        ]
+            # Determine the actual number of technicians to aim for in the group
+            # This will be the smaller of num_technicians_needed_rep and the count of eligible_technicians_for_this_rep_task
+            # unless num_technicians_needed_rep is 0.
+            aim_for_group_size = num_technicians_needed_rep
+            if len(eligible_technicians_for_this_rep_task) < num_technicians_needed_rep :
+                aim_for_group_size = len(eligible_technicians_for_this_rep_task)
 
-        if len(techs_100_percent_capable) >= num_technicians_needed_rep:
-            # Enough 100% capable technicians exist among the eligible user selection
-            sorted_techs_100_percent = sorted(
-                techs_100_percent_capable,
-                key=lambda tech_name: available_time_after_pm.get(tech_name, 0), # Sort by most available time
-                reverse=True
-            )
-            target_assignment_group_rep = sorted_techs_100_percent[:num_technicians_needed_rep]
-            print(f"  REP Info for '{task_name}': Formed assignment group from 100% capable user-selected technicians: {target_assignment_group_rep}")
-        else:
-            # Attempt 2: Fallback to 75%+ capable technicians if not enough 100% capable ones
-            print(f"  REP Info for '{task_name}': Not enough 100% capable user-selected technicians ({len(techs_100_percent_capable)} found, need {num_technicians_needed_rep}). Falling back to 75%+ capable.")
-            if len(eligible_technicians_for_this_rep_task) < num_technicians_needed_rep:
-                target_assignment_group_rep = list(eligible_technicians_for_this_rep_task) # Use all available from the >=75% pool
-            else: # Includes == num_technicians_needed_rep and > num_technicians_needed_rep from the >=75% pool
-                sorted_eligible_user_selected_75_plus = sorted(
-                    eligible_technicians_for_this_rep_task, # This list already contains only those with >=75% time
+
+            if len(techs_100_percent_capable) >= aim_for_group_size:
+                sorted_techs_100_percent = sorted(
+                    techs_100_percent_capable,
                     key=lambda tech_name: available_time_after_pm.get(tech_name, 0),
                     reverse=True
                 )
-                target_assignment_group_rep = sorted_eligible_user_selected_75_plus[:num_technicians_needed_rep]
-            print(f"  REP Info for '{task_name}': Formed assignment group from 75%+ capable user-selected technicians: {target_assignment_group_rep}")
+                target_assignment_group_rep = sorted_techs_100_percent[:aim_for_group_size]
+                print(f"  REP Info for '{task_name}': Formed assignment group from 100% capable user-selected technicians: {target_assignment_group_rep} (aimed for {aim_for_group_size})")
+            else:
+                print(f"  REP Info for '{task_name}': Not enough 100% capable user-selected technicians ({len(techs_100_percent_capable)} found, aimed for {aim_for_group_size}). Falling back to 75%+ capable.")
+                # Fallback uses the aim_for_group_size derived from eligible technicians
+                sorted_eligible_user_selected_75_plus = sorted(
+                    eligible_technicians_for_this_rep_task,
+                    key=lambda tech_name: available_time_after_pm.get(tech_name, 0),
+                    reverse=True
+                )
+                target_assignment_group_rep = sorted_eligible_user_selected_75_plus[:aim_for_group_size]
+                print(f"  REP Info for '{task_name}': Formed assignment group from 75%+ capable user-selected technicians: {target_assignment_group_rep} (aimed for {aim_for_group_size})")
 
-        if not target_assignment_group_rep:
+        if not target_assignment_group_rep and num_technicians_needed_rep > 0 : # If still no group and task needed techs
             reason = f"Skipped (REP): Could not form a target assignment group for '{task_name}' from user selection (even after fallback)."
             for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
             continue
+        elif not target_assignment_group_rep and num_technicians_needed_rep == 0 and base_duration_rep > 0:
+            # This case means a 0-tech task with duration > 0, which is odd. Mark unassigned.
+            reason = f"Skipped (REP): Task '{task_name}' has duration but needs 0 technicians. Marked unassigned."
+            for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
+            continue
+
 
         actual_num_assigned_rep = len(target_assignment_group_rep)
-        current_task_duration_rep = base_duration_rep # Duration is fixed for REP
+        current_task_duration_rep = base_duration_rep
 
         resource_mismatch_info_rep = None
-        # Update mismatch info based on the final target_assignment_group_rep
-        if actual_num_assigned_rep != num_technicians_needed_rep:
-            resource_mismatch_info_rep = f"Task requires {num_technicians_needed_rep}. Assigned to {actual_num_assigned_rep} (User selected {raw_user_selection_count}, {len(eligible_technicians_for_this_rep_task)} eligible with >=75% time)."
-        elif raw_user_selection_count != num_technicians_needed_rep and len(eligible_technicians_for_this_rep_task) >= num_technicians_needed_rep :
-             resource_mismatch_info_rep = f"Task requires {num_technicians_needed_rep}. User selected {raw_user_selection_count} ({len(eligible_technicians_for_this_rep_task)} eligible with >=75% time). Assigned to {actual_num_assigned_rep}."
+        if num_technicians_needed_rep > 0: # Only generate mismatch if task was supposed to have techs
+            if actual_num_assigned_rep != num_technicians_needed_rep:
+                resource_mismatch_info_rep = f"Task requires {num_technicians_needed_rep}. Assigned to {actual_num_assigned_rep} (User selected {raw_user_selection_count}, {len(eligible_technicians_for_this_rep_task)} eligible with >=75% time)."
+            elif raw_user_selection_count != num_technicians_needed_rep and len(eligible_technicians_for_this_rep_task) >= num_technicians_needed_rep :
+                 resource_mismatch_info_rep = f"Task requires {num_technicians_needed_rep}. User selected {raw_user_selection_count} ({len(eligible_technicians_for_this_rep_task)} eligible with >=75% time). Assigned to {actual_num_assigned_rep}."
+        elif num_technicians_needed_rep == 0 and actual_num_assigned_rep > 0: # Task planned for 0, but assigned (should not happen with current logic)
+            resource_mismatch_info_rep = f"Task planned for 0 technicians. Assigned to {actual_num_assigned_rep}."
+
+
+        if not target_assignment_group_rep and base_duration_rep == 0 and num_technicians_needed_rep == 0:
+            # This is a 0-duration, 0-tech task. It's "done" without assignment.
+            # We don't add to unassigned_tasks_reasons.
+            # We might want a way to log it as "completed by definition" if needed in the table.
+            # For now, it just won't appear in Gantt or unassigned.
+            print(f"  REP Info for '{task_name}': Task is 0 duration, 0 technicians. Considered complete by definition.")
+            # If you want to show it in the table as "assigned" to "N/A" or similar,
+            # you could add a placeholder assignment here to all_task_assignments.
+            # Example placeholder:
+            # for i_rep in range(1, quantity_rep + 1):
+            #     all_task_assignments.append({
+            #         'technician': 'N/A (0-tech task)',
+            #         'task_name': f"{task_name} (Instance {i_rep}/{quantity_rep})",
+            #         'start': 0, 'duration': 0, 'is_incomplete': False,
+            #         'original_duration': 0, 'instance_id': f"{task_id}_{i_rep}",
+            #         'ticket_mo': task.get('ticket_mo', ''), 'ticket_url': task.get('ticket_url', ''),
+            #         'resource_mismatch_info': "Task requires 0 technicians.",
+            #         'technician_task_priority': 'N/A'
+            #     })
+            continue # Move to the next REP task
 
 
         for instance_num_rep in range(1, quantity_rep + 1):
@@ -614,8 +657,13 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
             assigned_this_instance_rep = False
             last_known_failure_reason_rep = f"Could not find a suitable time slot for the target group for '{task_name}' (REP)."
 
-            # Try to assign to the target_assignment_group_rep
-            group_to_schedule = target_assignment_group_rep # This is the specific group we try to schedule
+            group_to_schedule = target_assignment_group_rep
+
+            if not group_to_schedule : # Should only happen if num_technicians_needed_rep was > 0 but group formation failed
+                unassigned_tasks_reasons[instance_id_rep] = last_known_failure_reason_rep # Or a more specific reason
+                print(f"  Could not schedule REP {instance_task_name_rep} as no group was formed and task required technicians.")
+                continue
+
 
             start_time_rep = 0
             while start_time_rep <= total_work_minutes:
@@ -656,11 +704,10 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                         start_time_rep += 15
                         continue
 
-                    for tech_assigned_rep in group_to_schedule: # Assign to everyone in this specific group
+                    for tech_assigned_rep in group_to_schedule:
                         technician_schedules[tech_assigned_rep].append(
                             (start_time_rep, start_time_rep + assigned_duration_for_gantt_rep, instance_task_name_rep))
                         technician_schedules[tech_assigned_rep].sort()
-                        # available_time_after_pm[tech_assigned_rep] -= assigned_duration_for_gantt_rep # Update for subsequent REP tasks if needed, though technician_schedules is the primary check
 
                         assignment_detail_rep = {
                             'technician': tech_assigned_rep,
@@ -668,7 +715,7 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                             'start': start_time_rep,
                             'duration': assigned_duration_for_gantt_rep,
                             'is_incomplete': is_incomplete_flag_rep,
-                            'original_duration': current_task_duration_rep, # This is base_duration_rep
+                            'original_duration': current_task_duration_rep,
                             'instance_id': instance_id_rep,
                             'ticket_mo': task.get('ticket_mo', ''),
                             'ticket_url': task.get('ticket_url', ''),
@@ -681,27 +728,25 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                         f"  Assigned REP {instance_task_name_rep} to {', '.join(group_to_schedule)} at {start_time_rep} for {assigned_duration_for_gantt_rep}min "
                         f"(Task duration: {current_task_duration_rep}min). Incomplete: {is_incomplete_flag_rep}. Mismatch: {resource_mismatch_info_rep}")
                     assigned_this_instance_rep = True
-                    break # Slot found for this group and instance
+                    break
                 else:
                     last_known_failure_reason_rep = f"Technician(s) in group '{', '.join(group_to_schedule)}' not available at {start_time_rep}min for {duration_to_check_availability_rep:.0f}min (REP for '{task_name}')."
                 start_time_rep += 15
-            # End of while loop for start_time_rep
 
             if not assigned_this_instance_rep:
                 print(f"  Could not schedule REP {instance_task_name_rep}. Reason: {last_known_failure_reason_rep}")
                 unassigned_tasks_reasons[instance_id_rep] = last_known_failure_reason_rep
-        # End of for loop for instances
 
-    # Final calculation of available time
     final_available_time = {tech: total_work_minutes for tech in present_technicians}
     for assignment_detail in all_task_assignments:
         tech = assignment_detail['technician']
         duration = assignment_detail['duration']
-        if tech in final_available_time:
+        if tech in final_available_time: # Ensure tech is a present technician
             final_available_time[tech] -= duration
             if final_available_time[tech] < 0:
                 print(f"Warning: Technician {tech} has negative available time: {final_available_time[tech]}")
                 final_available_time[tech] = 0
+        # If tech is 'N/A (0-tech task)', it won't be in final_available_time, which is fine.
 
     return all_task_assignments, unassigned_tasks_reasons, incomplete_tasks_ids, final_available_time
 

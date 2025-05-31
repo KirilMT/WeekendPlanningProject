@@ -382,7 +382,7 @@
                         <p><strong>Task:</strong> ${task.scheduler_group_task}</p>
                         <p><strong>Ticket/MO:</strong> ${task.ticket_mo || 'N/A'}</p>
                         ${task.ticket_url ? `<p><strong>Link:</strong> <a href="${task.ticket_url}" target="_blank">${task.ticket_url}</a></p>` : ''}
-                        <p><strong>Technicians Needed:</strong> ${task.mitarbeiter_pro_aufgabe}</p>
+                        <p><strong>Technicians Planned:</strong> ${task.mitarbeiter_pro_aufgabe}</p> <!-- Changed label -->
                         <p><strong>Duration:</strong> ${task.planned_worktime_min} minutes</p>
                         <p><strong>Progress:</strong> ${currentRepTaskIndex + 1} of ${repTasks.length}</p>
                     `;
@@ -440,13 +440,43 @@
                 console.error("INDEX.HTML: repTechnicians container div not found!");
                 return;
             }
-            techniciansContainer.innerHTML = '';
+            techniciansContainer.innerHTML = ''; // Clear previous checkboxes
+
+            // Clear any previous informational message
+            const existingInfoMsg = document.getElementById('repTaskAvailabilityInfo');
+            if (existingInfoMsg) {
+                existingInfoMsg.remove();
+            }
 
             console.log('INDEX.HTML: Full eligibleTechnicians object (before populating modal):', JSON.stringify(eligibleTechnicians));
             const availableTechsFromEligible = eligibleTechnicians[task.id] || [];
             console.log(`INDEX.HTML: Technicians from eligibleTechnicians for task.id ${task.id} (for modal):`, JSON.stringify(availableTechsFromEligible));
 
             const sortedTechnicians = [...availableTechsFromEligible].sort((a, b) => a.name.localeCompare(b.name));
+
+            const techniciansPlannedForTask = parseInt(task.mitarbeiter_pro_aufgabe) || 0;
+
+            // Add informational message if fewer technicians are available for selection than planned
+            if (sortedTechnicians.length < techniciansPlannedForTask && sortedTechnicians.length > 0 && techniciansPlannedForTask > 0) {
+                const infoMsg = document.createElement('p');
+                infoMsg.id = 'repTaskAvailabilityInfo'; // For easy removal if modal is re-populated
+                infoMsg.style.color = 'dimgray';
+                infoMsg.style.fontSize = '0.9em';
+                infoMsg.style.marginBottom = '10px';
+                infoMsg.style.textAlign = 'left';
+                infoMsg.textContent = `Note: This task is planned for ${techniciansPlannedForTask} technician(s). Currently, ${sortedTechnicians.length} are eligible and available for selection. You may proceed with the available technicians.`;
+
+                const repSearchInput = document.getElementById('repSearch'); // Insert before search bar
+                if (repSearchInput && repSearchInput.parentNode) {
+                     repSearchInput.parentNode.insertBefore(infoMsg, repSearchInput);
+                } else { // Fallback if search input isn't there for some reason
+                    const ticketInfoDiv = document.getElementById('ticketInfo');
+                    if (ticketInfoDiv && ticketInfoDiv.parentNode) {
+                         ticketInfoDiv.parentNode.insertBefore(infoMsg, ticketInfoDiv.nextSibling);
+                    }
+                }
+            }
+
 
             const validateRepButton = document.getElementById('validateRep');
 
@@ -466,7 +496,6 @@
                     const textSpan = document.createElement('span');
                     const baseText = `${tech.name} (${tech.available_time} min available)`;
                     const taskFullDurationForDisplay = tech.task_full_duration;
-                    const taskMinAcceptableDurationForDisplay = taskFullDurationForDisplay * 0.75;
 
                     if (taskFullDurationForDisplay > 0 && tech.available_time < taskFullDurationForDisplay) {
                         const partialSpan = document.createElement('span');
@@ -481,9 +510,6 @@
 
                     label.appendChild(textSpan);
                     techniciansContainer.appendChild(label);
-
-                    // Debug: Log the rendered HTML for this label
-                    console.log(`INDEX.HTML: Rendered HTML for technician ${tech.name}:`, label.outerHTML);
                 });
             }
         }
@@ -500,7 +526,6 @@
             });
         }
 
-        // Ensure all event listeners are attached after DOM is fully loaded
         document.addEventListener('DOMContentLoaded', () => {
             const uploadForm = document.getElementById('uploadForm');
             if (uploadForm) {
@@ -590,7 +615,7 @@
                             console.log('INDEX.HTML: eligibleTechnicians for REP tasks after PM processing:', JSON.stringify(eligibleTechnicians));
                             hideAbsentModal();
                             if (repTasks.length > 0) {
-                                showRepModal(); // This should now have data for the first REP task
+                                showRepModal();
                             } else {
                                 showMessage('No REP tasks to assign. Generating dashboard...', 'success');
                                 const finalFormData = new FormData();
@@ -639,14 +664,31 @@
                     console.log('INDEX.HTML: Validate Rep selection clicked.');
                     const selectedCheckboxes = document.querySelectorAll('#repTechnicians input[type="checkbox"]:checked');
                     const selectedTechnicians = Array.from(selectedCheckboxes).map(cb => cb.value);
-                    const task = repTasks[currentRepTaskIndex]; // The task that was just assigned
-                    const techniciansNeeded = parseInt(task.mitarbeiter_pro_aufgabe) || 1;
-                    console.log('INDEX.HTML: Selected technicians for REP:', selectedTechnicians, 'Technicians needed:', techniciansNeeded);
+                    const task = repTasks[currentRepTaskIndex];
+                    const techniciansPlanned = parseInt(task.mitarbeiter_pro_aufgabe) || 0;
 
-                    if (selectedTechnicians.length < techniciansNeeded) {
-                        alert(`Please select at least ${techniciansNeeded} technician(s) for this task.`);
+                    // Get the number of technicians currently available for selection in the modal
+                    const availableTechsInModal = eligibleTechnicians[task.id] ? eligibleTechnicians[task.id].length : 0;
+
+                    console.log('INDEX.HTML: Selected technicians for REP:', selectedTechnicians, 'Technicians Planned:', techniciansPlanned, 'Available in Modal:', availableTechsInModal);
+
+                    if (techniciansPlanned > 0 && selectedTechnicians.length === 0) {
+                        alert(`This task is planned for ${techniciansPlanned} technician(s). Please select at least one technician to proceed, or skip the task.`);
                         return;
                     }
+
+                    // NEW LOGIC:
+                    // If enough technicians are available in the modal to meet the plan,
+                    // but the user selected fewer than planned, then show a blocking alert.
+                    if (availableTechsInModal >= techniciansPlanned && selectedTechnicians.length < techniciansPlanned && techniciansPlanned > 0) {
+                        alert(`This task is planned for ${techniciansPlanned} technician(s), and enough are available. Please select at least ${techniciansPlanned} technician(s).`);
+                        return;
+                    }
+                    // If fewer technicians are available in the modal than planned (availableTechsInModal < techniciansPlanned),
+                    // or if the task is planned for 0 technicians,
+                    // or if the user selected the planned number or more,
+                    // then proceed without a blocking alert. The informational message in populateRepTechnicians handles the first case.
+
                     repAssignments.push({
                         task_id: task.id,
                         technicians: selectedTechnicians,
