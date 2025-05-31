@@ -209,6 +209,7 @@
             </td>
             <td> <!-- This is the cell for Task Name and its status messages -->
                 {{ task.name }}
+                {# THIS IS WHERE THE LOGIC YOU ASKED ABOUT STARTS FOR PM TASKS #}
                 {% set unassigned_instance_details = [] %}
                 {% set incomplete_instances_list = [] %}
                 {# {% set resource_mismatch_messages_for_task = namespace(texts=[]) %} #} <!-- REMOVED for PM -->
@@ -245,6 +246,7 @@
                         Unassigned: {{ unassigned_numbers | join(', ') }}
                     </span>
                 {% endif %}
+                {# THIS IS WHERE THE LOGIC YOU ASKED ABOUT ENDS FOR PM TASKS (before incomplete_instances_list display) #}
 
                 {% if incomplete_instances_list %}
                     <br><span style="color: orange;" title="Instances {{ incomplete_instances_list | join(', ') }} were partially assigned due to shift end.">
@@ -322,6 +324,7 @@
             </td>
             <td style="background-color: #e6e6e6;"> <!-- This is the cell for Task Name and its status messages -->
                 {{ task.name }}
+                {# THIS IS WHERE THE LOGIC YOU ASKED ABOUT STARTS FOR REP TASKS #}
                 {% set unassigned_instance_details_rep = [] %}
                 {% set incomplete_instances_list_rep = [] %}
                 {# {% set resource_mismatch_messages_for_task_rep = namespace(texts=[]) %} #} <!-- REMOVED for REP -->
@@ -358,6 +361,7 @@
                         Unassigned: {{ unassigned_numbers_rep | join(', ') }}
                     </span>
                 {% endif %}
+                {# THIS IS WHERE THE LOGIC YOU ASKED ABOUT ENDS FOR REP TASKS (before incomplete_instances_list_rep display) #}
 
                 {% if incomplete_instances_list_rep %}
                     <br><span style="color: orange;" title="Instances {{ incomplete_instances_list_rep | join(', ') }} were partially assigned due to shift end.">

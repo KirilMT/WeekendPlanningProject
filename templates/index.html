@@ -734,12 +734,24 @@
             if (skipRepButton) {
                 skipRepButton.addEventListener('click', function() {
                     console.log('INDEX.HTML: Skip Rep task clicked.');
+                    const rawReason = prompt("Please enter a reason for skipping this task (optional):", "");
+                    let skipReasonMessage = "Skipped reason."; // Default if prompt is cancelled or empty
+
+                    if (rawReason !== null && rawReason.trim() !== "") {
+                        skipReasonMessage = `Skipped reason: ${rawReason.trim()}`;
+                    } else if (rawReason === null) { // User pressed Cancel
+                        skipReasonMessage = "Skipped reason (note cancelled).";
+                    } else { // User pressed OK with empty or whitespace
+                        skipReasonMessage = "Skipped reason (no specific note provided).";
+                    }
+
                     repAssignments.push({
                         task_id: repTasks[currentRepTaskIndex].id,
                         technicians: [],
                         ticket_mo: repTasks[currentRepTaskIndex].ticket_mo,
                         ticket_url: repTasks[currentRepTaskIndex].ticket_url,
-                        skipped: true
+                        skipped: true,
+                        skip_reason: skipReasonMessage // Add the reason here
                     });
                     console.log('INDEX.HTML: Rep task skipped:', repAssignments[repAssignments.length - 1]);
                     currentRepTaskIndex++;

@@ -511,10 +511,36 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
     for task in rep_tasks:
         task_name = task.get('name', 'Unknown')
         task_id = task['id']
+        quantity_rep = int(task.get('quantity', 1)) # Ensure quantity_rep is defined early
 
         base_duration_rep = int(task.get('planned_worktime_min', 0))
         num_technicians_needed_rep = int(task.get('mitarbeiter_pro_aufgabe', 1))
-        quantity_rep = int(task.get('quantity', 1))
+
+        if task_id in rep_assignments_dict:
+            assignment_info = rep_assignments_dict[task_id]
+            if assignment_info.get('skipped'):
+                # Use the reason directly from the UI if available, otherwise a generic "skipped"
+                reason_for_unassignment = assignment_info.get('skip_reason', "Skipped by user (reason not specified).")
+                for i in range(quantity_rep): # Apply reason to all instances of this skipped task
+                    unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason_for_unassignment
+                print(f"  REP Task {task_name} (ID: {task_id}) was skipped. Reason: {reason_for_unassignment}")
+                continue # Process next REP task
+            else:
+                # Task was in rep_assignments_dict but not marked as skipped, proceed with assignment logic
+                selected_techs_from_ui = assignment_info.get('technicians', [])
+                # Fall through to the existing assignment logic for non-skipped REP tasks
+        else:
+            # Task ID was not found in rep_assignments_dict.
+            # This implies it wasn't presented for selection or skip, or data mismatch.
+            reason = "Skipped (REP): Task data not received from UI for assignment/skip."
+            for i in range(quantity_rep): # Apply reason to all instances
+                unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
+            print(f"  REP Task {task_name} (ID: {task_id}) was not found in rep_assignments_dict. Marked as unassigned.")
+            continue # Process next REP task
+
+
+        # --- This is the existing logic for REP tasks that are NOT skipped ---
+        # --- and ARE in rep_assignments_dict. It starts after the skip check. ---
 
         if num_technicians_needed_rep <= 0: # Allow 0 if task duration is also 0 (no work, no techs)
             if base_duration_rep == 0:
@@ -523,9 +549,9 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                 reason = f"Skipped (REP): Invalid 'Mitarbeiter pro Aufgabe' ({num_technicians_needed_rep}) for non-zero duration task."
                 for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
                 continue
-        if quantity_rep <= 0:
+        if quantity_rep <= 0: # This check might be redundant if tasks with qty <=0 are filtered earlier
             reason = f"Skipped (REP): Invalid 'Quantity' ({quantity_rep})."
-            # for i in range(1): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason # Assuming quantity=0 means 0 instances
+            # for i in range(1): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
             continue
 
         task_lines_str_rep = str(task.get('lines', ''))
@@ -537,54 +563,36 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                 print(f"  Warning (REP): Invalid lines format '{task_lines_str_rep}' for task {task_name}")
 
         eligible_technicians_for_this_rep_task = []
-        raw_user_selection_count = 0
-        if task_id in rep_assignments_dict and not rep_assignments_dict[task_id].get('skipped'):
-            selected_techs_from_ui = rep_assignments_dict[task_id].get('technicians', [])
-            raw_user_selection_count = len(selected_techs_from_ui)
-            for tech_name_from_ui in selected_techs_from_ui:
-                if tech_name_from_ui in present_technicians:
-                    if not task_lines_rep or any(line in TECHNICIAN_LINES.get(tech_name_from_ui, []) for line in task_lines_rep):
-                        min_acceptable_time_for_eligibility = base_duration_rep * 0.75
-                        if (base_duration_rep > 0 and available_time_after_pm.get(tech_name_from_ui, 0) >= min_acceptable_time_for_eligibility) or \
-                           (base_duration_rep == 0):
-                            eligible_technicians_for_this_rep_task.append(tech_name_from_ui)
-        else:
-            reason = "Skipped (REP): Task not in user selections or explicitly skipped."
-            for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
-            continue
+        raw_user_selection_count = len(selected_techs_from_ui) # selected_techs_from_ui is from the 'else' block above
 
-        if not eligible_technicians_for_this_rep_task and num_technicians_needed_rep > 0 : # If task needs techs but none eligible from selection
+        for tech_name_from_ui in selected_techs_from_ui:
+            if tech_name_from_ui in present_technicians:
+                if not task_lines_rep or any(line in TECHNICIAN_LINES.get(tech_name_from_ui, []) for line in task_lines_rep):
+                    min_acceptable_time_for_eligibility = base_duration_rep * 0.75
+                    if (base_duration_rep > 0 and available_time_after_pm.get(tech_name_from_ui, 0) >= min_acceptable_time_for_eligibility) or \
+                       (base_duration_rep == 0):
+                        eligible_technicians_for_this_rep_task.append(tech_name_from_ui)
+
+        if not eligible_technicians_for_this_rep_task and num_technicians_needed_rep > 0 :
             reason = "Skipped (REP): None of the user-selected technicians are eligible (present, lines, >=75% gross time after PMs)."
             for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
             continue
         elif not eligible_technicians_for_this_rep_task and num_technicians_needed_rep == 0 and base_duration_rep == 0:
-            # Task needs 0 techs and is 0 duration, effectively a placeholder, mark as "assigned" to no one.
-            # This might need special handling if you want to see it in the table.
-            # For now, let's assume it doesn't create Gantt entries.
-            # Or, if you want to represent it, you could add a special type of assignment.
-            # For simplicity, we'll let it pass through and it won't create assignments if target_assignment_group_rep is empty.
             pass
 
 
         target_assignment_group_rep = []
         if num_technicians_needed_rep == 0 and base_duration_rep == 0:
-            # For a 0-duration, 0-tech task, the target group is empty.
-            # It won't be scheduled in the Gantt but won't be "unassigned" in the typical sense.
             target_assignment_group_rep = []
             print(f"  REP Info for '{task_name}': Task is 0 duration and needs 0 technicians. No assignment group formed.")
-        elif eligible_technicians_for_this_rep_task: # Only proceed if there are eligible techs and task needs them
+        elif eligible_technicians_for_this_rep_task:
             techs_100_percent_capable = [
                 tech_name for tech_name in eligible_technicians_for_this_rep_task
                 if available_time_after_pm.get(tech_name, 0) >= base_duration_rep or base_duration_rep == 0
             ]
-
-            # Determine the actual number of technicians to aim for in the group
-            # This will be the smaller of num_technicians_needed_rep and the count of eligible_technicians_for_this_rep_task
-            # unless num_technicians_needed_rep is 0.
             aim_for_group_size = num_technicians_needed_rep
             if len(eligible_technicians_for_this_rep_task) < num_technicians_needed_rep :
                 aim_for_group_size = len(eligible_technicians_for_this_rep_task)
-
 
             if len(techs_100_percent_capable) >= aim_for_group_size:
                 sorted_techs_100_percent = sorted(
@@ -596,7 +604,6 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                 print(f"  REP Info for '{task_name}': Formed assignment group from 100% capable user-selected technicians: {target_assignment_group_rep} (aimed for {aim_for_group_size})")
             else:
                 print(f"  REP Info for '{task_name}': Not enough 100% capable user-selected technicians ({len(techs_100_percent_capable)} found, aimed for {aim_for_group_size}). Falling back to 75%+ capable.")
-                # Fallback uses the aim_for_group_size derived from eligible technicians
                 sorted_eligible_user_selected_75_plus = sorted(
                     eligible_technicians_for_this_rep_task,
                     key=lambda tech_name: available_time_after_pm.get(tech_name, 0),
@@ -605,70 +612,45 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                 target_assignment_group_rep = sorted_eligible_user_selected_75_plus[:aim_for_group_size]
                 print(f"  REP Info for '{task_name}': Formed assignment group from 75%+ capable user-selected technicians: {target_assignment_group_rep} (aimed for {aim_for_group_size})")
 
-        if not target_assignment_group_rep and num_technicians_needed_rep > 0 : # If still no group and task needed techs
+        if not target_assignment_group_rep and num_technicians_needed_rep > 0 :
             reason = f"Skipped (REP): Could not form a target assignment group for '{task_name}' from user selection (even after fallback)."
             for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
             continue
         elif not target_assignment_group_rep and num_technicians_needed_rep == 0 and base_duration_rep > 0:
-            # This case means a 0-tech task with duration > 0, which is odd. Mark unassigned.
             reason = f"Skipped (REP): Task '{task_name}' has duration but needs 0 technicians. Marked unassigned."
             for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
             continue
 
-
         actual_num_assigned_rep = len(target_assignment_group_rep)
         current_task_duration_rep = base_duration_rep
-
         resource_mismatch_info_rep = None
-        if num_technicians_needed_rep > 0: # Only generate mismatch if task was supposed to have techs
+        if num_technicians_needed_rep > 0:
             if actual_num_assigned_rep != num_technicians_needed_rep:
                 resource_mismatch_info_rep = f"Task requires {num_technicians_needed_rep}. Assigned to {actual_num_assigned_rep} (User selected {raw_user_selection_count}, {len(eligible_technicians_for_this_rep_task)} eligible with >=75% time)."
             elif raw_user_selection_count != num_technicians_needed_rep and len(eligible_technicians_for_this_rep_task) >= num_technicians_needed_rep :
                  resource_mismatch_info_rep = f"Task requires {num_technicians_needed_rep}. User selected {raw_user_selection_count} ({len(eligible_technicians_for_this_rep_task)} eligible with >=75% time). Assigned to {actual_num_assigned_rep}."
-        elif num_technicians_needed_rep == 0 and actual_num_assigned_rep > 0: # Task planned for 0, but assigned (should not happen with current logic)
+        elif num_technicians_needed_rep == 0 and actual_num_assigned_rep > 0:
             resource_mismatch_info_rep = f"Task planned for 0 technicians. Assigned to {actual_num_assigned_rep}."
 
-
         if not target_assignment_group_rep and base_duration_rep == 0 and num_technicians_needed_rep == 0:
-            # This is a 0-duration, 0-tech task. It's "done" without assignment.
-            # We don't add to unassigned_tasks_reasons.
-            # We might want a way to log it as "completed by definition" if needed in the table.
-            # For now, it just won't appear in Gantt or unassigned.
             print(f"  REP Info for '{task_name}': Task is 0 duration, 0 technicians. Considered complete by definition.")
-            # If you want to show it in the table as "assigned" to "N/A" or similar,
-            # you could add a placeholder assignment here to all_task_assignments.
-            # Example placeholder:
-            # for i_rep in range(1, quantity_rep + 1):
-            #     all_task_assignments.append({
-            #         'technician': 'N/A (0-tech task)',
-            #         'task_name': f"{task_name} (Instance {i_rep}/{quantity_rep})",
-            #         'start': 0, 'duration': 0, 'is_incomplete': False,
-            #         'original_duration': 0, 'instance_id': f"{task_id}_{i_rep}",
-            #         'ticket_mo': task.get('ticket_mo', ''), 'ticket_url': task.get('ticket_url', ''),
-            #         'resource_mismatch_info': "Task requires 0 technicians.",
-            #         'technician_task_priority': 'N/A'
-            #     })
-            continue # Move to the next REP task
-
+            continue
 
         for instance_num_rep in range(1, quantity_rep + 1):
             instance_id_rep = f"{task_id}_{instance_num_rep}"
             instance_task_name_rep = f"{task_name} (Instance {instance_num_rep}/{quantity_rep})"
             assigned_this_instance_rep = False
             last_known_failure_reason_rep = f"Could not find a suitable time slot for the target group for '{task_name}' (REP)."
-
             group_to_schedule = target_assignment_group_rep
 
-            if not group_to_schedule : # Should only happen if num_technicians_needed_rep was > 0 but group formation failed
-                unassigned_tasks_reasons[instance_id_rep] = last_known_failure_reason_rep # Or a more specific reason
+            if not group_to_schedule :
+                unassigned_tasks_reasons[instance_id_rep] = last_known_failure_reason_rep
                 print(f"  Could not schedule REP {instance_task_name_rep} as no group was formed and task required technicians.")
                 continue
-
 
             start_time_rep = 0
             while start_time_rep <= total_work_minutes:
                 duration_to_check_availability_rep = 1 if current_task_duration_rep == 0 else current_task_duration_rep
-
                 if current_task_duration_rep > 0 and start_time_rep >= total_work_minutes:
                     last_known_failure_reason_rep = "No time remaining in shift to start REP task."
                     break
@@ -685,7 +667,6 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                 if all_available_in_group_to_schedule:
                     assigned_duration_for_gantt_rep = current_task_duration_rep
                     is_incomplete_flag_rep = False
-
                     if current_task_duration_rep > 0 and (
                             start_time_rep + current_task_duration_rep > total_work_minutes):
                         remaining_time_in_shift_rep = total_work_minutes - start_time_rep
@@ -708,7 +689,6 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                         technician_schedules[tech_assigned_rep].append(
                             (start_time_rep, start_time_rep + assigned_duration_for_gantt_rep, instance_task_name_rep))
                         technician_schedules[tech_assigned_rep].sort()
-
                         assignment_detail_rep = {
                             'technician': tech_assigned_rep,
                             'task_name': instance_task_name_rep,
@@ -723,7 +703,6 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                             'technician_task_priority': 'N/A'
                         }
                         all_task_assignments.append(assignment_detail_rep)
-
                     print(
                         f"  Assigned REP {instance_task_name_rep} to {', '.join(group_to_schedule)} at {start_time_rep} for {assigned_duration_for_gantt_rep}min "
                         f"(Task duration: {current_task_duration_rep}min). Incomplete: {is_incomplete_flag_rep}. Mismatch: {resource_mismatch_info_rep}")
@@ -790,7 +769,7 @@ def generate_html_files(data, present_technicians, rep_assignments=None):
             total_work_minutes=total_work_minutes,
             num_intervals=num_intervals,
             assignments=validated_assignments_to_render,
-            unassigned_tasks=unassigned_reasons_dict,
+            unassigned_tasks=unassigned_reasons_dict, # This now contains detailed skip reasons
             incomplete_tasks=incomplete_ids
         )
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], "technician_dashboard.html")
