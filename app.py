@@ -536,80 +536,76 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
             except (ValueError, TypeError):
                 print(f"  Warning (REP): Invalid lines format '{task_lines_str_rep}' for task {task_name}")
 
-        # 1. Determine the pool of ELIGIBLE technicians based on user selection AND availability
-        eligible_technicians_for_this_rep_task = []
-        raw_user_selection_count = 0 # How many did the user pick in UI
+        # 1. Determine the pool of ELIGIBLE technicians based on user selection AND availability (>=75% time)
+        eligible_technicians_for_this_rep_task = [] # Technicians who user selected AND meet >=75% time criteria
+        raw_user_selection_count = 0
         if task_id in rep_assignments_dict and not rep_assignments_dict[task_id].get('skipped'):
             selected_techs_from_ui = rep_assignments_dict[task_id].get('technicians', [])
             raw_user_selection_count = len(selected_techs_from_ui)
             for tech_name_from_ui in selected_techs_from_ui:
                 if tech_name_from_ui in present_technicians:
                     if not task_lines_rep or any(line in TECHNICIAN_LINES.get(tech_name_from_ui, []) for line in task_lines_rep):
-                        # Check if technician has enough *gross* time after PMs
-                        if available_time_after_pm.get(tech_name_from_ui, 0) >= (base_duration_rep if base_duration_rep > 0 else 0):
+                        # Check if technician has enough *gross* time (>=75% of task duration)
+                        min_acceptable_time_for_eligibility = base_duration_rep * 0.75
+                        if (base_duration_rep > 0 and available_time_after_pm.get(tech_name_from_ui, 0) >= min_acceptable_time_for_eligibility) or \
+                           (base_duration_rep == 0): # If task is 0 min, time is not a constraint for eligibility
                             eligible_technicians_for_this_rep_task.append(tech_name_from_ui)
-                        # else: print(f"  REP Info: {tech_name_from_ui} (user-selected for {task_name}) lacks gross time.")
-                    # else: print(f"  REP Info: {tech_name_from_ui} (user-selected for {task_name}) fails line check.")
-                # else: print(f"  REP Info: {tech_name_from_ui} (user-selected for {task_name}) not present.")
         else:
             reason = "Skipped (REP): Task not in user selections or explicitly skipped."
             for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
             continue
 
         if not eligible_technicians_for_this_rep_task:
-            reason = "Skipped (REP): None of the user-selected technicians are eligible (present, lines, gross time after PMs)."
+            reason = "Skipped (REP): None of the user-selected technicians are eligible (present, lines, >=75% gross time after PMs)."
             for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
             continue
 
-        # If not enough eligible from user selection to meet num_technicians_needed_rep,
-        # we cannot proceed with the "old code's" group formation logic which expects enough candidates.
-        # We will assign to the (smaller than ideal) group of eligible user-selected techs.
-        if len(eligible_technicians_for_this_rep_task) < num_technicians_needed_rep:
-            print(f"  Info (REP): For task '{task_name}', only {len(eligible_technicians_for_this_rep_task)} of the user-selected technicians are eligible, but task needs {num_technicians_needed_rep}. Will attempt to assign to this smaller group.")
-            # The final_assignment_group_rep will be eligible_technicians_for_this_rep_task
-            # The resource_mismatch_info will be important.
-            # Fall through to the instance loop with this smaller group.
-            pass
-
-
-        # 2. Form viable groups from the eligible_technicians_for_this_rep_task
-        #    The "old code" tried to form groups of size num_technicians_needed up to len(eligible).
-        #    For REP, we should primarily target groups of EXACTLY num_technicians_needed_rep.
-        #    If user selected fewer, we use that smaller group.
-        #    If user selected more, we pick the best num_technicians_needed_rep from them.
-
+        # 2. Form the actual assignment group, prioritizing 100% capable technicians
         target_assignment_group_rep = []
-        if len(eligible_technicians_for_this_rep_task) < num_technicians_needed_rep:
-            target_assignment_group_rep = list(eligible_technicians_for_this_rep_task)
-        elif len(eligible_technicians_for_this_rep_task) == num_technicians_needed_rep:
-            target_assignment_group_rep = list(eligible_technicians_for_this_rep_task)
-        else: # len(eligible_technicians_for_this_rep_task) > num_technicians_needed_rep
-            # User selected more eligible people than the task ideally needs.
-            # Pick the 'num_technicians_needed_rep' with the most available time from the eligible user selection.
-            sorted_eligible_user_selected = sorted(
-                eligible_technicians_for_this_rep_task,
+
+        # Attempt 1: Find a group of 100% capable technicians from the eligible user selection
+        techs_100_percent_capable = [
+            tech_name for tech_name in eligible_technicians_for_this_rep_task # Start with those already deemed >=75% eligible
+            if available_time_after_pm.get(tech_name, 0) >= base_duration_rep # Check for 100% capability
+        ]
+
+        if len(techs_100_percent_capable) >= num_technicians_needed_rep:
+            # Enough 100% capable technicians exist among the eligible user selection
+            sorted_techs_100_percent = sorted(
+                techs_100_percent_capable,
                 key=lambda tech_name: available_time_after_pm.get(tech_name, 0), # Sort by most available time
                 reverse=True
             )
-            target_assignment_group_rep = sorted_eligible_user_selected[:num_technicians_needed_rep]
+            target_assignment_group_rep = sorted_techs_100_percent[:num_technicians_needed_rep]
+            print(f"  REP Info for '{task_name}': Formed assignment group from 100% capable user-selected technicians: {target_assignment_group_rep}")
+        else:
+            # Attempt 2: Fallback to 75%+ capable technicians if not enough 100% capable ones
+            print(f"  REP Info for '{task_name}': Not enough 100% capable user-selected technicians ({len(techs_100_percent_capable)} found, need {num_technicians_needed_rep}). Falling back to 75%+ capable.")
+            if len(eligible_technicians_for_this_rep_task) < num_technicians_needed_rep:
+                target_assignment_group_rep = list(eligible_technicians_for_this_rep_task) # Use all available from the >=75% pool
+            else: # Includes == num_technicians_needed_rep and > num_technicians_needed_rep from the >=75% pool
+                sorted_eligible_user_selected_75_plus = sorted(
+                    eligible_technicians_for_this_rep_task, # This list already contains only those with >=75% time
+                    key=lambda tech_name: available_time_after_pm.get(tech_name, 0),
+                    reverse=True
+                )
+                target_assignment_group_rep = sorted_eligible_user_selected_75_plus[:num_technicians_needed_rep]
+            print(f"  REP Info for '{task_name}': Formed assignment group from 75%+ capable user-selected technicians: {target_assignment_group_rep}")
 
-
-        if not target_assignment_group_rep: # Should be caught by "if not eligible_technicians_for_this_rep_task"
-            reason = f"Skipped (REP): Could not form a target assignment group for '{task_name}' from user selection."
+        if not target_assignment_group_rep:
+            reason = f"Skipped (REP): Could not form a target assignment group for '{task_name}' from user selection (even after fallback)."
             for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
             continue
 
         actual_num_assigned_rep = len(target_assignment_group_rep)
-        # IMPORTANT: For REP tasks, the duration is fixed as per 'base_duration_rep'.
-        # The "old code" had a scaling `task_duration = base_duration * (1 + missing_technicians)`.
-        # We will NOT use this scaling for REP tasks. The duration is what's in the Excel.
-        current_task_duration_rep = base_duration_rep
+        current_task_duration_rep = base_duration_rep # Duration is fixed for REP
 
         resource_mismatch_info_rep = None
+        # Update mismatch info based on the final target_assignment_group_rep
         if actual_num_assigned_rep != num_technicians_needed_rep:
-            resource_mismatch_info_rep = f"Task requires {num_technicians_needed_rep}. Assigned to {actual_num_assigned_rep} (User selected {raw_user_selection_count}, {len(eligible_technicians_for_this_rep_task)} eligible)."
-        elif raw_user_selection_count != num_technicians_needed_rep and len(eligible_technicians_for_this_rep_task) >= num_technicians_needed_rep:
-             resource_mismatch_info_rep = f"Task requires {num_technicians_needed_rep}. User selected {raw_user_selection_count} ({len(eligible_technicians_for_this_rep_task)} eligible). Assigned to {actual_num_assigned_rep}."
+            resource_mismatch_info_rep = f"Task requires {num_technicians_needed_rep}. Assigned to {actual_num_assigned_rep} (User selected {raw_user_selection_count}, {len(eligible_technicians_for_this_rep_task)} eligible with >=75% time)."
+        elif raw_user_selection_count != num_technicians_needed_rep and len(eligible_technicians_for_this_rep_task) >= num_technicians_needed_rep :
+             resource_mismatch_info_rep = f"Task requires {num_technicians_needed_rep}. User selected {raw_user_selection_count} ({len(eligible_technicians_for_this_rep_task)} eligible with >=75% time). Assigned to {actual_num_assigned_rep}."
 
 
         for instance_num_rep in range(1, quantity_rep + 1):
@@ -1017,13 +1013,22 @@ def upload_file_route():  # Renamed
             ]
 
             eligible_rep_technicians_ui = {}
-            for task_rep in rep_tasks_for_ui_selection:
-                base_duration_rep = int(task_rep.get('planned_worktime_min', 0))  # Ensure int
+            for task_rep in rep_tasks_for_ui_selection:  # task_rep is a dict from sanitized_excel_data
+                base_duration_rep = int(task_rep.get('planned_worktime_min', 0))
+                # Calculate the 75% threshold for UI display
+                min_acceptable_for_ui = base_duration_rep * 0.75
 
                 eligible_techs_for_this_rep = [
-                    {"name": tech, "available_time": time_val}
+                    {
+                        "name": tech,
+                        "available_time": time_val,
+                        "task_full_duration": base_duration_rep  # Add task's full duration here
+                    }
                     for tech, time_val in available_time_after_pm.items()
-                    if time_val >= base_duration_rep and tech in present_technicians
+                    # Technician is eligible if they have at least 75% of the task's base duration,
+                    # or if the task duration is 0 (in which case, time is not a constraint).
+                    if (base_duration_rep > 0 and time_val >= min_acceptable_for_ui and tech in present_technicians) or \
+                       (base_duration_rep == 0 and tech in present_technicians)
                 ]
                 eligible_rep_technicians_ui[task_rep['id']] = eligible_techs_for_this_rep
 

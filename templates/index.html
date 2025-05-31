@@ -283,7 +283,7 @@
         let currentRepTaskIndex = 0;
         let repAssignments = [];
         let presentTechnicians = [];
-        let eligibleTechnicians = {};
+        let eligibleTechnicians = {}; // This is key for the REP modal
         let filename = '';
         let sessionId = '';
 
@@ -293,25 +293,25 @@
         }
 
         // Fetch the grouped technicians from the server
-        console.log('Fetching technician groups...');
+        console.log('INDEX.HTML: Fetching technician groups...');
         fetch('/technicians')
             .then(response => {
-                console.log('Technicians response status:', response.status);
+                console.log('INDEX.HTML: Technicians response status:', response.status);
                 return response.json();
             })
             .then(data => {
-                console.log('Technician groups received:', data);
+                console.log('INDEX.HTML: Technician groups received:', data);
                 technicianGroups = data;
             })
             .catch(error => {
-                console.error('Error fetching technicians:', error);
+                console.error('INDEX.HTML: Error fetching technicians:', error);
                 showMessage('Error fetching technicians list. Please refresh the page.', 'error');
             });
 
         function populateTechnicianGroups() {
-            console.log('Populating technician groups...');
+            console.log('INDEX.HTML: Populating technician groups...');
             if (!Object.keys(technicianGroups).length) {
-                console.error('No technician groups available.');
+                console.error('INDEX.HTML: No technician groups available for populateTechnicianGroups.');
                 showMessage('No technicians available. Please check server configuration.', 'error');
                 return;
             }
@@ -343,44 +343,60 @@
                 groupDiv.appendChild(buttonsDiv);
                 groupsContainer.appendChild(groupDiv);
             }
-            console.log('Technician groups populated.');
+            console.log('INDEX.HTML: Technician groups populated.');
         }
 
         function showMessage(text, type) {
             const messageDiv = document.getElementById('message');
-            messageDiv.style.display = 'block';
-            messageDiv.className = type;
-            messageDiv.textContent = text;
+            if (messageDiv) {
+                messageDiv.style.display = 'block';
+                messageDiv.className = type;
+                messageDiv.textContent = text;
+            } else {
+                console.error("INDEX.HTML: Message div not found!");
+            }
         }
 
         function showAbsentModal() {
-            console.log('Showing absent modal...');
+            console.log('INDEX.HTML: Showing absent modal...');
             populateTechnicianGroups();
-            document.getElementById('absentModal').style.display = 'flex';
+            const absentModal = document.getElementById('absentModal');
+            if (absentModal) absentModal.style.display = 'flex';
+            else console.error("INDEX.HTML: Absent modal div not found!");
         }
 
         function hideAbsentModal() {
-            console.log('Hiding absent modal...');
-            document.getElementById('absentModal').style.display = 'none';
+            console.log('INDEX.HTML: Hiding absent modal...');
+            const absentModal = document.getElementById('absentModal');
+            if (absentModal) absentModal.style.display = 'none';
         }
 
         function showRepModal() {
-            console.log('Showing Rep modal for task index:', currentRepTaskIndex);
+            console.log('INDEX.HTML: showRepModal called. Current REP task index:', currentRepTaskIndex, 'Total REP tasks:', repTasks.length);
             if (currentRepTaskIndex < repTasks.length) {
                 const task = repTasks[currentRepTaskIndex];
-                document.getElementById('ticketInfo').innerHTML = `
-                    <p><strong>Task:</strong> ${task.scheduler_group_task}</p>
-                    <p><strong>Ticket/MO:</strong> ${task.ticket_mo || 'N/A'}</p>
-                    ${task.ticket_url ? `<p><strong>Link:</strong> <a href="${task.ticket_url}" target="_blank">${task.ticket_url}</a></p>` : ''}
-                    <p><strong>Technicians Needed:</strong> ${task.mitarbeiter_pro_aufgabe}</p>
-                    <p><strong>Duration:</strong> ${task.planned_worktime_min} minutes</p>
-                    <p><strong>Progress:</strong> ${currentRepTaskIndex + 1} of ${repTasks.length}</p>
-                `;
-                populateRepTechnicians(task);
-                document.getElementById('repSearch').value = '';
-                document.getElementById('repModal').style.display = 'flex';
+                console.log('INDEX.HTML: Current REP task for modal:', task);
+                const ticketInfoDiv = document.getElementById('ticketInfo');
+                if (ticketInfoDiv) {
+                    ticketInfoDiv.innerHTML = `
+                        <p><strong>Task:</strong> ${task.scheduler_group_task}</p>
+                        <p><strong>Ticket/MO:</strong> ${task.ticket_mo || 'N/A'}</p>
+                        ${task.ticket_url ? `<p><strong>Link:</strong> <a href="${task.ticket_url}" target="_blank">${task.ticket_url}</a></p>` : ''}
+                        <p><strong>Technicians Needed:</strong> ${task.mitarbeiter_pro_aufgabe}</p>
+                        <p><strong>Duration:</strong> ${task.planned_worktime_min} minutes</p>
+                        <p><strong>Progress:</strong> ${currentRepTaskIndex + 1} of ${repTasks.length}</p>
+                    `;
+                } else {
+                    console.error("INDEX.HTML: ticketInfo div not found!");
+                }
+                populateRepTechnicians(task); // Crucial call
+                const repSearchInput = document.getElementById('repSearch');
+                if (repSearchInput) repSearchInput.value = '';
+                const repModalDiv = document.getElementById('repModal');
+                if (repModalDiv) repModalDiv.style.display = 'flex';
+                else console.error("INDEX.HTML: REP modal div not found!");
             } else {
-                console.log('All Rep tasks processed, submitting final assignments...');
+                console.log('INDEX.HTML: All Rep tasks processed, submitting final assignments...');
                 const formData = new FormData();
                 const allTechnicians = Object.values(technicianGroups).flat();
                 const absentTechnicians = allTechnicians.filter(tech => !presentTechnicians.includes(tech));
@@ -393,40 +409,52 @@
                     body: formData
                 })
                 .then(response => {
-                    console.log('Final upload response status:', response.status);
+                    console.log('INDEX.HTML: Final upload response status:', response.status);
                     return response.json();
                 })
                 .then(data => {
-                    console.log('Final upload response data:', data);
+                    console.log('INDEX.HTML: Final upload response data:', data);
                     showMessage(data.message, data.message.includes('Error') ? 'error' : 'success');
                     if (!data.message.includes('Error')) {
-                        document.getElementById('openDashboardButton').style.display = 'inline-block';
+                        const openDashboardButton = document.getElementById('openDashboardButton');
+                        if (openDashboardButton) openDashboardButton.style.display = 'inline-block';
                     }
                 })
                 .catch(error => {
-                    console.error('Error in final upload:', error);
+                    console.error('INDEX.HTML: Error in final upload:', error);
                     showMessage('An error occurred: ' + error.message, 'error');
                 });
             }
         }
 
         function hideRepModal() {
-            console.log('Hiding Rep modal...');
-            document.getElementById('repModal').style.display = 'none';
+            console.log('INDEX.HTML: Hiding Rep modal...');
+            const repModalDiv = document.getElementById('repModal');
+            if (repModalDiv) repModalDiv.style.display = 'none';
         }
 
         function populateRepTechnicians(task) {
-            console.log('Populating Rep technicians for task:', task.id);
+            console.log('INDEX.HTML: populateRepTechnicians called for task ID:', task.id, 'Task Details:', JSON.stringify(task));
             const techniciansContainer = document.getElementById('repTechnicians');
+            if (!techniciansContainer) {
+                console.error("INDEX.HTML: repTechnicians container div not found!");
+                return;
+            }
             techniciansContainer.innerHTML = '';
-            const availableTechs = eligibleTechnicians[task.id] || [];
-            const sortedTechnicians = availableTechs.sort((a, b) => a.name.localeCompare(b.name));
+
+            console.log('INDEX.HTML: Full eligibleTechnicians object (before populating modal):', JSON.stringify(eligibleTechnicians));
+            const availableTechsFromEligible = eligibleTechnicians[task.id] || [];
+            console.log(`INDEX.HTML: Technicians from eligibleTechnicians for task.id ${task.id} (for modal):`, JSON.stringify(availableTechsFromEligible));
+
+            const sortedTechnicians = [...availableTechsFromEligible].sort((a, b) => a.name.localeCompare(b.name));
+
+            const validateRepButton = document.getElementById('validateRep');
 
             if (sortedTechnicians.length === 0) {
-                techniciansContainer.innerHTML = '<p>No technicians available with sufficient time for this task.</p>';
-                document.getElementById('validateRep').disabled = true;
+                techniciansContainer.innerHTML = '<p>No technicians available with at least 75% of the required time for this task.</p>';
+                if (validateRepButton) validateRepButton.disabled = true;
             } else {
-                document.getElementById('validateRep').disabled = false;
+                if (validateRepButton) validateRepButton.disabled = false;
                 sortedTechnicians.forEach(tech => {
                     const label = document.createElement('label');
                     const checkbox = document.createElement('input');
@@ -434,15 +462,37 @@
                     checkbox.value = tech.name;
                     checkbox.dataset.technician = tech.name;
                     label.appendChild(checkbox);
-                    label.appendChild(document.createTextNode(`${tech.name} (${tech.available_time} min available)`));
+
+                    const textSpan = document.createElement('span');
+                    const baseText = `${tech.name} (${tech.available_time} min available)`;
+                    const taskFullDurationForDisplay = tech.task_full_duration;
+                    const taskMinAcceptableDurationForDisplay = taskFullDurationForDisplay * 0.75;
+
+                    if (taskFullDurationForDisplay > 0 && tech.available_time < taskFullDurationForDisplay) {
+                        const partialSpan = document.createElement('span');
+                        partialSpan.style.color = 'orange';
+                        partialSpan.style.fontWeight = 'bold';
+                        partialSpan.textContent = ' (Partial assignment likely)';
+                        textSpan.appendChild(document.createTextNode(baseText));
+                        textSpan.appendChild(partialSpan);
+                    } else {
+                        textSpan.textContent = baseText;
+                    }
+
+                    label.appendChild(textSpan);
                     techniciansContainer.appendChild(label);
+
+                    // Debug: Log the rendered HTML for this label
+                    console.log(`INDEX.HTML: Rendered HTML for technician ${tech.name}:`, label.outerHTML);
                 });
             }
         }
 
         function filterTechnicians() {
-            console.log('Filtering technicians...');
-            const searchValue = document.getElementById('repSearch').value.toLowerCase();
+            console.log('INDEX.HTML: Filtering technicians...');
+            const repSearchInput = document.getElementById('repSearch');
+            if (!repSearchInput) return;
+            const searchValue = repSearchInput.value.toLowerCase();
             const checkboxes = document.querySelectorAll('#repTechnicians label');
             checkboxes.forEach(label => {
                 const techName = label.textContent.toLowerCase();
@@ -450,183 +500,225 @@
             });
         }
 
-        document.getElementById('uploadForm').addEventListener('submit', function(event) {
-            event.preventDefault();
-            console.log('Upload form submitted.');
-
-            const fileInput = document.getElementById('excelFile');
-            if (!fileInput.files.length) {
-                console.log('No file selected.');
-                showMessage('Please select a file to upload.', 'error');
-                return;
-            }
-
-            uploadedFile = fileInput.files[0];
-            sessionId = generateSessionId();
-            const formData = new FormData();
-            formData.append('excelFile', uploadedFile);
-            formData.append('session_id', sessionId);
-            console.log('FormData contents:', Array.from(formData.entries()));
-
-            console.log('Sending upload request...');
-            fetch('/upload', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                console.log('Upload response status:', response.status);
-                return response.json();
-            })
-            .then(data => {
-                console.log('Upload response data:', data);
-                if (data.message.includes('Error')) {
-                    console.log('Upload error:', data.message);
-                    showMessage(data.message, 'error');
-                } else {
-                    console.log('Upload successful, showing absent modal.');
-                    showMessage('File uploaded successfully. Please select absent technicians.', 'success');
-                    repTasks = data.repTasks || [];
-                    filename = data.filename || '';
-                    sessionId = data.session_id || sessionId;
-                    currentRepTaskIndex = 0;
-                    repAssignments = [];
-                    showAbsentModal();
-                }
-            })
-            .catch(error => {
-                console.error('Upload error:', error);
-                showMessage('An error occurred: ' + error.message, 'error');
-            });
-        });
-
-        document.getElementById('confirmAbsent').addEventListener('click', function() {
-            console.log('Confirm absent technicians clicked.');
-            const absentButtons = document.querySelectorAll('.technician-button.absent');
-            const absentTechnicians = Array.from(absentButtons).map(btn => btn.dataset.technician);
-            console.log('Absent technicians selected:', absentTechnicians);
-
-            presentTechnicians = Object.values(technicianGroups).flat()
-                .filter(tech => !absentTechnicians.includes(tech));
-            console.log('Present technicians:', presentTechnicians);
-
-            const formData = new FormData();
-            formData.append('absentTechnicians', JSON.stringify(absentTechnicians));
-            formData.append('filename', filename);
-            formData.append('session_id', sessionId);
-
-            console.log('Sending PM processing request...');
-            fetch('/upload', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                console.log('PM processing response status:', response.status);
-                return response.json();
-            })
-            .then(data => {
-                console.log('PM processing response data:', data);
-                if (data.message.includes('Error')) {
-                    showMessage(data.message, 'error');
-                    hideAbsentModal();
-                } else {
-                    repTasks = data.repTasks || [];
-                    eligibleTechnicians = data.eligibleTechnicians || {};
-                    filename = data.filename || filename;
-                    sessionId = data.session_id || sessionId;
-                    console.log('Eligible technicians for REP tasks:', eligibleTechnicians);
-                    hideAbsentModal();
-                    if (repTasks.length > 0) {
-                        showRepModal();
-                    } else {
-                        showMessage('No REP tasks to assign. Generating dashboard...', 'success');
-                        const finalFormData = new FormData();
-                        finalFormData.append('absentTechnicians', JSON.stringify(absentTechnicians));
-                        finalFormData.append('repAssignments', JSON.stringify([]));
-                        finalFormData.append('filename', filename);
-                        finalFormData.append('session_id', sessionId);
-                        fetch('/upload', {
-                            method: 'POST',
-                            body: finalFormData
-                        })
-                        .then(response => response.json())
-                        .then(finalData => {
-                            showMessage(finalData.message, finalData.message.includes('Error') ? 'error' : 'success');
-                            if (!finalData.message.includes('Error')) {
-                                document.getElementById('openDashboardButton').style.display = 'inline-block';
-                            }
-                        })
-                        .catch(error => {
-                            showMessage('An error occurred: ' + error.message, 'error');
-                        });
+        // Ensure all event listeners are attached after DOM is fully loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            const uploadForm = document.getElementById('uploadForm');
+            if (uploadForm) {
+                uploadForm.addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    console.log('INDEX.HTML: Upload form submitted.');
+                    const fileInput = document.getElementById('excelFile');
+                    if (!fileInput || !fileInput.files.length) {
+                        console.log('INDEX.HTML: No file selected.');
+                        showMessage('Please select a file to upload.', 'error');
+                        return;
                     }
-                }
-            })
-            .catch(error => {
-                console.error('PM processing error:', error);
-                showMessage('An error occurred: ' + error.message, 'error');
-                hideAbsentModal();
-            });
-        });
-
-        document.getElementById('repSearch').addEventListener('input', filterTechnicians);
-
-        document.getElementById('validateRep').addEventListener('click', function() {
-            console.log('Validate Rep selection clicked.');
-            const selectedCheckboxes = document.querySelectorAll('#repTechnicians input[type="checkbox"]:checked');
-            const selectedTechnicians = Array.from(selectedCheckboxes).map(cb => cb.value);
-            const task = repTasks[currentRepTaskIndex];
-            const techniciansNeeded = parseInt(task.mitarbeiter_pro_aufgabe) || 1;
-
-            console.log('Selected technicians:', selectedTechnicians, 'Technicians needed:', techniciansNeeded);
-            if (selectedTechnicians.length < techniciansNeeded) {
-                alert(`Please select at least ${techniciansNeeded} technician(s) for this task.`);
-                return;
-            }
-
-            repAssignments.push({
-                task_id: task.id,
-                technicians: selectedTechnicians,
-                ticket_mo: task.ticket_mo,
-                ticket_url: task.ticket_url
-            });
-            console.log('Rep assignment added:', repAssignments[repAssignments.length - 1]);
-
-            // Update eligibleTechnicians by updating available_time and removing ineligible technicians
-            const taskDuration = parseInt(task.planned_worktime_min) || 0;
-            selectedTechnicians.forEach(techName => {
-                Object.keys(eligibleTechnicians).forEach(taskId => {
-                    eligibleTechnicians[taskId] = eligibleTechnicians[taskId].map(tech => {
-                        if (tech.name === techName) {
-                            return { ...tech, available_time: tech.available_time - taskDuration };
+                    uploadedFile = fileInput.files[0];
+                    sessionId = generateSessionId();
+                    const formData = new FormData();
+                    formData.append('excelFile', uploadedFile);
+                    formData.append('session_id', sessionId);
+                    console.log('INDEX.HTML: FormData for initial upload:', Array.from(formData.entries()));
+                    console.log('INDEX.HTML: Sending initial upload request...');
+                    fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => {
+                        console.log('INDEX.HTML: Initial upload response status:', response.status);
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('INDEX.HTML: Initial upload response data:', data);
+                        if (data.message.includes('Error')) {
+                            console.log('INDEX.HTML: Initial upload error:', data.message);
+                            showMessage(data.message, 'error');
+                        } else {
+                            console.log('INDEX.HTML: Initial upload successful, preparing for absent modal.');
+                            showMessage('File uploaded successfully. Please select absent technicians.', 'success');
+                            repTasks = data.repTasks || [];
+                            console.log('INDEX.HTML: repTasks after initial upload:', JSON.stringify(repTasks));
+                            filename = data.filename || '';
+                            sessionId = data.session_id || sessionId;
+                            currentRepTaskIndex = 0;
+                            repAssignments = [];
+                            showAbsentModal();
                         }
-                        return tech;
-                    }).filter(tech => {
-                        const requiredTime = parseInt(repTasks.find(t => t.id === taskId).planned_worktime_min) || 0;
-                        return tech.available_time >= requiredTime;
+                    })
+                    .catch(error => {
+                        console.error('INDEX.HTML: Initial upload fetch error:', error);
+                        showMessage('An error occurred during initial upload: ' + error.message, 'error');
                     });
                 });
-            });
+            } else {
+                console.error("INDEX.HTML: uploadForm not found!");
+            }
 
-            currentRepTaskIndex++;
-            hideRepModal();
-            showRepModal();
-        });
+            const confirmAbsentButton = document.getElementById('confirmAbsent');
+            if (confirmAbsentButton) {
+                confirmAbsentButton.addEventListener('click', function() {
+                    console.log('INDEX.HTML: Confirm absent technicians clicked.');
+                    const absentButtons = document.querySelectorAll('.technician-button.absent');
+                    const absentTechnicians = Array.from(absentButtons).map(btn => btn.dataset.technician);
+                    console.log('INDEX.HTML: Absent technicians selected:', absentTechnicians);
+                    presentTechnicians = Object.values(technicianGroups).flat().filter(tech => !absentTechnicians.includes(tech));
+                    console.log('INDEX.HTML: Present technicians:', presentTechnicians);
+                    const formData = new FormData();
+                    formData.append('absentTechnicians', JSON.stringify(absentTechnicians));
+                    formData.append('filename', filename);
+                    formData.append('session_id', sessionId);
+                    console.log('INDEX.HTML: Sending PM processing request (after absent selection)...');
+                    fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => {
+                        console.log('INDEX.HTML: PM processing response status:', response.status);
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('INDEX.HTML: PM processing response data:', data);
+                        if (data.message.includes('Error')) {
+                            showMessage(data.message, 'error');
+                            hideAbsentModal();
+                        } else {
+                            repTasks = data.repTasks || [];
+                            eligibleTechnicians = data.eligibleTechnicians || {}; // CRITICAL: eligibleTechnicians populated here
+                            filename = data.filename || filename;
+                            sessionId = data.session_id || sessionId;
+                            console.log('INDEX.HTML: repTasks after PM processing:', JSON.stringify(repTasks));
+                            console.log('INDEX.HTML: eligibleTechnicians for REP tasks after PM processing:', JSON.stringify(eligibleTechnicians));
+                            hideAbsentModal();
+                            if (repTasks.length > 0) {
+                                showRepModal(); // This should now have data for the first REP task
+                            } else {
+                                showMessage('No REP tasks to assign. Generating dashboard...', 'success');
+                                const finalFormData = new FormData();
+                                finalFormData.append('absentTechnicians', JSON.stringify(absentTechnicians));
+                                finalFormData.append('repAssignments', JSON.stringify([]));
+                                finalFormData.append('filename', filename);
+                                finalFormData.append('session_id', sessionId);
+                                fetch('/upload', {
+                                    method: 'POST',
+                                    body: finalFormData
+                                })
+                                .then(response => response.json())
+                                .then(finalData => {
+                                    showMessage(finalData.message, finalData.message.includes('Error') ? 'error' : 'success');
+                                    if (!finalData.message.includes('Error')) {
+                                        const openDashboardButton = document.getElementById('openDashboardButton');
+                                        if (openDashboardButton) openDashboardButton.style.display = 'inline-block';
+                                    }
+                                })
+                                .catch(error => {
+                                    showMessage('An error occurred generating dashboard with no REP tasks: ' + error.message, 'error');
+                                });
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('INDEX.HTML: PM processing fetch error:', error);
+                        showMessage('An error occurred during PM processing: ' + error.message, 'error');
+                        hideAbsentModal();
+                    });
+                });
+            } else {
+                console.error("INDEX.HTML: confirmAbsent button not found!");
+            }
 
-        document.getElementById('skipRep').addEventListener('click', function() {
-            console.log('Skip Rep task clicked.');
-            repAssignments.push({
-                task_id: repTasks[currentRepTaskIndex].id,
-                technicians: [],
-                ticket_mo: repTasks[currentRepTaskIndex].ticket_mo,
-                ticket_url: repTasks[currentRepTaskIndex].ticket_url,
-                skipped: true
-            });
-            console.log('Rep task skipped:', repAssignments[repAssignments.length - 1]);
+            const repSearchInput = document.getElementById('repSearch');
+            if (repSearchInput) {
+                repSearchInput.addEventListener('input', filterTechnicians);
+            } else {
+                console.error("INDEX.HTML: repSearch input not found!");
+            }
 
-            currentRepTaskIndex++;
-            hideRepModal();
-            showRepModal();
-        });
+            const validateRepButton = document.getElementById('validateRep');
+            if (validateRepButton) {
+                validateRepButton.addEventListener('click', function() {
+                    console.log('INDEX.HTML: Validate Rep selection clicked.');
+                    const selectedCheckboxes = document.querySelectorAll('#repTechnicians input[type="checkbox"]:checked');
+                    const selectedTechnicians = Array.from(selectedCheckboxes).map(cb => cb.value);
+                    const task = repTasks[currentRepTaskIndex]; // The task that was just assigned
+                    const techniciansNeeded = parseInt(task.mitarbeiter_pro_aufgabe) || 1;
+                    console.log('INDEX.HTML: Selected technicians for REP:', selectedTechnicians, 'Technicians needed:', techniciansNeeded);
+
+                    if (selectedTechnicians.length < techniciansNeeded) {
+                        alert(`Please select at least ${techniciansNeeded} technician(s) for this task.`);
+                        return;
+                    }
+                    repAssignments.push({
+                        task_id: task.id,
+                        technicians: selectedTechnicians,
+                        ticket_mo: task.ticket_mo,
+                        ticket_url: task.ticket_url
+                    });
+                    console.log('INDEX.HTML: Rep assignment added:', repAssignments[repAssignments.length - 1]);
+
+                    // Update eligibleTechnicians for SUBSEQUENT tasks
+                    const assignedTaskDuration = parseInt(task.planned_worktime_min) || 0;
+                    selectedTechnicians.forEach(assignedTechName => {
+                        Object.keys(eligibleTechnicians).forEach(otherTaskId => {
+                            eligibleTechnicians[otherTaskId] = eligibleTechnicians[otherTaskId].map(tech => {
+                                if (tech.name === assignedTechName) {
+                                    return { ...tech, available_time: tech.available_time - assignedTaskDuration };
+                                }
+                                return tech;
+                            }).filter(tech => {
+                                const otherTaskDetails = repTasks.find(t => t.id === otherTaskId);
+                                if (!otherTaskDetails) return false;
+
+                                const otherTaskFullDuration = parseInt(otherTaskDetails.planned_worktime_min) || 0;
+                                const otherTaskMinAcceptable = otherTaskFullDuration * 0.75;
+
+                                if (otherTaskFullDuration > 0) {
+                                    return tech.available_time >= otherTaskMinAcceptable;
+                                }
+                                return true;
+                            });
+                        });
+                    });
+                    console.log("INDEX.HTML: eligibleTechnicians updated after assignment:", JSON.stringify(eligibleTechnicians));
+
+                    currentRepTaskIndex++;
+                    hideRepModal();
+                    showRepModal(); // Show next REP task or finalize
+                });
+            } else {
+                console.error("INDEX.HTML: validateRep button not found!");
+            }
+
+            const skipRepButton = document.getElementById('skipRep');
+            if (skipRepButton) {
+                skipRepButton.addEventListener('click', function() {
+                    console.log('INDEX.HTML: Skip Rep task clicked.');
+                    repAssignments.push({
+                        task_id: repTasks[currentRepTaskIndex].id,
+                        technicians: [],
+                        ticket_mo: repTasks[currentRepTaskIndex].ticket_mo,
+                        ticket_url: repTasks[currentRepTaskIndex].ticket_url,
+                        skipped: true
+                    });
+                    console.log('INDEX.HTML: Rep task skipped:', repAssignments[repAssignments.length - 1]);
+                    currentRepTaskIndex++;
+                    hideRepModal();
+                    showRepModal(); // Show next REP task or finalize
+                });
+            } else {
+                console.error("INDEX.HTML: skipRep button not found!");
+            }
+
+            const openDashboardButton = document.getElementById('openDashboardButton');
+            if (openDashboardButton) {
+                openDashboardButton.onclick = function() { window.location.href='/output/technician_dashboard.html'; };
+            }
+
+            const manageMappingsBtn = document.getElementById('manageMappingsBtn');
+            if (manageMappingsBtn) {
+                manageMappingsBtn.onclick = function() { window.location.href='/manage_mappings_ui'; };
+            }
+
+        }); // End of DOMContentLoaded
     </script>
 </body>
 </html>
