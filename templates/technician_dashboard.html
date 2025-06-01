@@ -69,7 +69,7 @@
             align-items: center; /* Vertically aligns label and time-grid content */
             min-height: 40px;
             position: relative;
-            border-bottom: 1px solid #ccc; /* MODIFIED: Row carries the bottom border */
+            /* border-bottom: 1px solid #ccc; */ /* REMOVED: Let children handle their borders for precise alignment */
         }
         .technician-label {
             width: 200px;
@@ -77,17 +77,18 @@
             font-weight: 500;
             color: #333;
             padding: 0 10px;
-            box-sizing: border-box;
+            box-sizing: border-box; /* Ensures padding and border are within the width/height */
             background-color: #f9f9f9; /* Ensure opaque background */
             text-align: left;
             word-wrap: break-word;
             position: sticky;
             left: 0;
-            z-index: 10; /* MODIFIED: Increased z-index */
+            z-index: 10;
             display: flex;
             align-items: center;
-            /* border-bottom removed, handled by .technician-row */
-            border-right: 1px solid #ccc; /* MODIFIED: Added for consistent vertical line */
+            border-right: 1px solid #ccc;
+            border-bottom: 1px solid #ccc; /* ADDED: For the sticky part of the horizontal line */
+            /* transform: translateZ(0); */ /* Optional: Uncomment if minor rendering glitches persist at the seam when scrolling */
         }
         .time-grid {
             display: grid;
@@ -97,7 +98,8 @@
             position: relative; /* For z-indexing of break-column-fill */
             height: 40px; /* Explicit height */
             background: transparent;
-            /* border-bottom removed, handled by .technician-row */
+            border-bottom: 1px solid #ccc; /* KEPT: For the scrollable part of the horizontal line */
+            box-sizing: border-box; /* ADDED: Crucial for alignment with technician-label's border */
         }
 
         /* Common styles for axis containers */
@@ -139,21 +141,24 @@
             box-sizing: border-box;
             white-space: nowrap;
             /* border-right is now applied by JS for data ticks to handle the last one correctly */
+            border-bottom: 1px solid #ddd;
         }
         .time-tick.spacer-tick { /* The first tick in headers (above tech labels) */
             width: 200px; /* Must match technician-label width */
-            background-color: #f9f9f9; /* MODIFIED: Match technician label background */
+            background-color: #f9f9f9;
             position: sticky;
             left: 0;
-            z-index: 11; /* MODIFIED: Increased z-index, above technician-label */
+            z-index: 11;
             border-right: 1px solid #ccc; /* Match border with technician label */
+            border-bottom: none; /* Exclude border-bottom for spacer tick */
+            /* transform: translateZ(0); */ /* Optional: Uncomment if minor rendering glitches persist at the seam when scrolling */
         }
 
         /* Styles for break column fills in the content grid */
         .break-column-fill {
             grid-row: 1 / 2;
             height: 100%;
-            z-index: 0; /* Behind task bars */
+            z-index: 0; /* Behind task bars and technician-label */
         }
         .break-column-fill.break-type-break1,
         .break-column-fill.break-type-break2 {
@@ -166,7 +171,7 @@
         .work-column-border-carrier {
             grid-row: 1 / 2;
             height: 100%;
-            z-index: 0; /* Behind task bars */
+            z-index: 0; /* Behind task bars and technician-label */
         }
 
 
