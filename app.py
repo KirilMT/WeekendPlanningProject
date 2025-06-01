@@ -2,11 +2,9 @@ from flask import Flask, request, jsonify, send_from_directory, render_template 
 import os
 import json
 from jinja2 import Environment, FileSystemLoader
-from extract_data import extract_data, get_current_day
-from math import ceil
+from extract_data import extract_data, get_current_day, get_current_shift
 import re
 from itertools import combinations
-import numpy as np  # Retained as it was in your original file
 import pandas as pd
 import traceback
 import random
@@ -750,7 +748,9 @@ def generate_html_files(data, present_technicians, rep_assignments=None):
 
         current_day = get_current_day()
         total_work_minutes = calculate_work_time(current_day)
-        num_intervals = ceil(total_work_minutes / 15) if total_work_minutes > 0 else 1
+
+        current_shift_type = get_current_shift()
+        shift_start_time_str = "06:00" if current_shift_type == "early" else "18:00"
 
         assignments_flat, unassigned_reasons_dict, incomplete_ids, available_time = assign_tasks(
             tasks_for_processing,
@@ -758,8 +758,6 @@ def generate_html_files(data, present_technicians, rep_assignments=None):
             total_work_minutes,
             rep_assignments
         )
-        print(
-            f"Generated {len(assignments_flat)} assignment entries, {len(unassigned_reasons_dict)} unassigned instances (with reasons), {len(incomplete_ids)} incomplete instances.")
 
         validated_assignments_to_render = validate_assignments_flat_input(assignments_flat)
         technician_template = env.get_template('technician_dashboard.html')
@@ -767,10 +765,10 @@ def generate_html_files(data, present_technicians, rep_assignments=None):
             tasks=tasks_for_processing,
             technicians=present_technicians,
             total_work_minutes=total_work_minutes,
-            num_intervals=num_intervals,
             assignments=validated_assignments_to_render,
-            unassigned_tasks=unassigned_reasons_dict, # This now contains detailed skip reasons
-            incomplete_tasks=incomplete_ids
+            unassigned_tasks=unassigned_reasons_dict,
+            incomplete_tasks=incomplete_ids,
+            shift_start_time_str=shift_start_time_str
         )
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], "technician_dashboard.html")
         with open(output_path, "w", encoding="utf-8") as f:
