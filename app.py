@@ -13,9 +13,12 @@ import sqlite3  # Import sqlite3
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'Uploads'
 app.config['OUTPUT_FOLDER'] = 'output'
-app.config['DATABASE'] = 'weekend_planning.db'  # Define database file path
+# Determine the absolute path to the directory where app.py is located
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+# Define the database file path relative to BASE_DIR
+app.config['DATABASE'] = os.path.join(BASE_DIR, 'weekend_planning.db')
 
-env = Environment(loader=FileSystemLoader('templates'))
+env = Environment(loader=FileSystemLoader(os.path.join(BASE_DIR, 'templates')))
 
 # Store uploaded file paths temporarily
 uploaded_files = {}
