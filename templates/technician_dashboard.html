@@ -68,54 +68,56 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             border-radius: 8px;
             box-sizing: border-box;
-            overflow: hidden;
+            overflow: hidden; /* Keep this on the outer container if needed for overall page layout */
         }
         .gantt-chart {
             position: relative;
-            overflow-x: auto;
-            overflow-y: hidden;
+            overflow-x: auto; /* This is the main horizontal scroll container */
+            overflow-y: hidden; /* Assuming vertical scroll is not desired or handled differently */
             display: flex;
             flex-direction: column;
             min-height: 0;
         }
         .technician-row {
             display: grid;
-            grid-template-columns: 200px minmax(0, 1fr);
+            /* Second column 'auto' allows .time-grid to define its width */
+            grid-template-columns: 200px auto;
             align-items: center;
             min-height: 40px;
             position: relative;
         }
-        .technician-row::after {
-            content: "";
-            display: block;
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 1960px; /* This might need to be dynamic or 100% if the container is constrained */
-            border-bottom: 1px solid #eee;
-        }
+        /* REMOVED .technician-row::after rule */
+
         .technician-label {
             width: 200px;
+            height: 40px;
             font-weight: 500;
             color: #333;
-            padding: 10px;
+            padding: 0 10px;
             box-sizing: border-box;
             background-color: #f9f9f9;
             text-align: left;
             word-wrap: break-word;
+            position: sticky;
+            left: 0;
+            z-index: 3;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #ccc; /* Darker border */
         }
         .time-grid {
             display: grid;
             grid-template-columns: repeat({{ num_intervals | default(1) }}, minmax(40px, 1fr));
             grid-template-rows: 40px;
             grid-auto-rows: 0;
-            overflow: hidden;
             position: relative;
             height: 40px;
             background: transparent;
+            border-bottom: 1px solid #ccc; /* Darker border */
         }
         .time-axis {
             display: grid;
+            /* MODIFIED BACK: Explicit columns for each time tick to prevent wrapping */
             grid-template-columns: 200px repeat({{ num_intervals | default(1) }}, minmax(40px, 1fr));
             height: 30px;
             position: sticky;
@@ -130,7 +132,7 @@
             bottom: 0;
             left: 0;
             width: 100%;
-            border-bottom: 1px solid #ddd;
+            border-bottom: 1px solid #ddd; /* This is the line under the time numbers */
         }
         .time-tick {
             text-align: center;
@@ -143,18 +145,21 @@
             justify-content: center;
             box-sizing: border-box;
         }
-        .time-tick:not(:first-child)::after {
+        .time-tick:not(:first-child)::after { /* Vertical grid lines */
             content: '';
             position: absolute;
             top: 0;
             left: 0;
-            height: 100vh; /* Extends grid lines down */
+            height: 100vh;
             border-left: 1px solid #e0e0e0;
             z-index: -1;
         }
-        .time-tick:first-child {
+        .time-tick:first-child { /* The empty cell in time-axis above technician labels */
             width: 200px;
             background-color: #f9f9f9;
+            position: sticky;
+            left: 0;
+            z-index: 2;
         }
         .task-bar {
             grid-row: 1 / 2;
@@ -490,21 +495,6 @@
     {% endif %}
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const ganttChart = document.querySelector('.gantt-chart');
-            const timeTicks = document.querySelectorAll('.time-tick:not(:first-child)');
-            if (ganttChart && timeTicks.length) {
-                function updateGrid() {
-                    const chartWidth = ganttChart.offsetWidth - 200; // 200px for technician labels
-                    const tickWidth = chartWidth / {{ num_intervals | default(1) }};
-                    timeTicks.forEach(tick => {
-                        tick.style.minWidth = `${tickWidth}px`;
-                    });
-                }
-                updateGrid();
-                window.addEventListener('resize', updateGrid);
-            }
-        });
     </script>
 </body>
 </html>
