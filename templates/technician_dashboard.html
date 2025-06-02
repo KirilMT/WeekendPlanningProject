@@ -131,7 +131,7 @@
 
         .time-tick { /* Common for all ticks in both axes headers */
             text-align: center;
-            font-size: 9px;
+            font-size: 12px; /* MODIFIED: Increased font size */
             color: #666;
             padding: 5px 2px;
             position: relative;
@@ -652,7 +652,7 @@
             let labelClock = formatTime(currentClock);
             if (slot.type !== 'work' && slot.type !== 'placeholder') {
                 tickDivClock.classList.add('break-interval', `break-type-${slot.type}`);
-                labelClock += ` (${slot.type.replace('break', 'B')})`;
+                // labelClock += ` (${slot.type.replace('break', 'B')})`; // MODIFIED: Removed break indicator text
             }
             if (slot.type === 'placeholder') {
                  labelClock = `${formatTime(currentClock)} (No Work Scheduled)`;
@@ -671,26 +671,27 @@
             } else if (slot.type === 'placeholder') {
                 tickDivWork.textContent = "0-0";
             } else { // Break slot
-                tickDivWork.textContent = slot.type.charAt(0).toUpperCase() + slot.type.slice(1).replace('break', 'Break ');
-                tickDivWork.classList.add('break-interval', `break-type-${slot.type}`);
+                tickDivWork.textContent = 'Break'; // MODIFIED: Display "Break" for all break types
+                tickDivWork.classList.add('break-interval', `break-type-${slot.type}`); // Keep class for styling
             }
             workIntervalAxisContainer.appendChild(tickDivWork);
         });
 
+        const ganttColumnMinWidth = '50px'; // MODIFIED: Gantt column min width
 
         if (numTotalTimelineSlots > 0) {
-            const gridColsStyle = `200px repeat(${numTotalTimelineSlots}, minmax(60px, 1fr))`;
+            const gridColsStyle = `200px repeat(${numTotalTimelineSlots}, minmax(${ganttColumnMinWidth}, 1fr))`;
             clockTimeAxisContainer.style.gridTemplateColumns = gridColsStyle;
             workIntervalAxisContainer.style.gridTemplateColumns = gridColsStyle;
             timeGrids.forEach(grid => {
-                grid.style.gridTemplateColumns = `repeat(${numTotalTimelineSlots}, minmax(60px, 1fr))`;
+                grid.style.gridTemplateColumns = `repeat(${numTotalTimelineSlots}, minmax(${ganttColumnMinWidth}, 1fr))`;
             });
         } else { // Should only happen if timelineSlots is unexpectedly empty
-             const gridColsStyle = `200px minmax(60px, 1fr)`;
+             const gridColsStyle = `200px minmax(${ganttColumnMinWidth}, 1fr)`;
              clockTimeAxisContainer.style.gridTemplateColumns = gridColsStyle;
              workIntervalAxisContainer.style.gridTemplateColumns = gridColsStyle;
              timeGrids.forEach(grid => {
-                grid.style.gridTemplateColumns = `minmax(60px, 1fr)`;
+                grid.style.gridTemplateColumns = `minmax(${ganttColumnMinWidth}, 1fr)`;
             });
         }
 
@@ -809,14 +810,26 @@
                         const currentSlot = timelineSlots[timelineSlotCursor_0_based];
 
                         if (currentSlot.type === 'work') {
-                            if (currentSegmentStartTimelineSlot_0_based === -1) {
+                            if (currentSegmentStartTimelineSlot_0_based === -1) { // This is the beginning of a new segment of the current task bar
                                 currentSegmentStartTimelineSlot_0_based = timelineSlotCursor_0_based;
-                                if (timelineSlotCursor_0_based > 0 && timelineSlots[timelineSlotCursor_0_based - 1].type !== 'work' && timelineSlots[timelineSlotCursor_0_based - 1].type !== 'placeholder') {
-                                    previousSlotWasBreakForSegmentStart = true;
+                                // Determine if this new segment starts after a break AND is part of a split task
+                                if (timelineSlotCursor_0_based > 0 &&
+                                    timelineSlots[timelineSlotCursor_0_based - 1].type !== 'work' &&
+                                    timelineSlots[timelineSlotCursor_0_based - 1].type !== 'placeholder') {
+                                    // Previous slot was a break.
+                                    // Now, check if work for *this task* was already processed before this break.
+                                    if (workMinutesProcessedForTask > 0) {
+                                        previousSlotWasBreakForSegmentStart = true;
+                                    } else {
+                                        // Task starts after a break, but it's the first part of this task, so not "split" yet.
+                                        previousSlotWasBreakForSegmentStart = false;
+                                    }
                                 } else {
+                                    // Does not start immediately after a break.
                                     previousSlotWasBreakForSegmentStart = false;
                                 }
                             }
+
                             const remainingWorkForTask = assignmentDurationWorkMinutes - workMinutesProcessedForTask;
                             workMinutesProcessedForTask += Math.min(currentSlot.workTimeCovered, remainingWorkForTask);
 
@@ -831,8 +844,14 @@
                                     segmentDiv.classList.add('task-segment-starts-after-break');
                                 }
                                 // Check if the *next* slot is a break to mark the end of this segment
-                                if (timelineSlotCursor_0_based < timelineSlots.length - 1 && timelineSlots[timelineSlotCursor_0_based + 1].type !== 'work' && timelineSlots[timelineSlotCursor_0_based + 1].type !== 'placeholder') {
-                                    segmentDiv.classList.add('task-segment-ends-before-break');
+                                if (timelineSlotCursor_0_based < timelineSlots.length - 1 && // Ensure there IS a next slot
+                                    timelineSlots[timelineSlotCursor_0_based + 1].type !== 'work' &&
+                                    timelineSlots[timelineSlotCursor_0_based + 1].type !== 'placeholder') { // Next slot IS a break
+
+                                    // MODIFIED: Only add class if task was actually cut short by this upcoming break
+                                    if (workMinutesProcessedForTask < assignmentDurationWorkMinutes) {
+                                        segmentDiv.classList.add('task-segment-ends-before-break');
+                                    }
                                 }
                                 grid.appendChild(segmentDiv);
                                 currentSegmentStartTimelineSlot_0_based = -1;
