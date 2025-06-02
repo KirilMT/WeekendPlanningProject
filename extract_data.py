@@ -97,20 +97,21 @@ def find_and_filter_data(df, current_day, current_shift):
 
     return filtered_df, target_col
 
+
 # Step 4: Extract data
-def extract_data(file_path):
+def extract_data(excel_file_object):  # MODIFIED: Changed argument name
     try:
         sheet_name = get_current_week()  # e.g., "Summary KW17"
         current_day = get_current_day()  # e.g., "Monday"
         current_shift = get_current_shift()  # e.g., "early"
         current_week = get_current_week_number()
 
-        _, file_extension = os.path.splitext(file_path)
+        # MODIFIED: Determine engine based on original filename from the stream object
+        original_filename = getattr(excel_file_object, 'filename', '').lower()
+        engine_to_use = 'pyxlsb' if original_filename.endswith('.xlsb') else 'openpyxl'
 
-        if file_extension.lower() == '.xlsb':
-            df = pd.read_excel(file_path, sheet_name=sheet_name, engine='pyxlsb', header=None)
-        else:
-            df = pd.read_excel(file_path, sheet_name=sheet_name, engine='openpyxl', header=None)
+        # MODIFIED: Read from the excel_file_object (stream)
+        df = pd.read_excel(excel_file_object, sheet_name=sheet_name, engine=engine_to_use, header=None)
 
         print("First 10 rows of DataFrame:")
         print(df.head(10))
@@ -228,4 +229,7 @@ def extract_data(file_path):
 
     except Exception as e:
         print(f"Error in extract_data: {str(e)}")
-        return []
+        # Optionally, add traceback for more detailed debugging if needed
+        # import traceback
+        # print(traceback.format_exc())
+        raise  # MODIFIED: Re-raise the exception

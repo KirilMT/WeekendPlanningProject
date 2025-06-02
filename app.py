@@ -20,9 +20,8 @@ app.config['DATABASE'] = os.path.join(BASE_DIR, 'weekend_planning.db')
 
 env = Environment(loader=FileSystemLoader(os.path.join(BASE_DIR, 'templates')))
 
-# Store uploaded file paths temporarily
-uploaded_files = {}
-
+# Cache for storing extracted Excel data in memory
+session_excel_data_cache = {}
 
 # --- Database Helper Functions ---
 def get_db_connection():
@@ -918,65 +917,78 @@ def index_route():  # Renamed
 def upload_file_route():  # Renamed
     session_id = request.form.get('session_id', str(random.randint(10000, 99999)))
 
+    # --- Initial File Upload and Data Extraction (In-Memory) ---
     if 'excelFile' in request.files and request.files['excelFile'].filename != '':
-        file = request.files['excelFile']
-        if file.filename == '':
+        excel_file_stream = request.files['excelFile']  # This is a FileStorage object (stream)
+        original_filename = excel_file_stream.filename
+
+        if original_filename == '':
             return jsonify({"message": "No file selected"}), 400
 
-        if not os.path.exists(app.config['UPLOAD_FOLDER']):
-            os.makedirs(app.config['UPLOAD_FOLDER'])
+        # REMOVED: UPLOAD_FOLDER creation and file.save() as we process in memory
 
-        # Use session_id in filename to avoid conflicts if multiple users upload same filename
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{session_id}_{file.filename}")
-        file.save(file_path)
-        uploaded_files[session_id] = file_path  # Store full path
         try:
-            data = extract_data(file_path)
-            sanitized_data = sanitize_data(data)  # sanitized_data items are dicts with int fields
-            if not sanitized_data:
+            # Pass the file stream directly to extract_data
+            # IMPORTANT: extract_data function MUST be able to handle a stream
+            raw_excel_data_from_upload = extract_data(excel_file_stream)
+
+            # Store the extracted *data* in the cache, not the file path
+            session_excel_data_cache[session_id] = {
+                'filename': original_filename,
+                'raw_data': raw_excel_data_from_upload
+            }
+
+            temp_sanitized_data_for_ui = sanitize_data(raw_excel_data_from_upload)
+            if not temp_sanitized_data_for_ui:
+                if session_id in session_excel_data_cache:  # Clean cache on error
+                    del session_excel_data_cache[session_id]
                 return jsonify({
                     "message": "No valid data found after sanitization. Check if the Summary KW sheet contains valid tasks."
                 }), 400
 
+            # Robust REP task filtering
             rep_tasks_for_ui = [
                 {**task_item, 'id': str(idx + 1)}
-                for idx, task_item in enumerate(sanitized_data)
-                if task_item.get('task_type', '').upper() == 'REP'
-                   and task_item.get('ticket_mo')
-                   and str(task_item.get('ticket_mo')).strip().lower() != 'nan'
-                   and str(task_item.get('ticket_mo')).strip() != ''
+                for idx, task_item in enumerate(temp_sanitized_data_for_ui)
+                if task_item.get('task_type', '').upper() == 'REP' and \
+                   task_item.get('ticket_mo') is not None and \
+                   str(task_item.get('ticket_mo')).strip().lower() != 'nan' and \
+                   str(task_item.get('ticket_mo')).strip() != ''
             ]
 
             return jsonify({
-                "message": "File uploaded successfully. Please select absent technicians.",
+                "message": "File processed (in memory). Please select absent technicians.",
                 "repTasks": rep_tasks_for_ui,
-                "filename": file.filename,  # Original filename for display
+                "filename": original_filename,
                 "session_id": session_id
             })
         except Exception as e:
             print(f"Error processing file upload: {str(e)}")
             print(traceback.format_exc())
-            # Clean up uploaded file on error if it exists
-            if session_id in uploaded_files and os.path.exists(uploaded_files[session_id]):
-                try:
-                    os.remove(uploaded_files[session_id])
-                except Exception as e_del:
-                    print(f"Error deleting uploaded file during error handling: {e_del}")
-            if session_id in uploaded_files:
-                del uploaded_files[session_id]
+            if session_id in session_excel_data_cache:  # Clean up cache on error
+                del session_excel_data_cache[session_id]
             return jsonify({"message": f"Error processing file: {str(e)}"}), 500
 
-    if 'filename' in request.form and session_id in uploaded_files:
-        file_path = uploaded_files[session_id]  # Get full path
-        if not os.path.exists(file_path):
-            return jsonify({"message": "Uploaded file not found on server. Please re-upload."}), 400
+    # --- Subsequent Processing Steps (Using Cached Data) ---
+    # MODIFIED: Condition now checks session_excel_data_cache instead of uploaded_files
+    elif 'session_id' in request.form and request.form.get('session_id') in session_excel_data_cache:
+        session_id = request.form.get('session_id')
+        cached_session_content = session_excel_data_cache[session_id]
+
+        # Retrieve the raw Excel data directly from the cache
+        raw_excel_data_from_cache = cached_session_content['raw_data']
+        original_filename_from_cache = cached_session_content['filename']
+
+        # REMOVED: os.path.exists(file_path) check as we are not using file_path
+
         try:
-            excel_data = extract_data(file_path)
-            # sanitized_excel_data items are dicts with int fields
-            sanitized_excel_data = sanitize_data(excel_data)
-            if not sanitized_excel_data:
+            # Sanitize the raw data obtained from the cache
+            sanitized_excel_data_for_current_step = sanitize_data(raw_excel_data_from_cache)
+            if not sanitized_excel_data_for_current_step:
+                if session_id in session_excel_data_cache:  # Clean cache
+                    del session_excel_data_cache[session_id]
                 return jsonify({
-                    "message": "No valid data found after sanitization. Check if the Summary KW sheet contains valid tasks."
+                    "message": "No valid data found after sanitization during subsequent step."
                 }), 400
 
             absent_technicians = json.loads(request.form.get('absentTechnicians', '[]'))
@@ -984,37 +996,36 @@ def upload_file_route():  # Renamed
 
             if 'repAssignments' in request.form:
                 rep_assignments_list = json.loads(request.form['repAssignments'])
-                if not os.path.exists(app.config['OUTPUT_FOLDER']):
-                    os.makedirs(app.config['OUTPUT_FOLDER'])
-                # generate_html_files expects tasks with int fields
-                available_time = generate_html_files(sanitized_excel_data, present_technicians, rep_assignments_list)
 
-                if session_id in uploaded_files:  # Clean up
-                    try:
-                        os.remove(uploaded_files[session_id])
-                        del uploaded_files[session_id]
-                    except Exception as e_del:
-                        print(f"Error deleting uploaded file {uploaded_files.get(session_id)}: {e_del}")
+                # REMOVED: OUTPUT_FOLDER creation here, generate_html_files can handle it if needed
+
+                # Pass the raw_excel_data_from_cache to generate_html_files
+                # (assuming generate_html_files calls sanitize_data internally or expects raw)
+                available_time = generate_html_files(raw_excel_data_from_cache, present_technicians,
+                                                     rep_assignments_list)
+
+                if session_id in session_excel_data_cache:  # Clean up cache after final processing
+                    del session_excel_data_cache[session_id]
 
                 return jsonify({
                     "message": "Technician dashboard generated successfully! Check the output folder.",
                     "availableTime": available_time
                 })
 
+            # --- Intermediate step (PM processing, preparing for REP task selection UI) ---
             current_day = get_current_day()
             total_work_minutes = calculate_work_time(current_day)
 
-            # tasks_for_pm_processing items should have int fields where appropriate
             tasks_for_pm_processing = []
-            for idx, row_dict in enumerate(sanitized_excel_data):  # row_dict from sanitize_data
+            for idx, row_dict in enumerate(sanitized_excel_data_for_current_step):
                 tasks_for_pm_processing.append({
                     "id": str(idx + 1),
                     "name": row_dict.get("scheduler_group_task", "Unknown"),
                     "lines": row_dict.get("lines", ""),
-                    "mitarbeiter_pro_aufgabe": row_dict.get("mitarbeiter_pro_aufgabe", 1),  # Already int
-                    "planned_worktime_min": row_dict.get("planned_worktime_min", 0),  # Already int
+                    "mitarbeiter_pro_aufgabe": row_dict.get("mitarbeiter_pro_aufgabe", 1),
+                    "planned_worktime_min": row_dict.get("planned_worktime_min", 0),
                     "priority": row_dict.get("priority", "C"),
-                    "quantity": row_dict.get("quantity", 1),  # Already int
+                    "quantity": row_dict.get("quantity", 1),
                     "task_type": row_dict.get("task_type", ""),
                     "ticket_mo": row_dict.get("ticket_mo", ""),
                     "ticket_url": row_dict.get("ticket_url", "")
@@ -1026,32 +1037,29 @@ def upload_file_route():  # Renamed
                 pm_only_tasks_for_processing,
                 present_technicians,
                 total_work_minutes,
-                []
+                []  # No rep assignments at this stage
             )
 
+            # Robust REP task filtering
             rep_tasks_for_ui_selection = [
-                task_item for task_item in tasks_for_pm_processing  # Use the list with correct int types
-                if task_item.get('task_type', '').upper() == 'REP'
-                   and task_item.get('ticket_mo')
-                   and str(task_item.get('ticket_mo')).strip().lower() != 'nan'
-                   and str(task_item.get('ticket_mo')).strip() != ''
+                task_item for task_item in tasks_for_pm_processing
+                if task_item.get('task_type', '').upper() == 'REP' and \
+                   task_item.get('ticket_mo') is not None and \
+                   str(task_item.get('ticket_mo')).strip().lower() != 'nan' and \
+                   str(task_item.get('ticket_mo')).strip() != ''
             ]
 
             eligible_rep_technicians_ui = {}
-            for task_rep in rep_tasks_for_ui_selection:  # task_rep is a dict from sanitized_excel_data
+            for task_rep in rep_tasks_for_ui_selection:
                 base_duration_rep = int(task_rep.get('planned_worktime_min', 0))
-                # Calculate the 75% threshold for UI display
                 min_acceptable_for_ui = base_duration_rep * 0.75
-
                 eligible_techs_for_this_rep = [
                     {
                         "name": tech,
                         "available_time": time_val,
-                        "task_full_duration": base_duration_rep  # Add task's full duration here
+                        "task_full_duration": base_duration_rep
                     }
                     for tech, time_val in available_time_after_pm.items()
-                    # Technician is eligible if they have at least 75% of the task's base duration,
-                    # or if the task duration is 0 (in which case, time is not a constraint).
                     if (base_duration_rep > 0 and time_val >= min_acceptable_for_ui and tech in present_technicians) or \
                        (base_duration_rep == 0 and tech in present_technicians)
                 ]
@@ -1061,24 +1069,19 @@ def upload_file_route():  # Renamed
                 "message": "PM tasks processed. Please assign technicians for REP tasks.",
                 "repTasks": rep_tasks_for_ui_selection,
                 "eligibleTechnicians": eligible_rep_technicians_ui,
-                "filename": os.path.basename(file_path),
+                "filename": original_filename_from_cache,  # Use filename from cache
                 "session_id": session_id
             })
         except Exception as e:
-            print(f"Error processing file after absent selection or during REP prep: {str(e)}")
+            print(f"Error processing cached data: {str(e)}")
             print(traceback.format_exc())
-            # Clean up uploaded file on error
-            if session_id in uploaded_files and os.path.exists(uploaded_files[session_id]):
-                try:
-                    os.remove(uploaded_files[session_id])
-                except Exception as e_del:
-                    print(f"Error deleting uploaded file during error handling: {e_del}")
-            if session_id in uploaded_files:
-                del uploaded_files[session_id]
-            return jsonify({"message": f"Error processing file: {str(e)}"}), 500
-
-    return jsonify({"message": "No file uploaded or invalid session"}), 400
-
+            if session_id in session_excel_data_cache:  # Clean up cache on error
+                del session_excel_data_cache[session_id]
+            return jsonify({"message": f"Error processing file data: {str(e)}"}), 500
+    else:
+        if 'session_id' in request.form and request.form.get('session_id') not in session_excel_data_cache:
+            return jsonify({"message": "Session data not found or expired. Please re-upload the file."}), 400
+        return jsonify({"message": "No file uploaded or invalid session"}), 400
 
 @app.route('/technicians', methods=['GET'])
 def get_technicians_route_actual():  # Renamed to avoid conflict
@@ -1091,8 +1094,6 @@ def serve_output(filename):
 
 
 if __name__ == '__main__':
-    if not os.path.exists(app.config['UPLOAD_FOLDER']):
-        os.makedirs(app.config['UPLOAD_FOLDER'])
     if not os.path.exists(app.config['OUTPUT_FOLDER']):
         os.makedirs(app.config['OUTPUT_FOLDER'])
     app.run(debug=True, use_reloader=False)

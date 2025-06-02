@@ -129,20 +129,23 @@
             justify-content: center;
             align-items: center;
         }
-        .modal-content {
+        .modal-content { /* General modal styles */
             background-color: white;
             padding: 30px;
             border-radius: 10px;
             width: 80%;
             max-width: 800px;
-            max-height: 80vh;
-            overflow-y: auto;
+            max-height: 85vh; /* Use viewport height for responsiveness */
+            overflow-y: auto; /* Allows general modals to scroll if content exceeds max-height */
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
         }
         .modal-content h2 {
             margin-top: 0;
             color: #333;
             font-size: 22px;
+            flex-shrink: 0; /* Prevent h2 from shrinking */
         }
         .group {
             margin: 20px 0;
@@ -193,28 +196,60 @@
         .technician-button.absent:hover {
             background-color: #e60000;
         }
+
+        /* REP Modal Specific Styles */
         #repModal .modal-content {
-            max-width: 900px;
-            width: 900px;
-            min-height: 500px;
+            width: 90%;
+            max-width: 700px;
+            height: 600px; /* MODIFIED: Fixed height for the modal content area */
+            /* max-height: 85vh; /* REMOVED: Using fixed height now */
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;   /* Prevent this modal from scrolling itself */
             resize: none;
         }
+
+        #ticketInfo {
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            flex-shrink: 0;
+            text-align: left;
+        }
+        #ticketInfo p {
+            margin: 5px 0;
+        }
+        #ticketInfo a {
+            color: #007bff;
+            text-decoration: none;
+            word-break: break-all;
+        }
+        #ticketInfo a:hover {
+            text-decoration: underline;
+        }
+
         #repSearch {
             width: 100%;
             padding: 10px;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             border: 2px solid #ccc;
             border-radius: 5px;
             font-size: 16px;
+            box-sizing: border-box;
+            flex-shrink: 0;
         }
+
         .technician-checkboxes {
-            max-height: 300px;
-            overflow-y: auto;
+            overflow-y: auto;   /* Scroll inside this div */
             margin-bottom: 15px;
             border: 1px solid #ccc;
             padding: 10px;
             border-radius: 5px;
-            min-height: 300px;
+            flex-grow: 1; /* Allow this to take available space and scroll */
+            min-height: 150px; /* Ensure it has some minimum visible space, adjust as needed */
+            text-align: left;
         }
         .technician-checkboxes label {
             display: block;
@@ -223,20 +258,27 @@
         }
         .technician-checkboxes input[type="checkbox"] {
             margin-right: 10px;
+            vertical-align: middle;
         }
-        #ticketInfo {
-            margin-bottom: 15px;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            background-color: #f9f9f9;
+        .technician-checkboxes label span {
+            vertical-align: middle;
         }
-        #ticketInfo a {
-            color: #007bff;
-            text-decoration: none;
+
+        /* Container for REP modal buttons */
+        .rep-modal-buttons {
+            display: flex;
+            justify-content: space-between; /* Positions children to extremes */
+            align-items: center; /* Vertically align buttons if they have different heights */
+            margin-top: auto; /* Pushes this container to the bottom of the flex column */
+            padding-top: 15px; /* Space above the buttons */
+            flex-shrink: 0; /* Prevent this container from shrinking */
         }
-        #ticketInfo a:hover {
-            text-decoration: underline;
+
+        /* Individual button styling within the REP modal can remain as is or be adjusted */
+        /* #repModal .modal-content > button was too general, targeting specific buttons is better */
+        #validateRep, #skipRep {
+            /* General button styles are already applied */
+            /* You can add specific margins here if needed, e.g., margin: 0; */
         }
     </style>
 </head>
@@ -271,8 +313,11 @@
             <div id="ticketInfo"></div>
             <input type="text" id="repSearch" placeholder="Search for technicians...">
             <div class="technician-checkboxes" id="repTechnicians"></div>
-            <button id="validateRep">Validate Selection</button>
-            <button id="skipRep">Skip Task</button>
+            <!-- MODIFIED: Wrap buttons in a div -->
+            <div class="rep-modal-buttons">
+                <button id="validateRep">Validate Selection</button>
+                <button id="skipRep">Skip Task</button>
+            </div>
         </div>
     </div>
 
@@ -372,60 +417,60 @@
         }
 
         function showRepModal() {
-            console.log('INDEX.HTML: showRepModal called. Current REP task index:', currentRepTaskIndex, 'Total REP tasks:', repTasks.length);
-            if (currentRepTaskIndex < repTasks.length) {
-                const task = repTasks[currentRepTaskIndex];
-                console.log('INDEX.HTML: Current REP task for modal:', task);
-                const ticketInfoDiv = document.getElementById('ticketInfo');
-                if (ticketInfoDiv) {
-                    ticketInfoDiv.innerHTML = `
-                        <p><strong>Task:</strong> ${task.scheduler_group_task}</p>
-                        <p><strong>Ticket/MO:</strong> ${task.ticket_mo || 'N/A'}</p>
-                        ${task.ticket_url ? `<p><strong>Link:</strong> <a href="${task.ticket_url}" target="_blank">${task.ticket_url}</a></p>` : ''}
-                        <p><strong>Technicians Planned:</strong> ${task.mitarbeiter_pro_aufgabe}</p> <!-- Changed label -->
-                        <p><strong>Duration:</strong> ${task.planned_worktime_min} minutes</p>
-                        <p><strong>Progress:</strong> ${currentRepTaskIndex + 1} of ${repTasks.length}</p>
-                    `;
-                } else {
-                    console.error("INDEX.HTML: ticketInfo div not found!");
-                }
-                populateRepTechnicians(task); // Crucial call
-                const repSearchInput = document.getElementById('repSearch');
-                if (repSearchInput) repSearchInput.value = '';
-                const repModalDiv = document.getElementById('repModal');
-                if (repModalDiv) repModalDiv.style.display = 'flex';
-                else console.error("INDEX.HTML: REP modal div not found!");
-            } else {
-                console.log('INDEX.HTML: All Rep tasks processed, submitting final assignments...');
-                const formData = new FormData();
-                const allTechnicians = Object.values(technicianGroups).flat();
-                const absentTechnicians = allTechnicians.filter(tech => !presentTechnicians.includes(tech));
-                formData.append('absentTechnicians', JSON.stringify(absentTechnicians));
-                formData.append('repAssignments', JSON.stringify(repAssignments));
-                formData.append('filename', filename);
-                formData.append('session_id', sessionId);
-                fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => {
-                    console.log('INDEX.HTML: Final upload response status:', response.status);
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('INDEX.HTML: Final upload response data:', data);
-                    showMessage(data.message, data.message.includes('Error') ? 'error' : 'success');
-                    if (!data.message.includes('Error')) {
-                        const openDashboardButton = document.getElementById('openDashboardButton');
-                        if (openDashboardButton) openDashboardButton.style.display = 'inline-block';
+                console.log('INDEX.HTML: showRepModal called. Current REP task index:', currentRepTaskIndex, 'Total REP tasks:', repTasks.length);
+                if (currentRepTaskIndex < repTasks.length) {
+                    const task = repTasks[currentRepTaskIndex];
+                    console.log('INDEX.HTML: Current REP task for modal:', JSON.stringify(task)); // Stringify to see all props
+                    const ticketInfoDiv = document.getElementById('ticketInfo');
+                    if (ticketInfoDiv) {
+                        ticketInfoDiv.innerHTML = `
+                            <p><strong>Task:</strong> ${task.name || task.scheduler_group_task || 'Unknown Task'}</p>
+                            <p><strong>Ticket/MO:</strong> ${task.ticket_mo || 'N/A'}</p>
+                            ${task.ticket_url ? `<p><strong>Link:</strong> <a href="${task.ticket_url}" target="_blank">${task.ticket_url}</a></p>` : ''}
+                            <p><strong>Technicians Planned:</strong> ${task.mitarbeiter_pro_aufgabe}</p>
+                            <p><strong>Duration:</strong> ${task.planned_worktime_min} minutes</p>
+                            <p><strong>Progress:</strong> ${currentRepTaskIndex + 1} of ${repTasks.length}</p>
+                        `;
+                    } else {
+                        console.error("INDEX.HTML: ticketInfo div not found!");
                     }
-                })
-                .catch(error => {
-                    console.error('INDEX.HTML: Error in final upload:', error);
-                    showMessage('An error occurred: ' + error.message, 'error');
-                });
+                    populateRepTechnicians(task);
+                    const repSearchInput = document.getElementById('repSearch');
+                    if (repSearchInput) repSearchInput.value = '';
+                    const repModalDiv = document.getElementById('repModal');
+                    if (repModalDiv) repModalDiv.style.display = 'flex';
+                    else console.error("INDEX.HTML: REP modal div not found!");
+                } else {
+                    console.log('INDEX.HTML: All Rep tasks processed, submitting final assignments...');
+                    const formData = new FormData();
+                    const allTechnicians = Object.values(technicianGroups).flat();
+                    const absentTechnicians = allTechnicians.filter(tech => !presentTechnicians.includes(tech));
+                    formData.append('absentTechnicians', JSON.stringify(absentTechnicians));
+                    formData.append('repAssignments', JSON.stringify(repAssignments));
+                    formData.append('filename', filename);
+                    formData.append('session_id', sessionId);
+                    fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => {
+                        console.log('INDEX.HTML: Final upload response status:', response.status);
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('INDEX.HTML: Final upload response data:', data);
+                        showMessage(data.message, data.message.includes('Error') ? 'error' : 'success');
+                        if (!data.message.includes('Error')) {
+                            const openDashboardButton = document.getElementById('openDashboardButton');
+                            if (openDashboardButton) openDashboardButton.style.display = 'inline-block';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('INDEX.HTML: Error in final upload:', error);
+                        showMessage('An error occurred: ' + error.message, 'error');
+                    });
+                }
             }
-        }
 
         function hideRepModal() {
             console.log('INDEX.HTML: Hiding Rep modal...');
