@@ -96,6 +96,11 @@
             border-bottom: 1px solid #ddd;
             z-index: 2;
         }
+        /* Remove horizontal line for spacer wrappers */
+        .clock-time-axis-spacer-wrapper.axis-container::after,
+        .work-interval-axis-spacer-wrapper.axis-container::after {
+            border-bottom: none;
+        }
 
         .clock-time-axis-spacer-wrapper {
             height: 25px;
@@ -112,11 +117,15 @@
             height: 25px;
             top: 0;
             z-index: 15;
+            width: auto; /* Allow it to stretch */
+            min-width: 100%; /* Prevent shrinking */
         }
         .work-interval-axis-ticks-wrapper {
             height: 30px;
             top: 25px;
             z-index: 15;
+            width: auto; /* Allow it to stretch */
+            min-width: 100%; /* Prevent shrinking */
         }
 
         .technician-labels-wrapper {
@@ -280,7 +289,6 @@
 
         .time-tick.break-interval {
             background-color: #e7e7e7;
-
             font-style: italic;
             color: #555;
         }
@@ -827,6 +835,14 @@
         const ganttColumnMinWidth = '50px';
         const ganttColumnMinWidthPx = parseInt(ganttColumnMinWidth);
         const totalWidth = numTotalTimelineSlots * ganttColumnMinWidthPx;
+
+        // Set widths for scrollable axis containers to ensure horizontal lines extend to the end
+        if (clockTicksWrapper) {
+            clockTicksWrapper.style.width = `${totalWidth}px`;
+        }
+        if (workIntervalTicksWrapper) {
+            workIntervalTicksWrapper.style.width = `${totalWidth}px`;
+        }
         const timeGridsWrapper = document.querySelector('.time-grids-wrapper');
         if (timeGridsWrapper) {
             timeGridsWrapper.style.width = `${totalWidth}px`;
