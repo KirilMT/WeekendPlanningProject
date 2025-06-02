@@ -7,7 +7,6 @@
             font-family: 'Segoe UI', Arial, sans-serif;
             margin: 20px;
             background-color: #f5f5f5;
-            /* overflow-x: hidden; */ /* Keep this commented out or removed */
         }
         h1, h2 {
             text-align: center;
@@ -95,7 +94,7 @@
             left: 0;
             width: 100%;
             border-bottom: 1px solid #ddd;
-            z-index: 2; /* This z-index is for the axis bottom line itself */
+            z-index: 2;
         }
 
         .clock-time-axis-spacer-wrapper {
@@ -145,19 +144,21 @@
         .time-grids-wrapper {
             flex-grow: 1;
             position: relative;
+            width: auto;
+            min-width: 100%;
         }
 
         .time-grid {
             display: grid;
             grid-template-rows: 40px;
             grid-auto-rows: 0;
-            position: relative; /* Crucial for ::after and z-indexed children */
+            position: relative;
             height: 40px;
-            background: transparent; /* Allows .hover-highlight-time-grid-row to show */
+            background: transparent;
             box-sizing: border-box;
+            width: 100%;
         }
 
-        /* MODIFIED: Horizontal line for each time-grid row */
         .time-grid::after {
             content: '';
             position: absolute;
@@ -165,9 +166,8 @@
             left: 0;
             right: 0;
             height: 1px;
-            background-color: #ccc; /* Color of the horizontal line */
-            z-index: 5 !important;  /* INCREASED Z-INDEX SIGNIFICANTLY and marked important for emphasis */
-                                    /* This line must be above column backgrounds and task bars */
+            background-color: #ccc;
+            z-index: 5 !important;
         }
 
         .time-tick {
@@ -190,22 +190,20 @@
             border-right: none !important;
         }
 
-        /* MODIFIED: Styles for break column fills and work column carriers */
         .break-column-fill,
         .work-column-border-carrier {
             grid-row: 1 / 2;
             height: 100%;
-            position: relative; /* ADDED: Ensure they are stacking contexts for their z-index */
-            z-index: 0;         /* These are background elements, should be at the bottom of the .time-grid stacking context */
+            position: relative;
+            z-index: 0;
         }
         .break-column-fill.break-type-break1,
         .break-column-fill.break-type-break2 {
-            background-color: #dcdcdc; /* Opaque break background */
+            background-color: #dcdcdc;
         }
         .break-column-fill.break-type-breakMain {
-            background-color: #c0c0c0; /* Opaque break background */
+            background-color: #c0c0c0;
         }
-        /* .work-column-border-carrier has no default background, so .hover-highlight-time-grid-row can show through */
 
         .task-bar {
             grid-row: 1 / 2;
@@ -225,7 +223,7 @@
             text-align: center;
             margin: 8px 2px;
             position: relative;
-            z-index: 1; /* MODIFIED: Above column fills (0), below the main horizontal line (5) */
+            z-index: 1;
         }
         .task-bar.zero-duration {
             width: 6px !important;
@@ -282,6 +280,7 @@
 
         .time-tick.break-interval {
             background-color: #e7e7e7;
+
             font-style: italic;
             color: #555;
         }
@@ -300,24 +299,14 @@
             background-color: gold !important;
         }
 
-        /* MODIFIED: Row hover effect - UNCOMMENTED and using a semi-transparent color */
         .hover-highlight-time-grid-row {
-            background-color: rgba(255, 220, 100, 0.3) !important; /* Light, semi-transparent orange/yellow */
-            /* This background is on the .time-grid itself.
-               It will be underneath .time-grid::after (the line, z-index 5).
-               It will be underneath opaque .break-column-fill cells (z-index 0).
-               It should be visible through .work-column-border-carrier cells (z-index 0, no background)
-               unless they also have the .hover-highlight-grid-cell-column class. */
+            background-color: rgba(255, 220, 100, 0.3) !important;
         }
 
-        /* MODIFIED: Column hover effect - Made slightly transparent for testing line visibility */
         .hover-highlight-grid-cell-column {
-            background-color: rgba(255, 250, 205, 0.7) !important; /* lightgoldenrodyellow, 70% opacity */
-            /* This background is on .work-column-border-carrier or .break-column-fill (z-index 0).
-               It should be underneath the .time-grid::after (the line, z-index 5). */
+            background-color: rgba(255, 250, 205, 0.7) !important;
         }
 
-        /* --- START: CSS for Task Table (existing styles) --- */
         .task-table tr:not(.section-header):not(.task-row-rep):hover td:not(.prio-a):not(.prio-b):not(.prio-c) {
             background-color: #e9e9e9;
         }
@@ -339,7 +328,6 @@
         .task-table tr:hover td.prio-a { background-color: #ff4d4d; color: #333; }
         .task-table tr:hover td.prio-b { background-color: #ffd700; color: #333; }
         .task-table tr:hover td.prio-c { background-color: #d2b48c; color: #333; }
-        /* --- END: CSS for Task Table --- */
     </style>
 </head>
 <body>
@@ -553,7 +541,7 @@
 
         <div class="gantt-chart">
 
-            <!-- New: Fixed Left Pane -->
+            <!-- Fixed Left Pane -->
             <div class="gantt-fixed-left-pane">
                 <div class="clock-time-axis-spacer-wrapper axis-container">
                     <!-- JS will populate ONLY the spacer tick for the clock axis here -->
@@ -568,8 +556,8 @@
                 </div>
             </div>
 
-            <!-- New: Scrollable Right Pane -->
-            <div class="gantt-scrollable-right-pane">
+            <!-- Scrollable Right Pane -->
+            <div class=" gantt-scrollable-right-pane">
                 <div class="clock-time-axis-ticks-wrapper axis-container">
                     <!-- JS will populate the actual time ticks (no spacer) for the clock axis here -->
                 </div>
@@ -657,7 +645,6 @@
         }
     }
 
-    // Function to handle mouseover on a Gantt grid cell
     function handleGanttCellHover(event) {
         const cell = event.target;
         const columnIndex = parseInt(cell.dataset.columnIndex);
@@ -665,7 +652,6 @@
 
         if (!parentGrid || columnIndex === undefined || isNaN(columnIndex)) return;
 
-        // 1. Highlight Technician Label (Row Header)
         const allGridsNodeList = document.querySelectorAll('.time-grids-wrapper .time-grid');
         const allGridsArray = Array.from(allGridsNodeList);
         const technicianIndex = allGridsArray.indexOf(parentGrid);
@@ -675,7 +661,6 @@
             technicianLabels[technicianIndex].classList.add('hover-highlight-technician');
         }
 
-        // 2. Highlight Time Ticks in Headers (Column Headers)
         const clockTicks = document.querySelectorAll('.clock-time-axis-ticks-wrapper .time-tick');
         const workIntervalTicks = document.querySelectorAll('.work-interval-axis-ticks-wrapper .time-tick');
 
@@ -686,14 +671,9 @@
             workIntervalTicks[columnIndex].classList.add('hover-highlight-time-tick');
         }
 
-        // 3. Highlight the entire Time Grid row for the current technician
         parentGrid.classList.add('hover-highlight-time-grid-row');
 
-        // 4. Highlight all grid cells in the hovered column across all technician rows
         allGridsNodeList.forEach(grid => {
-            // Find the specific cell (work-column-border-carrier or break-column-fill)
-            // in this grid at the hovered columnIndex.
-            // These cells are direct children and were given the data-column-index attribute.
             const cellInColumn = grid.querySelector(`[data-column-index="${columnIndex}"]`);
             if (cellInColumn) {
                 cellInColumn.classList.add('hover-highlight-grid-cell-column');
@@ -701,7 +681,6 @@
         });
     }
 
-    // Function to handle mouseout from a Gantt grid cell
     function handleGanttCellMouseOut(event) {
         const cell = event.target;
         const columnIndex = parseInt(cell.dataset.columnIndex);
@@ -709,7 +688,6 @@
 
         if (!parentGrid || columnIndex === undefined || isNaN(columnIndex)) return;
 
-        // 1. Remove Technician Label Highlight
         const allGridsNodeList = document.querySelectorAll('.time-grids-wrapper .time-grid');
         const allGridsArray = Array.from(allGridsNodeList);
         const technicianIndex = allGridsArray.indexOf(parentGrid);
@@ -719,7 +697,6 @@
             technicianLabels[technicianIndex].classList.remove('hover-highlight-technician');
         }
 
-        // 2. Remove Time Ticks Highlight
         const clockTicks = document.querySelectorAll('.clock-time-axis-ticks-wrapper .time-tick');
         const workIntervalTicks = document.querySelectorAll('.work-interval-axis-ticks-wrapper .time-tick');
 
@@ -730,10 +707,8 @@
             workIntervalTicks[columnIndex].classList.remove('hover-highlight-time-tick');
         }
 
-        // 3. Remove Time Grid row highlight
         parentGrid.classList.remove('hover-highlight-time-grid-row');
 
-        // 4. Remove all grid cells column highlight
         allGridsNodeList.forEach(grid => {
             const cellInColumn = grid.querySelector(`[data-column-index="${columnIndex}"]`);
             if (cellInColumn) {
@@ -850,6 +825,12 @@
         });
 
         const ganttColumnMinWidth = '50px';
+        const ganttColumnMinWidthPx = parseInt(ganttColumnMinWidth);
+        const totalWidth = numTotalTimelineSlots * ganttColumnMinWidthPx;
+        const timeGridsWrapper = document.querySelector('.time-grids-wrapper');
+        if (timeGridsWrapper) {
+            timeGridsWrapper.style.width = `${totalWidth}px`;
+        }
 
         if (clockSpacerWrapper) clockSpacerWrapper.style.gridTemplateColumns = '1fr';
         if (workIntervalSpacerWrapper) workIntervalSpacerWrapper.style.gridTemplateColumns = '1fr';
