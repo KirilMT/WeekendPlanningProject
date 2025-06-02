@@ -101,6 +101,12 @@
             border-bottom: 1px solid #ddd;
         }
 
+        /* ADD THIS MODIFICATION HERE */
+        .clock-time-axis-spacer-wrapper.axis-container::after,
+        .work-interval-axis-spacer-wrapper.axis-container::after {
+            border-bottom: none; /* Prevent the general axis border for these specific spacer headers */
+        }
+
         /* Spacer Axis Wrappers (Left Pane) */
         .clock-time-axis-spacer-wrapper {
             height: 25px;
