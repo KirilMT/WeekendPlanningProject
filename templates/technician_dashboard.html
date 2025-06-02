@@ -53,64 +53,45 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             border-radius: 8px;
             box-sizing: border-box;
-            overflow: hidden; /* Important for sticky headers */
-        }
-        .gantt-chart {
-            position: relative;
-            overflow-x: auto;
-            overflow-y: hidden; /* Keep this to allow content to scroll under sticky headers */
-            display: flex;
-            flex-direction: column;
-            min-height: 0; /* For flexbox to behave in scrollable content */
-        }
-        .technician-row {
-            display: grid;
-            grid-template-columns: 200px auto; /* 'auto' for the .time-grid part */
-            align-items: center; /* Vertically aligns label and time-grid content */
-            min-height: 40px;
-            position: relative;
-            /* border-bottom: 1px solid #ccc; */ /* REMOVED: Let children handle their borders for precise alignment */
-        }
-        .technician-label {
-            width: 200px;
-            height: 40px; /* Explicit height */
-            font-weight: 500;
-            color: #333;
-            padding: 0 10px;
-            box-sizing: border-box; /* Ensures padding and border are within the width/height */
-            background-color: #f9f9f9; /* Ensure opaque background */
-            text-align: left;
-            word-wrap: break-word;
-            position: sticky;
-            left: 0;
-            z-index: 10;
-            display: flex;
-            align-items: center;
-            border-right: 1px solid #ccc;
-            border-bottom: 1px solid #ccc; /* ADDED: For the sticky part of the horizontal line */
-            /* transform: translateZ(0); */ /* Optional: Uncomment if minor rendering glitches persist at the seam when scrolling */
-        }
-        .time-grid {
-            display: grid;
-            /* JS will set grid-template-columns */
-            grid-template-rows: 40px; /* Fixed height for task rows */
-            grid-auto-rows: 0; /* Prevent implicit rows */
-            position: relative; /* For z-indexing of break-column-fill */
-            height: 40px; /* Explicit height */
-            background: transparent;
-            border-bottom: 1px solid #ccc; /* KEPT: For the scrollable part of the horizontal line */
-            box-sizing: border-box; /* ADDED: Crucial for alignment with technician-label's border */
+            overflow: hidden; /* Important for overall container */
         }
 
-        /* Common styles for axis containers */
+        .gantt-chart {
+            position: relative;
+            display: flex; /* CHANGED: to arrange left and right panes */
+            min-height: 0; /* For flexbox to behave in scrollable content */
+            /* Removed overflow-x, overflow-y, flex-direction: column */
+        }
+
+        /* New Styles for Panes */
+        .gantt-fixed-left-pane {
+            width: 200px;
+            flex-shrink: 0; /* Prevent shrinking */
+            position: relative;
+            z-index: 20;
+            background-color: #fff; /* Match page background or a specific pane background */
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #ccc; /* Vertical separator line */
+        }
+
+        .gantt-scrollable-right-pane {
+            flex-grow: 1; /* Take remaining space */
+            overflow-x: auto; /* THIS IS THE TARGET HORIZONTAL SCROLLBAR */
+            overflow-y: auto; /* THIS IS THE PRIMARY VERTICAL SCROLLBAR */
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Common styles for axis containers (now on 4 new wrappers) */
         .axis-container {
             display: grid;
-            /* JS will set grid-template-columns */
             position: sticky;
-            background-color: #fff;
-            z-index: 3; /* Standard z-index for headers */
+            background-color: #fff; /* Ensure background for sticky headers */
+            /* z-index will be set more specifically on child wrappers */
         }
-        .axis-container::after { /* Bottom border for axis */
+        .axis-container::after { /* Bottom border for the entire axis row */
             content: "";
             display: block;
             position: absolute;
@@ -120,18 +101,77 @@
             border-bottom: 1px solid #ddd;
         }
 
-        .clock-time-axis { /* Top-most header */
+        /* Spacer Axis Wrappers (Left Pane) */
+        .clock-time-axis-spacer-wrapper {
             height: 25px;
-            top: 0; /* Stick to the very top */
+            top: 0;
+            z-index: 22; /* Above technician labels and right pane headers */
         }
-        .work-interval-axis { /* Middle header */
+        .work-interval-axis-spacer-wrapper {
             height: 30px;
-            top: 25px; /* Stick below the clock-time-axis */
+            top: 25px; /* Stick below the clock-time-axis-spacer-wrapper */
+            z-index: 22;
         }
 
-        .time-tick { /* Common for all ticks in both axes headers */
+        /* Ticks Axis Wrappers (Right Pane) */
+        .clock-time-axis-ticks-wrapper {
+            height: 25px;
+            top: 0;
+            z-index: 15; /* Above time-grids in right pane */
+        }
+        .work-interval-axis-ticks-wrapper {
+            height: 30px;
+            top: 25px; /* Stick below the clock-time-axis-ticks-wrapper */
+            z-index: 15;
+        }
+
+
+        /* Technician Labels Wrapper (Left Pane) */
+        .technician-labels-wrapper {
+            flex-grow: 1; /* Allows it to fill vertical space */
+            overflow-y: hidden; /* Vertical scroll will be synced from right pane */
+            position: relative;
+            background-color: #f9f9f9; /* Match technician label background */
+        }
+
+        .technician-label {
+            width: 100%; /* Takes full width of its 200px parent column in the wrapper grid */
+            height: 40px;
+            font-weight: 500;
+            color: #333;
+            padding: 0 10px;
+            box-sizing: border-box;
+            background-color: #f9f9f9; /* Match wrapper or specific color */
+            text-align: left;
+            word-wrap: break-word;
+            display: flex;
+            align-items: center;
+            /* border-right: 1px solid #ccc; */ /* Moved to .gantt-fixed-left-pane */
+            border-bottom: 1px solid #ccc;
+            /* position: sticky, left: 0, z-index REMOVED */
+        }
+
+        /* Time Grids Wrapper (Right Pane) */
+        .time-grids-wrapper {
+            flex-grow: 1;
+            position: relative;
+        }
+
+        .time-grid {
+            display: grid;
+            grid-template-rows: 40px;
+            grid-auto-rows: 0;
+            position: relative;
+            height: 40px;
+            background: transparent;
+            border-bottom: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+
+
+        .time-tick {
             text-align: center;
-            font-size: 12px; /* MODIFIED: Increased font size */
+            font-size: 12px;
             color: #666;
             padding: 5px 2px;
             position: relative;
@@ -140,25 +180,28 @@
             justify-content: center;
             box-sizing: border-box;
             white-space: nowrap;
-            /* border-right is now applied by JS for data ticks to handle the last one correctly */
-            border-bottom: 1px solid #ddd;
+            /* border-bottom: 1px solid #ddd; */ /* REMOVED: .axis-container::after handles this */
+            /* border-right is applied by JS */
         }
-        .time-tick.spacer-tick { /* The first tick in headers (above tech labels) */
-            width: 200px; /* Must match technician-label width */
-            background-color: #f9f9f9;
-            position: sticky;
-            left: 0;
-            z-index: 11;
-            border-right: 1px solid #ccc; /* Match border with technician label */
-            border-bottom: none; /* Exclude border-bottom for spacer tick */
-            /* transform: translateZ(0); */ /* Optional: Uncomment if minor rendering glitches persist at the seam when scrolling */
+
+        .time-tick.spacer-tick {
+            /* width: 200px; */ /* Handled by grid column of its wrapper */
+            background-color: #f9f9f9; /* Match technician label background */
+            /* border-right: 1px solid #ccc; */ /* This is effectively the right border of the fixed pane */
+            border-bottom: none; /* Crucial: No bottom border for the spacer tick itself */
+            /* position: sticky, left: 0, z-index REMOVED */
         }
+        /* Ensure the spacer tick in the fixed left pane doesn't get a right border from JS if JS adds it to all ticks */
+        .gantt-fixed-left-pane .time-tick.spacer-tick {
+            border-right: none !important; /* Override JS if it adds one */
+        }
+
 
         /* Styles for break column fills in the content grid */
         .break-column-fill {
             grid-row: 1 / 2;
             height: 100%;
-            z-index: 0; /* Behind task bars and technician-label */
+            z-index: 0;
         }
         .break-column-fill.break-type-break1,
         .break-column-fill.break-type-break2 {
@@ -167,11 +210,10 @@
         .break-column-fill.break-type-breakMain {
             background-color: #c0c0c0;
         }
-        /* For work column border carriers in the content grid */
         .work-column-border-carrier {
             grid-row: 1 / 2;
             height: 100%;
-            z-index: 0; /* Behind task bars and technician-label */
+            z-index: 0;
         }
 
 
@@ -187,13 +229,13 @@
             font-weight: 500;
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
             box-sizing: border-box;
-            overflow: visible; /* Allow pseudo-elements to show */
+            overflow: visible;
             text-overflow: ellipsis;
             white-space: nowrap;
             text-align: center;
             margin: 8px 2px;
             position: relative;
-            z-index: 1; /* Above break-column-fill and work-column-border-carrier */
+            z-index: 1;
         }
         .task-bar.zero-duration {
             width: 6px !important;
@@ -209,7 +251,6 @@
             display: none;
         }
 
-        /* MODIFIED: Visual cues for split tasks - Thicker and darker */
         .task-segment-ends-before-break {
             margin-right: 4px;
         }
@@ -249,8 +290,6 @@
             z-index: 1;
         }
 
-
-        /* CSS for Break Ticks in headers */
         .time-tick.break-interval {
             background-color: #e7e7e7;
             font-style: italic;
@@ -263,6 +302,7 @@
         .time-tick.break-interval.break-type-breakMain {
             background-color: #c0c0c0;
         }
+
         /* --- START: CSS for Task Table (existing styles) --- */
         .task-table tr:not(.section-header):not(.task-row-rep):hover td:not(.prio-a):not(.prio-b):not(.prio-c) {
             background-color: #e9e9e9;
@@ -273,11 +313,9 @@
             font-weight: bold;
             padding: 8px 16px;
         }
-        /* ADDED RULE FOR REP TASK ROW BACKGROUND */
         .task-table tr.task-row-rep td {
-            background-color: #e6e6e6; /* Default background for REP task cells */
+            background-color: #e6e6e6;
         }
-        /* END OF ADDED RULE */
         .task-table tr.task-row-rep td.prio-a { background-color: #ff4d4d; color: #333; }
         .task-table tr.task-row-rep td.prio-b { background-color: #ffd700; color: #333; }
         .task-table tr.task-row-rep td.prio-c { background-color: #d2b48c; color: #333; }
@@ -294,7 +332,7 @@
 <body>
     <h1>Technician Dashboard</h1>
 
-    <!-- Task Table (Structure remains as per your last provided version) -->
+    <!-- Task Table -->
     <table class="task-table" border="1">
         <thead>
             <tr>
@@ -499,45 +537,61 @@
     <div class="gantt-container"
          data-total-work-minutes="{{ total_work_minutes | default(0) }}"
          data-shift-start-time="{{ shift_start_time_str | default('06:00') }}">
-        <div class="gantt-chart">
-            <!-- Top-most: Actual Clock Time Axis -->
-            <div class="clock-time-axis axis-container">
-                {# JS will populate ticks here #}
-            </div>
-            <!-- Middle: Work Interval Axis -->
-            <div class="work-interval-axis axis-container">
-                {# JS will populate ticks here #}
-            </div>
 
-            <!-- Technician Rows -->
-            {% for technician in technicians %}
-            <div class="technician-row">
-                <div class="technician-label">{{ technician }}</div>
-                <div class="time-grid"> {# JS will set its grid-template-columns #}
-                    {# Master task bars rendered by Jinja - JS will hide these and create new segmented bars #}
-                    {% for assignment in assignments %}
-                        {% if assignment.technician == technician %}
-                            {% set task_id_num = assignment.instance_id.split('_')[0] if assignment.instance_id and '_' in assignment.instance_id else '0' %}
-                            {% set color_r = ((task_id_num | int | default(1)) * 97 % 200 + 55) %}
-                            {% set color_g = ((task_id_num | int | default(1)) * 53 % 200 + 55) %}
-                            {% set color_b = ((task_id_num | int | default(1)) * 37 % 200 + 55) %}
-                            <div class="task-bar"
-                                 data-assignment-start="{{ assignment.start | default(0) }}"
-                                 data-assignment-duration="{{ assignment.duration | default(0) }}"
-                                 data-task-id="{{ task_id_num | default('0') }}" {# Store task ID for text content #}
-                                 style="
-                                    background-color: #{{ '%02x%02x%02x' % (color_r, color_g, color_b) }};
-                                    {% if assignment.is_incomplete %}border: 2px solid red;{% endif %}
-                                    display: none; /* Initially hide, JS will create visible segments */
-                                 "
-                                 title="{{ assignment.task_name | default('Unknown') }} (Work Time: {{ assignment.start | default(0) }}-{{ (assignment.start | default(0)) + (assignment.duration | default(0)) }} min{% if assignment.is_incomplete %} - Partially assigned, full ideal duration for group: {{ assignment.original_duration | default(0) }} min{% endif %}{% if assignment.resource_mismatch_info %} - {{ assignment.resource_mismatch_info }}{% endif %})">
-                                 <span>{{ task_id_num | default('0') }}</span> {# Text content in a span for zero-duration styling #}
-                            </div>
-                        {% endif %}
+        <div class="gantt-chart"> <!-- Will become a flex container for two panes -->
+
+            <!-- New: Fixed Left Pane -->
+            <div class="gantt-fixed-left-pane">
+                <div class="clock-time-axis-spacer-wrapper axis-container">
+                    <!-- JS will populate ONLY the spacer tick for the clock axis here -->
+                </div>
+                <div class="work-interval-axis-spacer-wrapper axis-container">
+                    <!-- JS will populate ONLY the spacer tick for the work interval axis here -->
+                </div>
+                <div class="technician-labels-wrapper">
+                    {% for technician in technicians %}
+                        <div class="technician-label">{{ technician }}</div>
                     {% endfor %}
                 </div>
             </div>
-            {% endfor %}
+
+            <!-- New: Scrollable Right Pane -->
+            <div class="gantt-scrollable-right-pane">
+                <div class="clock-time-axis-ticks-wrapper axis-container">
+                    <!-- JS will populate the actual time ticks (no spacer) for the clock axis here -->
+                </div>
+                <div class="work-interval-axis-ticks-wrapper axis-container">
+                    <!-- JS will populate the actual time ticks (no spacer) for the work interval axis here -->
+                </div>
+                <div class="time-grids-wrapper">
+                    {% for technician in technicians %}
+                    {# Note: The technician-row div is removed, we directly create time-grids #}
+                    <div class="time-grid">
+                        {# Master task bars rendered by Jinja - JS will hide these and create new segmented bars #}
+                        {% for assignment in assignments %}
+                            {% if assignment.technician == technician %}
+                                {% set task_id_num = assignment.instance_id.split('_')[0] if assignment.instance_id and '_' in assignment.instance_id else '0' %}
+                                {% set color_r = ((task_id_num | int | default(1)) * 97 % 200 + 55) %}
+                                {% set color_g = ((task_id_num | int | default(1)) * 53 % 200 + 55) %}
+                                {% set color_b = ((task_id_num | int | default(1)) * 37 % 200 + 55) %}
+                                <div class="task-bar"
+                                     data-assignment-start="{{ assignment.start | default(0) }}"
+                                     data-assignment-duration="{{ assignment.duration | default(0) }}"
+                                     data-task-id="{{ task_id_num | default('0') }}"
+                                     style="
+                                        background-color: #{{ '%02x%02x%02x' % (color_r, color_g, color_b) }};
+                                        {% if assignment.is_incomplete %}border: 2px solid red;{% endif %}
+                                        display: none; /* Initially hide, JS will create visible segments */
+                                     "
+                                     title="{{ assignment.task_name | default('Unknown') }} (Work Time: {{ assignment.start | default(0) }}-{{ (assignment.start | default(0)) + (assignment.duration | default(0)) }} min{% if assignment.is_incomplete %} - Partially assigned, full ideal duration for group: {{ assignment.original_duration | default(0) }} min{% endif %}{% if assignment.resource_mismatch_info %} - {{ assignment.resource_mismatch_info }}{% endif %})">
+                                     <span>{{ task_id_num | default('0') }}</span>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
     </div>
     {% endif %}
@@ -569,16 +623,52 @@
         return `${hours}:${minutes}`;
     }
 
-    function generateDynamicGantt(shiftStartTimeStr, totalWorkMinutes) {
-        const clockTimeAxisContainer = document.querySelector('.clock-time-axis');
-        const workIntervalAxisContainer = document.querySelector('.work-interval-axis');
-        const timeGrids = document.querySelectorAll('.time-grid');
+    function setupGanttScrollSync() {
+        const rightPane = document.querySelector('.gantt-scrollable-right-pane');
+        const leftPaneLabelsWrapper = document.querySelector('.technician-labels-wrapper');
+        const clockTicksWrapper = document.querySelector('.clock-time-axis-ticks-wrapper');
+        const workIntervalTicksWrapper = document.querySelector('.work-interval-axis-ticks-wrapper');
 
-        clockTimeAxisContainer.innerHTML = '';
-        workIntervalAxisContainer.innerHTML = '';
+        if (rightPane && leftPaneLabelsWrapper && clockTicksWrapper && workIntervalTicksWrapper) {
+            rightPane.addEventListener('scroll', function() {
+                // Sync vertical scroll of technician labels in the left pane
+                leftPaneLabelsWrapper.scrollTop = this.scrollTop;
+
+                // Sync horizontal scroll of the header tick sections in the right pane
+                // Check if elements are still in DOM and visible before setting scrollLeft
+                if (clockTicksWrapper.offsetParent !== null) { // A simple check for visibility/DOM presence
+                    clockTicksWrapper.scrollLeft = this.scrollLeft;
+                }
+                if (workIntervalTicksWrapper.offsetParent !== null) {
+                    workIntervalTicksWrapper.scrollLeft = this.scrollLeft;
+                }
+            });
+        } else {
+            console.error("Gantt scroll sync elements not found. Check selectors:",
+                {rightPane, leftPaneLabelsWrapper, clockTicksWrapper, workIntervalTicksWrapper}
+            );
+        }
+    }
+
+
+    function generateDynamicGantt(shiftStartTimeStr, totalWorkMinutes) {
+        // MODIFIED: Select new wrapper elements
+        const clockSpacerWrapper = document.querySelector('.clock-time-axis-spacer-wrapper');
+        const workIntervalSpacerWrapper = document.querySelector('.work-interval-axis-spacer-wrapper');
+        const clockTicksWrapper = document.querySelector('.clock-time-axis-ticks-wrapper');
+        const workIntervalTicksWrapper = document.querySelector('.work-interval-axis-ticks-wrapper');
+
+        // Select all time grids from the new wrapper
+        const timeGrids = document.querySelectorAll('.time-grids-wrapper .time-grid');
+
+        // Clear previous content from new wrappers
+        if (clockSpacerWrapper) clockSpacerWrapper.innerHTML = ''; else console.error('.clock-time-axis-spacer-wrapper not found');
+        if (workIntervalSpacerWrapper) workIntervalSpacerWrapper.innerHTML = ''; else console.error('.work-interval-axis-spacer-wrapper not found');
+        if (clockTicksWrapper) clockTicksWrapper.innerHTML = ''; else console.error('.clock-time-axis-ticks-wrapper not found');
+        if (workIntervalTicksWrapper) workIntervalTicksWrapper.innerHTML = ''; else console.error('.work-interval-axis-ticks-wrapper not found');
+
 
         const workIntervalDuration = 15;
-
         const timelineSlots = [];
         let workTimeProcessed = 0;
         const break1StartAfterWork = Math.floor(totalWorkMinutes * 0.25 / workIntervalDuration) * workIntervalDuration;
@@ -632,36 +722,37 @@
             spacer.classList.add('time-tick', 'spacer-tick');
             return spacer;
         };
-        clockTimeAxisContainer.appendChild(createSpacerTick());
-        workIntervalAxisContainer.appendChild(createSpacerTick());
+
+        // Append spacer ticks to their new wrappers
+        if (clockSpacerWrapper) clockSpacerWrapper.appendChild(createSpacerTick());
+        if (workIntervalSpacerWrapper) workIntervalSpacerWrapper.appendChild(createSpacerTick());
+
 
         const [startHour, startMinute] = shiftStartTimeStr.split(':').map(Number);
         let currentClock = new Date(2000, 0, 1, startHour, startMinute);
         let cumulativeWorkMinutes = 0;
 
-
-        // Populate Header Ticks (Clock and Work Interval)
+        // Populate Header Ticks
         timelineSlots.forEach((slot, index) => {
             const isLastRealSlot = (index === numTotalTimelineSlots - 1);
-            const headerTickBorderStyle = isLastRealSlot ? "none" : "1px solid #e0e0e0"; // Header tick border color
+            const headerTickBorderStyle = isLastRealSlot ? "none" : "1px solid #e0e0e0";
 
-            // Clock Time Axis Tick
+            // Clock Time Axis Tick (for the scrollable part)
             const tickDivClock = document.createElement('div');
             tickDivClock.classList.add('time-tick');
             tickDivClock.style.borderRight = headerTickBorderStyle;
             let labelClock = formatTime(currentClock);
             if (slot.type !== 'work' && slot.type !== 'placeholder') {
                 tickDivClock.classList.add('break-interval', `break-type-${slot.type}`);
-                // labelClock += ` (${slot.type.replace('break', 'B')})`; // MODIFIED: Removed break indicator text
             }
             if (slot.type === 'placeholder') {
                  labelClock = `${formatTime(currentClock)} (No Work Scheduled)`;
             }
             tickDivClock.textContent = labelClock;
-            clockTimeAxisContainer.appendChild(tickDivClock);
+            if (clockTicksWrapper) clockTicksWrapper.appendChild(tickDivClock);
             currentClock.setMinutes(currentClock.getMinutes() + workIntervalDuration);
 
-            // Work Interval Axis Tick
+            // Work Interval Axis Tick (for the scrollable part)
             const tickDivWork = document.createElement('div');
             tickDivWork.classList.add('time-tick');
             tickDivWork.style.borderRight = headerTickBorderStyle;
@@ -671,49 +762,50 @@
             } else if (slot.type === 'placeholder') {
                 tickDivWork.textContent = "0-0";
             } else { // Break slot
-                tickDivWork.textContent = 'Break'; // MODIFIED: Display "Break" for all break types
-                tickDivWork.classList.add('break-interval', `break-type-${slot.type}`); // Keep class for styling
+                tickDivWork.textContent = 'Break';
+                tickDivWork.classList.add('break-interval', `break-type-${slot.type}`);
             }
-            workIntervalAxisContainer.appendChild(tickDivWork);
+            if (workIntervalTicksWrapper) workIntervalTicksWrapper.appendChild(tickDivWork);
         });
 
-        const ganttColumnMinWidth = '50px'; // MODIFIED: Gantt column min width
+        const ganttColumnMinWidth = '50px';
 
+        // Set grid-template-columns for SPACER wrappers
+        if (clockSpacerWrapper) clockSpacerWrapper.style.gridTemplateColumns = '1fr'; // Takes full width of its 200px parent
+        if (workIntervalSpacerWrapper) workIntervalSpacerWrapper.style.gridTemplateColumns = '1fr';
+
+
+        // Set grid-template-columns for TICKS wrappers and TIME GRIDS
         if (numTotalTimelineSlots > 0) {
-            const gridColsStyle = `200px repeat(${numTotalTimelineSlots}, minmax(${ganttColumnMinWidth}, 1fr))`;
-            clockTimeAxisContainer.style.gridTemplateColumns = gridColsStyle;
-            workIntervalAxisContainer.style.gridTemplateColumns = gridColsStyle;
+            const ticksGridColsStyle = `repeat(${numTotalTimelineSlots}, minmax(${ganttColumnMinWidth}, 1fr))`;
+            if (clockTicksWrapper) clockTicksWrapper.style.gridTemplateColumns = ticksGridColsStyle;
+            if (workIntervalTicksWrapper) workIntervalTicksWrapper.style.gridTemplateColumns = ticksGridColsStyle;
             timeGrids.forEach(grid => {
-                grid.style.gridTemplateColumns = `repeat(${numTotalTimelineSlots}, minmax(${ganttColumnMinWidth}, 1fr))`;
+                grid.style.gridTemplateColumns = ticksGridColsStyle;
             });
-        } else { // Should only happen if timelineSlots is unexpectedly empty
-             const gridColsStyle = `200px minmax(${ganttColumnMinWidth}, 1fr)`;
-             clockTimeAxisContainer.style.gridTemplateColumns = gridColsStyle;
-             workIntervalAxisContainer.style.gridTemplateColumns = gridColsStyle;
-             timeGrids.forEach(grid => {
-                grid.style.gridTemplateColumns = `minmax(${ganttColumnMinWidth}, 1fr)`;
+        } else {
+            const fallbackTicksGridColsStyle = `minmax(${ganttColumnMinWidth}, 1fr)`;
+            if (clockTicksWrapper) clockTicksWrapper.style.gridTemplateColumns = fallbackTicksGridColsStyle;
+            if (workIntervalTicksWrapper) workIntervalTicksWrapper.style.gridTemplateColumns = fallbackTicksGridColsStyle;
+            timeGrids.forEach(grid => {
+                grid.style.gridTemplateColumns = fallbackTicksGridColsStyle;
             });
         }
 
         // --- Populate Break Column Fills AND Work Column Borders in Time Grids ---
         timeGrids.forEach(grid => {
             grid.querySelectorAll('.break-column-fill, .work-column-border-carrier').forEach(el => el.remove());
-
             timelineSlots.forEach((slot, index) => {
                 const isLastSlot = (index === numTotalTimelineSlots - 1);
-                // Use a slightly lighter border for content grid lines for subtlety
                 const contentGridLineBorderStyle = isLastSlot ? "none" : "1px solid #e0e0e0";
-
                 let columnElement = null;
-
-                if (slot.type !== 'work' && slot.type !== 'placeholder') { // Break slot
+                if (slot.type !== 'work' && slot.type !== 'placeholder') {
                     columnElement = document.createElement('div');
                     columnElement.classList.add('break-column-fill', `break-type-${slot.type}`);
-                } else { // Work or Placeholder slot - needs a border carrier
+                } else {
                     columnElement = document.createElement('div');
                     columnElement.classList.add('work-column-border-carrier');
                 }
-
                 if (columnElement) {
                     columnElement.style.gridColumn = `${index + 1} / span 1`;
                     columnElement.style.borderRight = contentGridLineBorderStyle;
@@ -721,7 +813,6 @@
                 }
             });
         });
-
 
         function getTimelineSlotIndexForWorkStart(targetWorkMinutes) {
             if (totalWorkMinutes === 0 && timelineSlots.length > 0 && timelineSlots[0].type === 'placeholder') return 1;
@@ -747,7 +838,7 @@
         }
 
         if (totalWorkMinutes > 0) {
-            const allTechnicianGrids = document.querySelectorAll('.time-grid');
+            const allTechnicianGrids = timeGrids; // Use the new NodeList
             allTechnicianGrids.forEach(grid => {
                 const masterTaskBars = Array.from(grid.querySelectorAll('.task-bar[style*="display: none"]'));
                 grid.querySelectorAll('.task-bar:not([style*="display: none"])').forEach(bar => bar.remove());
@@ -810,22 +901,17 @@
                         const currentSlot = timelineSlots[timelineSlotCursor_0_based];
 
                         if (currentSlot.type === 'work') {
-                            if (currentSegmentStartTimelineSlot_0_based === -1) { // This is the beginning of a new segment of the current task bar
+                            if (currentSegmentStartTimelineSlot_0_based === -1) {
                                 currentSegmentStartTimelineSlot_0_based = timelineSlotCursor_0_based;
-                                // Determine if this new segment starts after a break AND is part of a split task
                                 if (timelineSlotCursor_0_based > 0 &&
                                     timelineSlots[timelineSlotCursor_0_based - 1].type !== 'work' &&
                                     timelineSlots[timelineSlotCursor_0_based - 1].type !== 'placeholder') {
-                                    // Previous slot was a break.
-                                    // Now, check if work for *this task* was already processed before this break.
                                     if (workMinutesProcessedForTask > 0) {
                                         previousSlotWasBreakForSegmentStart = true;
                                     } else {
-                                        // Task starts after a break, but it's the first part of this task, so not "split" yet.
                                         previousSlotWasBreakForSegmentStart = false;
                                     }
                                 } else {
-                                    // Does not start immediately after a break.
                                     previousSlotWasBreakForSegmentStart = false;
                                 }
                             }
@@ -843,12 +929,9 @@
                                 if (previousSlotWasBreakForSegmentStart) {
                                     segmentDiv.classList.add('task-segment-starts-after-break');
                                 }
-                                // Check if the *next* slot is a break to mark the end of this segment
-                                if (timelineSlotCursor_0_based < timelineSlots.length - 1 && // Ensure there IS a next slot
+                                if (timelineSlotCursor_0_based < timelineSlots.length - 1 &&
                                     timelineSlots[timelineSlotCursor_0_based + 1].type !== 'work' &&
-                                    timelineSlots[timelineSlotCursor_0_based + 1].type !== 'placeholder') { // Next slot IS a break
-
-                                    // MODIFIED: Only add class if task was actually cut short by this upcoming break
+                                    timelineSlots[timelineSlotCursor_0_based + 1].type !== 'placeholder') {
                                     if (workMinutesProcessedForTask < assignmentDurationWorkMinutes) {
                                         segmentDiv.classList.add('task-segment-ends-before-break');
                                     }
@@ -856,20 +939,20 @@
                                 grid.appendChild(segmentDiv);
                                 currentSegmentStartTimelineSlot_0_based = -1;
                                 previousSlotWasBreakForSegmentStart = false;
-                                break; // Task segment ends, or task fully completed
+                                break;
                             }
                         } else { // Break slot
-                            if (currentSegmentStartTimelineSlot_0_based !== -1) { // If a segment was in progress
+                            if (currentSegmentStartTimelineSlot_0_based !== -1) {
                                 const segmentDiv = masterBar.cloneNode(true);
                                 segmentDiv.innerHTML = `<span>${taskIdText}</span>`;
                                 const startCol = currentSegmentStartTimelineSlot_0_based + 1;
-                                const endColExclusive = timelineSlotCursor_0_based + 1; // Segment ends *at* the break slot (exclusive)
+                                const endColExclusive = timelineSlotCursor_0_based + 1;
                                 segmentDiv.style.gridColumn = `${startCol} / ${endColExclusive}`;
                                 segmentDiv.style.display = 'flex';
                                 if (previousSlotWasBreakForSegmentStart) {
                                     segmentDiv.classList.add('task-segment-starts-after-break');
                                 }
-                                segmentDiv.classList.add('task-segment-ends-before-break'); // Ends before this break
+                                segmentDiv.classList.add('task-segment-ends-before-break');
                                 grid.appendChild(segmentDiv);
                                 currentSegmentStartTimelineSlot_0_based = -1;
                                 previousSlotWasBreakForSegmentStart = false;
@@ -880,6 +963,8 @@
                 });
             });
         }
+        // Call scroll sync after DOM is updated
+        setupGanttScrollSync();
     }
     </script>
 </body>
