@@ -501,7 +501,7 @@
 
             const techniciansPlannedForTask = parseInt(task.mitarbeiter_pro_aufgabe) || 0;
 
-            // Add informational message if fewer technicians are available for selection than planned
+            // Add an informational message if fewer technicians are available for selection than planned
             if (sortedTechnicians.length < techniciansPlannedForTask && sortedTechnicians.length > 0 && techniciansPlannedForTask > 0) {
                 const infoMsg = document.createElement('p');
                 infoMsg.id = 'repTaskAvailabilityInfo'; // For easy removal if modal is re-populated
@@ -769,7 +769,7 @@
 
                     currentRepTaskIndex++;
                     hideRepModal();
-                    showRepModal(); // Show next REP task or finalize
+                    showRepModal(); // Show the next REP task or finalise
                 });
             } else {
                 console.error("INDEX.HTML: validateRep button not found!");
@@ -801,7 +801,7 @@
                     console.log('INDEX.HTML: Rep task skipped:', repAssignments[repAssignments.length - 1]);
                     currentRepTaskIndex++;
                     hideRepModal();
-                    showRepModal(); // Show next REP task or finalize
+                    showRepModal(); // Show the next REP task or finalise
                 });
             } else {
                 console.error("INDEX.HTML: skipRep button not found!");
