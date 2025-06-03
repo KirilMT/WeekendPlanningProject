@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, send_from_directory, render_template 
 import os
 import json
 from jinja2 import Environment, FileSystemLoader
-from extract_data import extract_data, get_current_day, get_current_shift
+from extract_data import extract_data, get_current_week, get_current_week_number, get_current_day, get_current_shift
 import re
 from itertools import combinations
 import pandas as pd
@@ -761,6 +761,13 @@ def generate_html_files(data, present_technicians, rep_assignments=None):
             rep_assignments
         )
 
+        week_date_day_shift = {
+            "week": get_current_week_number(),
+            "date": get_current_week()[1].strftime("%d/%m/%Y"),
+            "day": get_current_day(),
+            "shift": get_current_shift().capitalize()
+        }
+
         validated_assignments_to_render = validate_assignments_flat_input(assignments_flat)
         technician_template = env.get_template('technician_dashboard.html')
         technician_html = technician_template.render(
@@ -770,7 +777,8 @@ def generate_html_files(data, present_technicians, rep_assignments=None):
             assignments=validated_assignments_to_render,
             unassigned_tasks=unassigned_reasons_dict,
             incomplete_tasks=incomplete_ids,
-            shift_start_time_str=shift_start_time_str
+            shift_start_time_str=shift_start_time_str,
+            week_date_day_shift=week_date_day_shift
         )
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], "technician_dashboard.html")
         with open(output_path, "w", encoding="utf-8") as f:

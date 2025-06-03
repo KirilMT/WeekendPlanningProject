@@ -7,11 +7,22 @@
             font-family: 'Segoe UI', Arial, sans-serif;
             margin: 20px;
             background-color: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
-        h1, h2 {
+        h1, h2, h4 {
             text-align: center;
             color: #333;
             font-weight: 500;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+        .heading-container {
+            display: flex;
+            justify-content: center;
+            align-items: baseline;
+            gap: 15px;
         }
         .task-table {
             width: 100%;
@@ -339,7 +350,10 @@
     </style>
 </head>
 <body>
-    <h1>Technician Dashboard</h1>
+    <div class="heading-container">
+        <h1>Technician Dashboard</h1>
+        <h4>(KW{{ week_date_day_shift.week }} - {{ week_date_day_shift.date }} - {{ week_date_day_shift.day }} - {{ week_date_day_shift.shift }})</h4>
+    </div>
 
     <!-- Task Table -->
     <table class="task-table" border="1">

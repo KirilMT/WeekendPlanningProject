@@ -7,7 +7,7 @@ import re
 def get_current_week():
     current_date = datetime(2025, 4, 20)  # Hardcoded for testing
     week_number = current_date.isocalendar().week
-    return f"Summary KW{week_number:02d}"  # e.g., "Summary KW17"
+    return f"Summary KW{week_number:02d}", current_date  # e.g., "Summary KW17"
 
 # Helper function to get the current week number (e.g., "17")
 def get_current_week_number():
@@ -101,7 +101,7 @@ def find_and_filter_data(df, current_day, current_shift):
 # Step 4: Extract data
 def extract_data(excel_file_object):  # MODIFIED: Changed argument name
     try:
-        sheet_name = get_current_week()  # e.g., "Summary KW17"
+        sheet_name = get_current_week()[0]  # e.g., "Summary KW17"
         current_day = get_current_day()  # e.g., "Monday"
         current_shift = get_current_shift()  # e.g., "early"
         current_week = get_current_week_number()
