@@ -604,446 +604,446 @@
     {% endif %}
 
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const ganttContainer = document.querySelector('.gantt-container');
-        if (!ganttContainer) return;
+        document.addEventListener('DOMContentLoaded', function() {
+            const ganttContainer = document.querySelector('.gantt-container');
+            if (!ganttContainer) return;
 
-        const totalWorkMinutes = parseInt(ganttContainer.dataset.totalWorkMinutes);
-        const shiftStartTimeStr = ganttContainer.dataset.shiftStartTime;
+            const totalWorkMinutes = parseInt(ganttContainer.dataset.totalWorkMinutes);
+            const shiftStartTimeStr = ganttContainer.dataset.shiftStartTime;
 
-        if (isNaN(totalWorkMinutes) || !shiftStartTimeStr) {
-            console.error("Missing data for Gantt chart initialization.");
-            return;
+            if (isNaN(totalWorkMinutes) || !shiftStartTimeStr) {
+                console.error("Missing data for Gantt chart initialization.");
+                return;
+            }
+            if (totalWorkMinutes === 0 && {{technicians | length}} > 0) {
+                 generateDynamicGantt(shiftStartTimeStr, 0);
+            } else if (totalWorkMinutes > 0) {
+                generateDynamicGantt(shiftStartTimeStr, totalWorkMinutes);
+            } else if ({{ technicians | length }} === 0 && totalWorkMinutes === 0) {
+                generateDynamicGantt(shiftStartTimeStr, 0);
+            }
+        });
+
+        function formatTime(dateObj) {
+            const hours = dateObj.getHours().toString().padStart(2, '0');
+            const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+            return `${hours}:${minutes}`;
         }
-        if (totalWorkMinutes === 0 && {{technicians | length}} > 0) {
-             generateDynamicGantt(shiftStartTimeStr, 0);
-        } else if (totalWorkMinutes > 0) {
-            generateDynamicGantt(shiftStartTimeStr, totalWorkMinutes);
-        } else if ({{ technicians | length }} === 0 && totalWorkMinutes === 0) {
-            generateDynamicGantt(shiftStartTimeStr, 0);
+
+        function setupGanttScrollSync() {
+            const rightPane = document.querySelector('.gantt-scrollable-right-pane');
+            const leftPaneLabelsWrapper = document.querySelector('.technician-labels-wrapper');
+            const clockTicksWrapper = document.querySelector('.clock-time-axis-ticks-wrapper');
+            const workIntervalTicksWrapper = document.querySelector('.work-interval-axis-ticks-wrapper');
+
+            if (rightPane && leftPaneLabelsWrapper && clockTicksWrapper && workIntervalTicksWrapper) {
+                rightPane.addEventListener('scroll', function() {
+                    leftPaneLabelsWrapper.scrollTop = this.scrollTop;
+                    if (clockTicksWrapper.offsetParent !== null) {
+                        clockTicksWrapper.scrollLeft = this.scrollLeft;
+                    }
+                    if (workIntervalTicksWrapper.offsetParent !== null) {
+                        workIntervalTicksWrapper.scrollLeft = this.scrollLeft;
+                    }
+                });
+            } else {
+                console.error("Gantt scroll sync elements not found. Check selectors:",
+                    {rightPane, leftPaneLabelsWrapper, clockTicksWrapper, workIntervalTicksWrapper}
+                );
+            }
         }
-    });
 
-    function formatTime(dateObj) {
-        const hours = dateObj.getHours().toString().padStart(2, '0');
-        const minutes = dateObj.getMinutes().toString().padStart(2, '0');
-        return `${hours}:${minutes}`;
-    }
+        function handleGanttCellHover(event) {
+            const cell = event.target;
+            const columnIndex = parseInt(cell.dataset.columnIndex);
+            const parentGrid = cell.closest('.time-grid');
 
-    function setupGanttScrollSync() {
-        const rightPane = document.querySelector('.gantt-scrollable-right-pane');
-        const leftPaneLabelsWrapper = document.querySelector('.technician-labels-wrapper');
-        const clockTicksWrapper = document.querySelector('.clock-time-axis-ticks-wrapper');
-        const workIntervalTicksWrapper = document.querySelector('.work-interval-axis-ticks-wrapper');
+            if (!parentGrid || columnIndex === undefined || isNaN(columnIndex)) return;
 
-        if (rightPane && leftPaneLabelsWrapper && clockTicksWrapper && workIntervalTicksWrapper) {
-            rightPane.addEventListener('scroll', function() {
-                leftPaneLabelsWrapper.scrollTop = this.scrollTop;
-                if (clockTicksWrapper.offsetParent !== null) {
-                    clockTicksWrapper.scrollLeft = this.scrollLeft;
-                }
-                if (workIntervalTicksWrapper.offsetParent !== null) {
-                    workIntervalTicksWrapper.scrollLeft = this.scrollLeft;
+            const allGridsNodeList = document.querySelectorAll('.time-grids-wrapper .time-grid');
+            const allGridsArray = Array.from(allGridsNodeList);
+            const technicianIndex = allGridsArray.indexOf(parentGrid);
+            const technicianLabels = document.querySelectorAll('.technician-labels-wrapper .technician-label');
+
+            if (technicianLabels[technicianIndex]) {
+                technicianLabels[technicianIndex].classList.add('hover-highlight-technician');
+            }
+
+            const clockTicks = document.querySelectorAll('.clock-time-axis-ticks-wrapper .time-tick');
+            const workIntervalTicks = document.querySelectorAll('.work-interval-axis-ticks-wrapper .time-tick');
+
+            if (clockTicks[columnIndex]) {
+                clockTicks[columnIndex].classList.add('hover-highlight-time-tick');
+            }
+            if (workIntervalTicks[columnIndex]) {
+                workIntervalTicks[columnIndex].classList.add('hover-highlight-time-tick');
+            }
+
+            parentGrid.classList.add('hover-highlight-time-grid-row');
+
+            allGridsNodeList.forEach(grid => {
+                const cellInColumn = grid.querySelector(`[data-column-index="${columnIndex}"]`);
+                if (cellInColumn) {
+                    cellInColumn.classList.add('hover-highlight-grid-cell-column');
                 }
             });
-        } else {
-            console.error("Gantt scroll sync elements not found. Check selectors:",
-                {rightPane, leftPaneLabelsWrapper, clockTicksWrapper, workIntervalTicksWrapper}
-            );
-        }
-    }
-
-    function handleGanttCellHover(event) {
-        const cell = event.target;
-        const columnIndex = parseInt(cell.dataset.columnIndex);
-        const parentGrid = cell.closest('.time-grid');
-
-        if (!parentGrid || columnIndex === undefined || isNaN(columnIndex)) return;
-
-        const allGridsNodeList = document.querySelectorAll('.time-grids-wrapper .time-grid');
-        const allGridsArray = Array.from(allGridsNodeList);
-        const technicianIndex = allGridsArray.indexOf(parentGrid);
-        const technicianLabels = document.querySelectorAll('.technician-labels-wrapper .technician-label');
-
-        if (technicianLabels[technicianIndex]) {
-            technicianLabels[technicianIndex].classList.add('hover-highlight-technician');
         }
 
-        const clockTicks = document.querySelectorAll('.clock-time-axis-ticks-wrapper .time-tick');
-        const workIntervalTicks = document.querySelectorAll('.work-interval-axis-ticks-wrapper .time-tick');
+        function handleGanttCellMouseOut(event) {
+            const cell = event.target;
+            const columnIndex = parseInt(cell.dataset.columnIndex);
+            const parentGrid = cell.closest('.time-grid');
 
-        if (clockTicks[columnIndex]) {
-            clockTicks[columnIndex].classList.add('hover-highlight-time-tick');
-        }
-        if (workIntervalTicks[columnIndex]) {
-            workIntervalTicks[columnIndex].classList.add('hover-highlight-time-tick');
-        }
+            if (!parentGrid || columnIndex === undefined || isNaN(columnIndex)) return;
 
-        parentGrid.classList.add('hover-highlight-time-grid-row');
+            const allGridsNodeList = document.querySelectorAll('.time-grids-wrapper .time-grid');
+            const allGridsArray = Array.from(allGridsNodeList);
+            const technicianIndex = allGridsArray.indexOf(parentGrid);
+            const technicianLabels = document.querySelectorAll('.technician-labels-wrapper .technician-label');
 
-        allGridsNodeList.forEach(grid => {
-            const cellInColumn = grid.querySelector(`[data-column-index="${columnIndex}"]`);
-            if (cellInColumn) {
-                cellInColumn.classList.add('hover-highlight-grid-cell-column');
+            if (technicianLabels[technicianIndex]) {
+                technicianLabels[technicianIndex].classList.remove('hover-highlight-technician');
             }
-        });
-    }
 
-    function handleGanttCellMouseOut(event) {
-        const cell = event.target;
-        const columnIndex = parseInt(cell.dataset.columnIndex);
-        const parentGrid = cell.closest('.time-grid');
+            const clockTicks = document.querySelectorAll('.clock-time-axis-ticks-wrapper .time-tick');
+            const workIntervalTicks = document.querySelectorAll('.work-interval-axis-ticks-wrapper .time-tick');
 
-        if (!parentGrid || columnIndex === undefined || isNaN(columnIndex)) return;
-
-        const allGridsNodeList = document.querySelectorAll('.time-grids-wrapper .time-grid');
-        const allGridsArray = Array.from(allGridsNodeList);
-        const technicianIndex = allGridsArray.indexOf(parentGrid);
-        const technicianLabels = document.querySelectorAll('.technician-labels-wrapper .technician-label');
-
-        if (technicianLabels[technicianIndex]) {
-            technicianLabels[technicianIndex].classList.remove('hover-highlight-technician');
-        }
-
-        const clockTicks = document.querySelectorAll('.clock-time-axis-ticks-wrapper .time-tick');
-        const workIntervalTicks = document.querySelectorAll('.work-interval-axis-ticks-wrapper .time-tick');
-
-        if (clockTicks[columnIndex]) {
-            clockTicks[columnIndex].classList.remove('hover-highlight-time-tick');
-        }
-        if (workIntervalTicks[columnIndex]) {
-            workIntervalTicks[columnIndex].classList.remove('hover-highlight-time-tick');
-        }
-
-        parentGrid.classList.remove('hover-highlight-time-grid-row');
-
-        allGridsNodeList.forEach(grid => {
-            const cellInColumn = grid.querySelector(`[data-column-index="${columnIndex}"]`);
-            if (cellInColumn) {
-                cellInColumn.classList.remove('hover-highlight-grid-cell-column');
+            if (clockTicks[columnIndex]) {
+                clockTicks[columnIndex].classList.remove('hover-highlight-time-tick');
             }
-        });
-    }
+            if (workIntervalTicks[columnIndex]) {
+                workIntervalTicks[columnIndex].classList.remove('hover-highlight-time-tick');
+            }
 
-    function generateDynamicGantt(shiftStartTimeStr, totalWorkMinutes) {
-        const clockSpacerWrapper = document.querySelector('.clock-time-axis-spacer-wrapper');
-        const workIntervalSpacerWrapper = document.querySelector('.work-interval-axis-spacer-wrapper');
-        const clockTicksWrapper = document.querySelector('.clock-time-axis-ticks-wrapper');
-        const workIntervalTicksWrapper = document.querySelector('.work-interval-axis-ticks-wrapper');
-        const timeGrids = document.querySelectorAll('.time-grids-wrapper .time-grid');
+            parentGrid.classList.remove('hover-highlight-time-grid-row');
 
-        if (clockSpacerWrapper) clockSpacerWrapper.innerHTML = ''; else console.error('.clock-time-axis-spacer-wrapper not found');
-        if (workIntervalSpacerWrapper) workIntervalSpacerWrapper.innerHTML = ''; else console.error('.work-interval-axis-spacer-wrapper not found');
-        if (clockTicksWrapper) clockTicksWrapper.innerHTML = ''; else console.error('.clock-time-axis-ticks-wrapper not found');
-        if (workIntervalTicksWrapper) workIntervalTicksWrapper.innerHTML = ''; else console.error('.work-interval-axis-ticks-wrapper not found');
+            allGridsNodeList.forEach(grid => {
+                const cellInColumn = grid.querySelector(`[data-column-index="${columnIndex}"]`);
+                if (cellInColumn) {
+                    cellInColumn.classList.remove('hover-highlight-grid-cell-column');
+                }
+            });
+        }
 
-        const workIntervalDuration = 15;
-        const timelineSlots = [];
-        let workTimeProcessed = 0;
-        const break1StartAfterWork = Math.floor(totalWorkMinutes * 0.25 / workIntervalDuration) * workIntervalDuration;
-        const breakMainStartAfterWork = Math.floor(totalWorkMinutes * 0.50 / workIntervalDuration) * workIntervalDuration;
-        const break2StartAfterWork = Math.floor(totalWorkMinutes * 0.75 / workIntervalDuration) * workIntervalDuration;
-        const break1Duration = 15;
-        const breakMainDuration = 60;
-        const break2Duration = 15;
+        function generateDynamicGantt(shiftStartTimeStr, totalWorkMinutes) {
+            const clockSpacerWrapper = document.querySelector('.clock-time-axis-spacer-wrapper');
+            const workIntervalSpacerWrapper = document.querySelector('.work-interval-axis-spacer-wrapper');
+            const clockTicksWrapper = document.querySelector('.clock-time-axis-ticks-wrapper');
+            const workIntervalTicksWrapper = document.querySelector('.work-interval-axis-ticks-wrapper');
+            const timeGrids = document.querySelectorAll('.time-grids-wrapper .time-grid');
 
-        const breakPointsConfig = [
-            { triggerWorkTime: break1StartAfterWork, duration: break1Duration, type: 'break1', taken: false },
-            { triggerWorkTime: breakMainStartAfterWork, duration: breakMainDuration, type: 'breakMain', taken: false },
-            { triggerWorkTime: break2StartAfterWork, duration: break2Duration, type: 'break2', taken: false }
-        ].sort((a, b) => a.triggerWorkTime - b.triggerWorkTime);
+            if (clockSpacerWrapper) clockSpacerWrapper.innerHTML = ''; else console.error('.clock-time-axis-spacer-wrapper not found');
+            if (workIntervalSpacerWrapper) workIntervalSpacerWrapper.innerHTML = ''; else console.error('.work-interval-axis-spacer-wrapper not found');
+            if (clockTicksWrapper) clockTicksWrapper.innerHTML = ''; else console.error('.clock-time-axis-ticks-wrapper not found');
+            if (workIntervalTicksWrapper) workIntervalTicksWrapper.innerHTML = ''; else console.error('.work-interval-axis-ticks-wrapper not found');
 
-        if (totalWorkMinutes > 0) {
-            while (workTimeProcessed < totalWorkMinutes) {
-                let breakAddedInIteration = false;
+            const workIntervalDuration = 15;
+            const timelineSlots = [];
+            let workTimeProcessed = 0;
+            const break1StartAfterWork = Math.floor(totalWorkMinutes * 0.25 / workIntervalDuration) * workIntervalDuration;
+            const breakMainStartAfterWork = Math.floor(totalWorkMinutes * 0.50 / workIntervalDuration) * workIntervalDuration;
+            const break2StartAfterWork = Math.floor(totalWorkMinutes * 0.75 / workIntervalDuration) * workIntervalDuration;
+            const break1Duration = 15;
+            const breakMainDuration = 60;
+            const break2Duration = 15;
+
+            const breakPointsConfig = [
+                { triggerWorkTime: break1StartAfterWork, duration: break1Duration, type: 'break1', taken: false },
+                { triggerWorkTime: breakMainStartAfterWork, duration: breakMainDuration, type: 'breakMain', taken: false },
+                { triggerWorkTime: break2StartAfterWork, duration: break2Duration, type: 'break2', taken: false }
+            ].sort((a, b) => a.triggerWorkTime - b.triggerWorkTime);
+
+            if (totalWorkMinutes > 0) {
+                while (workTimeProcessed < totalWorkMinutes) {
+                    let breakAddedInIteration = false;
+                    for (const bp of breakPointsConfig) {
+                        if (!bp.taken && workTimeProcessed === bp.triggerWorkTime) {
+                            for (let i = 0; i < bp.duration / workIntervalDuration; i++) {
+                                timelineSlots.push({ type: bp.type, workTimeCovered: 0 });
+                            }
+                            bp.taken = true;
+                            breakAddedInIteration = true;
+                        }
+                    }
+                    if (workTimeProcessed < totalWorkMinutes) {
+                        timelineSlots.push({ type: 'work', workTimeCovered: workIntervalDuration });
+                        workTimeProcessed += workIntervalDuration;
+                    } else if (!breakAddedInIteration && workTimeProcessed >= totalWorkMinutes) {
+                        break;
+                    }
+                }
                 for (const bp of breakPointsConfig) {
                     if (!bp.taken && workTimeProcessed === bp.triggerWorkTime) {
                         for (let i = 0; i < bp.duration / workIntervalDuration; i++) {
                             timelineSlots.push({ type: bp.type, workTimeCovered: 0 });
                         }
                         bp.taken = true;
-                        breakAddedInIteration = true;
                     }
                 }
-                if (workTimeProcessed < totalWorkMinutes) {
-                    timelineSlots.push({ type: 'work', workTimeCovered: workIntervalDuration });
-                    workTimeProcessed += workIntervalDuration;
-                } else if (!breakAddedInIteration && workTimeProcessed >= totalWorkMinutes) {
-                    break;
-                }
-            }
-            for (const bp of breakPointsConfig) {
-                if (!bp.taken && workTimeProcessed === bp.triggerWorkTime) {
-                    for (let i = 0; i < bp.duration / workIntervalDuration; i++) {
-                        timelineSlots.push({ type: bp.type, workTimeCovered: 0 });
-                    }
-                    bp.taken = true;
-                }
-            }
-        } else {
-             timelineSlots.push({ type: 'placeholder', workTimeCovered: 0 });
-        }
-
-        const numTotalTimelineSlots = timelineSlots.length;
-
-        const createSpacerTick = () => {
-            const spacer = document.createElement('div');
-            spacer.classList.add('time-tick', 'spacer-tick');
-            return spacer;
-        };
-
-        if (clockSpacerWrapper) clockSpacerWrapper.appendChild(createSpacerTick());
-        if (workIntervalSpacerWrapper) workIntervalSpacerWrapper.appendChild(createSpacerTick());
-
-        const [startHour, startMinute] = shiftStartTimeStr.split(':').map(Number);
-        let currentClock = new Date(2000, 0, 1, startHour, startMinute);
-        let cumulativeWorkMinutes = 0;
-
-        timelineSlots.forEach((slot, index) => {
-            const isLastRealSlot = (index === numTotalTimelineSlots - 1);
-            const headerTickBorderStyle = isLastRealSlot ? "none" : "1px solid #e0e0e0";
-
-            const tickDivClock = document.createElement('div');
-            tickDivClock.classList.add('time-tick');
-            tickDivClock.style.borderRight = headerTickBorderStyle;
-            let labelClock = formatTime(currentClock);
-            if (slot.type !== 'work' && slot.type !== 'placeholder') {
-                tickDivClock.classList.add('break-interval', `break-type-${slot.type}`);
-            }
-            if (slot.type === 'placeholder') {
-                 labelClock = `${formatTime(currentClock)} (No Work Scheduled)`;
-            }
-            tickDivClock.textContent = labelClock;
-            if (clockTicksWrapper) clockTicksWrapper.appendChild(tickDivClock);
-            currentClock.setMinutes(currentClock.getMinutes() + workIntervalDuration);
-
-            const tickDivWork = document.createElement('div');
-            tickDivWork.classList.add('time-tick');
-            tickDivWork.style.borderRight = headerTickBorderStyle;
-            if (slot.type === 'work') {
-                tickDivWork.textContent = `${cumulativeWorkMinutes}-${cumulativeWorkMinutes + slot.workTimeCovered}`;
-                cumulativeWorkMinutes += slot.workTimeCovered;
-            } else if (slot.type === 'placeholder') {
-                tickDivWork.textContent = "0-0";
             } else {
-                tickDivWork.textContent = 'Break';
-                tickDivWork.classList.add('break-interval', `break-type-${slot.type}`);
+                 timelineSlots.push({ type: 'placeholder', workTimeCovered: 0 });
             }
-            if (workIntervalTicksWrapper) workIntervalTicksWrapper.appendChild(tickDivWork);
-        });
 
-        const ganttColumnMinWidth = '50px';
-        const ganttColumnMinWidthPx = parseInt(ganttColumnMinWidth);
-        const totalWidth = numTotalTimelineSlots * ganttColumnMinWidthPx;
+            const numTotalTimelineSlots = timelineSlots.length;
 
-        // Set widths for scrollable axis containers to ensure horizontal lines extend to the end
-        if (clockTicksWrapper) {
-            clockTicksWrapper.style.width = `${totalWidth}px`;
-        }
-        if (workIntervalTicksWrapper) {
-            workIntervalTicksWrapper.style.width = `${totalWidth}px`;
-        }
-        const timeGridsWrapper = document.querySelector('.time-grids-wrapper');
-        if (timeGridsWrapper) {
-            timeGridsWrapper.style.width = `${totalWidth}px`;
-        }
+            const createSpacerTick = () => {
+                const spacer = document.createElement('div');
+                spacer.classList.add('time-tick', 'spacer-tick');
+                return spacer;
+            };
 
-        if (clockSpacerWrapper) clockSpacerWrapper.style.gridTemplateColumns = '1fr';
-        if (workIntervalSpacerWrapper) workIntervalSpacerWrapper.style.gridTemplateColumns = '1fr';
+            if (clockSpacerWrapper) clockSpacerWrapper.appendChild(createSpacerTick());
+            if (workIntervalSpacerWrapper) workIntervalSpacerWrapper.appendChild(createSpacerTick());
 
-        if (numTotalTimelineSlots > 0) {
-            const ticksGridColsStyle = `repeat(${numTotalTimelineSlots}, minmax(${ganttColumnMinWidth}, 1fr))`;
-            if (clockTicksWrapper) clockTicksWrapper.style.gridTemplateColumns = ticksGridColsStyle;
-            if (workIntervalTicksWrapper) workIntervalTicksWrapper.style.gridTemplateColumns = ticksGridColsStyle;
-            timeGrids.forEach(grid => {
-                grid.style.gridTemplateColumns = ticksGridColsStyle;
-            });
-        } else {
-            const fallbackTicksGridColsStyle = `minmax(${ganttColumnMinWidth}, 1fr)`;
-            if (clockTicksWrapper) clockTicksWrapper.style.gridTemplateColumns = fallbackTicksGridColsStyle;
-            if (workIntervalTicksWrapper) workIntervalTicksWrapper.style.gridTemplateColumns = fallbackTicksGridColsStyle;
-            timeGrids.forEach(grid => {
-                grid.style.gridTemplateColumns = fallbackTicksGridColsStyle;
-            });
-        }
+            const [startHour, startMinute] = shiftStartTimeStr.split(':').map(Number);
+            let currentClock = new Date(2000, 0, 1, startHour, startMinute);
+            let cumulativeWorkMinutes = 0;
 
-        timeGrids.forEach(grid => {
-            grid.querySelectorAll('.break-column-fill, .work-column-border-carrier').forEach(el => el.remove());
             timelineSlots.forEach((slot, index) => {
-                const isLastSlot = (index === numTotalTimelineSlots - 1);
-                const contentGridLineBorderStyle = isLastSlot ? "none" : "1px solid #e0e0e0";
-                let columnElement = null;
+                const isLastRealSlot = (index === numTotalTimelineSlots - 1);
+                const headerTickBorderStyle = isLastRealSlot ? "none" : "1px solid #e0e0e0";
+
+                const tickDivClock = document.createElement('div');
+                tickDivClock.classList.add('time-tick');
+                tickDivClock.style.borderRight = headerTickBorderStyle;
+                let labelClock = formatTime(currentClock);
                 if (slot.type !== 'work' && slot.type !== 'placeholder') {
-                    columnElement = document.createElement('div');
-                    columnElement.classList.add('break-column-fill', `break-type-${slot.type}`);
-                } else {
-                    columnElement = document.createElement('div');
-                    columnElement.classList.add('work-column-border-carrier');
+                    tickDivClock.classList.add('break-interval', `break-type-${slot.type}`);
                 }
-                if (columnElement) {
-                    columnElement.style.gridColumn = `${index + 1} / span 1`;
-                    columnElement.style.borderRight = contentGridLineBorderStyle;
-
-                    columnElement.dataset.columnIndex = index;
-                    columnElement.addEventListener('mouseover', handleGanttCellHover);
-                    columnElement.addEventListener('mouseout', handleGanttCellMouseOut);
-
-                    grid.appendChild(columnElement);
+                if (slot.type === 'placeholder') {
+                     labelClock = `${formatTime(currentClock)} (No Work Scheduled)`;
                 }
-            });
-        });
+                tickDivClock.textContent = labelClock;
+                if (clockTicksWrapper) clockTicksWrapper.appendChild(tickDivClock);
+                currentClock.setMinutes(currentClock.getMinutes() + workIntervalDuration);
 
-        function getTimelineSlotIndexForWorkStart(targetWorkMinutes) {
-            if (totalWorkMinutes === 0 && timelineSlots.length > 0 && timelineSlots[0].type === 'placeholder') return 1;
-            let cumulativeWorkTime = 0;
-            for (let i = 0; i < timelineSlots.length; i++) {
-                const slot = timelineSlots[i];
+                const tickDivWork = document.createElement('div');
+                tickDivWork.classList.add('time-tick');
+                tickDivWork.style.borderRight = headerTickBorderStyle;
                 if (slot.type === 'work') {
-                    if (targetWorkMinutes >= cumulativeWorkTime && targetWorkMinutes < cumulativeWorkTime + slot.workTimeCovered) {
-                        return i + 1;
-                    }
-                    cumulativeWorkTime += slot.workTimeCovered;
+                    tickDivWork.textContent = `${cumulativeWorkMinutes}-${cumulativeWorkMinutes + slot.workTimeCovered}`;
+                    cumulativeWorkMinutes += slot.workTimeCovered;
+                } else if (slot.type === 'placeholder') {
+                    tickDivWork.textContent = "0-0";
+                } else {
+                    tickDivWork.textContent = 'Break';
+                    tickDivWork.classList.add('break-interval', `break-type-${slot.type}`);
                 }
-                if (targetWorkMinutes === 0 && cumulativeWorkTime === 0 && slot.type === 'work') return i + 1;
+                if (workIntervalTicksWrapper) workIntervalTicksWrapper.appendChild(tickDivWork);
+            });
+
+            const ganttColumnMinWidth = '50px';
+            const ganttColumnMinWidthPx = parseInt(ganttColumnMinWidth);
+            const totalWidth = numTotalTimelineSlots * ganttColumnMinWidthPx;
+
+            // Set widths for scrollable axis containers to ensure horizontal lines extend to the end
+            if (clockTicksWrapper) {
+                clockTicksWrapper.style.width = `${totalWidth}px`;
             }
-            if (targetWorkMinutes === totalWorkMinutes && totalWorkMinutes > 0) {
-                let tempWorkTime = 0;
-                for (let i = 0; i < timelineSlots.length; i++) {
-                    if (timelineSlots[i].type === 'work') tempWorkTime += timelineSlots[i].workTimeCovered;
-                    if (tempWorkTime === totalWorkMinutes) return i + 1;
-                }
+            if (workIntervalTicksWrapper) {
+                workIntervalTicksWrapper.style.width = `${totalWidth}px`;
             }
-            return numTotalTimelineSlots > 0 ? numTotalTimelineSlots : 1;
-        }
+            const timeGridsWrapper = document.querySelector('.time-grids-wrapper');
+            if (timeGridsWrapper) {
+                timeGridsWrapper.style.width = `${totalWidth}px`;
+            }
 
-        if (totalWorkMinutes > 0) {
-            const allTechnicianGrids = timeGrids;
-            allTechnicianGrids.forEach(grid => {
-                const masterTaskBars = Array.from(grid.querySelectorAll('.task-bar[style*="display: none"]'));
-                grid.querySelectorAll('.task-bar:not([style*="display: none"])').forEach(bar => bar.remove());
+            if (clockSpacerWrapper) clockSpacerWrapper.style.gridTemplateColumns = '1fr';
+            if (workIntervalSpacerWrapper) workIntervalSpacerWrapper.style.gridTemplateColumns = '1fr';
 
-                masterTaskBars.forEach(masterBar => {
-                    const assignmentStartWorkMinutes = parseFloat(masterBar.dataset.assignmentStart);
-                    const assignmentDurationWorkMinutes = parseFloat(masterBar.dataset.assignmentDuration);
-                    const taskIdText = masterBar.dataset.taskId;
+            if (numTotalTimelineSlots > 0) {
+                const ticksGridColsStyle = `repeat(${numTotalTimelineSlots}, minmax(${ganttColumnMinWidth}, 1fr))`;
+                if (clockTicksWrapper) clockTicksWrapper.style.gridTemplateColumns = ticksGridColsStyle;
+                if (workIntervalTicksWrapper) workIntervalTicksWrapper.style.gridTemplateColumns = ticksGridColsStyle;
+                timeGrids.forEach(grid => {
+                    grid.style.gridTemplateColumns = ticksGridColsStyle;
+                });
+            } else {
+                const fallbackTicksGridColsStyle = `minmax(${ganttColumnMinWidth}, 1fr)`;
+                if (clockTicksWrapper) clockTicksWrapper.style.gridTemplateColumns = fallbackTicksGridColsStyle;
+                if (workIntervalTicksWrapper) workIntervalTicksWrapper.style.gridTemplateColumns = fallbackTicksGridColsStyle;
+                timeGrids.forEach(grid => {
+                    grid.style.gridTemplateColumns = fallbackTicksGridColsStyle;
+                });
+            }
 
-                    if (assignmentDurationWorkMinutes === 0) {
-                        const timelineSlotStartCssIndex = getTimelineSlotIndexForWorkStart(assignmentStartWorkMinutes);
-                        const segmentDiv = masterBar.cloneNode(true);
-                        segmentDiv.innerHTML = `<span>${taskIdText}</span>`;
-                        segmentDiv.style.gridColumn = `${timelineSlotStartCssIndex} / span 1`;
-                        segmentDiv.style.display = 'flex';
-                        segmentDiv.classList.add('zero-duration');
-                        grid.appendChild(segmentDiv);
-                        return;
+            timeGrids.forEach(grid => {
+                grid.querySelectorAll('.break-column-fill, .work-column-border-carrier').forEach(el => el.remove());
+                timelineSlots.forEach((slot, index) => {
+                    const isLastSlot = (index === numTotalTimelineSlots - 1);
+                    const contentGridLineBorderStyle = isLastSlot ? "none" : "1px solid #e0e0e0";
+                    let columnElement = null;
+                    if (slot.type !== 'work' && slot.type !== 'placeholder') {
+                        columnElement = document.createElement('div');
+                        columnElement.classList.add('break-column-fill', `break-type-${slot.type}`);
+                    } else {
+                        columnElement = document.createElement('div');
+                        columnElement.classList.add('work-column-border-carrier');
                     }
+                    if (columnElement) {
+                        columnElement.style.gridColumn = `${index + 1} / span 1`;
+                        columnElement.style.borderRight = contentGridLineBorderStyle;
 
-                    let workMinutesProcessedForTask = 0;
-                    let currentSegmentStartTimelineSlot_0_based = -1;
-                    let timelineSlotCursor_0_based = 0;
-                    let cumulativeWorkTimeForCursorSearch = 0;
-                    let initialCursorFound = false;
+                        columnElement.dataset.columnIndex = index;
+                        columnElement.addEventListener('mouseover', handleGanttCellHover);
+                        columnElement.addEventListener('mouseout', handleGanttCellMouseOut);
 
-                    for (let i = 0; i < timelineSlots.length; i++) {
-                        if (timelineSlots[i].type === 'work') {
-                            if (assignmentStartWorkMinutes >= cumulativeWorkTimeForCursorSearch &&
-                                assignmentStartWorkMinutes < cumulativeWorkTimeForCursorSearch + timelineSlots[i].workTimeCovered) {
-                                timelineSlotCursor_0_based = i;
-                                initialCursorFound = true;
-                                break;
-                            }
-                            cumulativeWorkTimeForCursorSearch += timelineSlots[i].workTimeCovered;
-                        }
-                        if (assignmentStartWorkMinutes === 0 && cumulativeWorkTimeForCursorSearch === 0 && timelineSlots[i].type === 'work') {
-                            timelineSlotCursor_0_based = i;
-                            initialCursorFound = true;
-                            break;
-                        }
-                    }
-                    if (!initialCursorFound && assignmentStartWorkMinutes === totalWorkMinutes) {
-                        for (let i = timelineSlots.length - 1; i >= 0; i--) {
-                            if (timelineSlots[i].type === 'work') {
-                                timelineSlotCursor_0_based = i;
-                                initialCursorFound = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (!initialCursorFound) {
-                        console.warn(`Could not find starting slot for task: ${masterBar.title}, start: ${assignmentStartWorkMinutes}`);
-                        return;
-                    }
-
-                    let previousSlotWasBreakForSegmentStart = false;
-
-                    while (workMinutesProcessedForTask < assignmentDurationWorkMinutes && timelineSlotCursor_0_based < timelineSlots.length) {
-                        const currentSlot = timelineSlots[timelineSlotCursor_0_based];
-
-                        if (currentSlot.type === 'work') {
-                            if (currentSegmentStartTimelineSlot_0_based === -1) {
-                                currentSegmentStartTimelineSlot_0_based = timelineSlotCursor_0_based;
-                                if (timelineSlotCursor_0_based > 0 &&
-                                    timelineSlots[timelineSlotCursor_0_based - 1].type !== 'work' &&
-                                    timelineSlots[timelineSlotCursor_0_based - 1].type !== 'placeholder') {
-                                    if (workMinutesProcessedForTask > 0) {
-                                        previousSlotWasBreakForSegmentStart = true;
-                                    } else {
-                                        previousSlotWasBreakForSegmentStart = false;
-                                    }
-                                } else {
-                                    previousSlotWasBreakForSegmentStart = false;
-                                }
-                            }
-
-                            const remainingWorkForTask = assignmentDurationWorkMinutes - workMinutesProcessedForTask;
-                            workMinutesProcessedForTask += Math.min(currentSlot.workTimeCovered, remainingWorkForTask);
-
-                            if (workMinutesProcessedForTask >= assignmentDurationWorkMinutes || timelineSlotCursor_0_based === timelineSlots.length - 1) {
-                                const segmentDiv = masterBar.cloneNode(true);
-                                segmentDiv.innerHTML = `<span>${taskIdText}</span>`;
-                                const startCol = currentSegmentStartTimelineSlot_0_based + 1;
-                                const endColExclusive = timelineSlotCursor_0_based + 1 + 1;
-                                segmentDiv.style.gridColumn = `${startCol} / ${endColExclusive}`;
-                                segmentDiv.style.display = 'flex';
-                                if (previousSlotWasBreakForSegmentStart) {
-                                    segmentDiv.classList.add('task-segment-starts-after-break');
-                                }
-                                if (timelineSlotCursor_0_based < timelineSlots.length - 1 &&
-                                    timelineSlots[timelineSlotCursor_0_based + 1].type !== 'work' &&
-                                    timelineSlots[timelineSlotCursor_0_based + 1].type !== 'placeholder') {
-                                    if (workMinutesProcessedForTask < assignmentDurationWorkMinutes) {
-                                        segmentDiv.classList.add('task-segment-ends-before-break');
-                                    }
-                                }
-                                grid.appendChild(segmentDiv);
-                                currentSegmentStartTimelineSlot_0_based = -1;
-                                previousSlotWasBreakForSegmentStart = false;
-                                break;
-                            }
-                        } else {
-                            if (currentSegmentStartTimelineSlot_0_based !== -1) {
-                                const segmentDiv = masterBar.cloneNode(true);
-                                segmentDiv.innerHTML = `<span>${taskIdText}</span>`;
-                                const startCol = currentSegmentStartTimelineSlot_0_based + 1;
-                                const endColExclusive = timelineSlotCursor_0_based + 1;
-                                segmentDiv.style.gridColumn = `${startCol} / ${endColExclusive}`;
-                                segmentDiv.style.display = 'flex';
-                                if (previousSlotWasBreakForSegmentStart) {
-                                    segmentDiv.classList.add('task-segment-starts-after-break');
-                                }
-                                segmentDiv.classList.add('task-segment-ends-before-break');
-                                grid.appendChild(segmentDiv);
-                                currentSegmentStartTimelineSlot_0_based = -1;
-                                previousSlotWasBreakForSegmentStart = false;
-                            }
-                        }
-                        timelineSlotCursor_0_based++;
+                        grid.appendChild(columnElement);
                     }
                 });
             });
+
+            function getTimelineSlotIndexForWorkStart(targetWorkMinutes) {
+                if (totalWorkMinutes === 0 && timelineSlots.length > 0 && timelineSlots[0].type === 'placeholder') return 1;
+                let cumulativeWorkTime = 0;
+                for (let i = 0; i < timelineSlots.length; i++) {
+                    const slot = timelineSlots[i];
+                    if (slot.type === 'work') {
+                        if (targetWorkMinutes >= cumulativeWorkTime && targetWorkMinutes < cumulativeWorkTime + slot.workTimeCovered) {
+                            return i + 1;
+                        }
+                        cumulativeWorkTime += slot.workTimeCovered;
+                    }
+                    if (targetWorkMinutes === 0 && cumulativeWorkTime === 0 && slot.type === 'work') return i + 1;
+                }
+                if (targetWorkMinutes === totalWorkMinutes && totalWorkMinutes > 0) {
+                    let tempWorkTime = 0;
+                    for (let i = 0; i < timelineSlots.length; i++) {
+                        if (timelineSlots[i].type === 'work') tempWorkTime += timelineSlots[i].workTimeCovered;
+                        if (tempWorkTime === totalWorkMinutes) return i + 1;
+                    }
+                }
+                return numTotalTimelineSlots > 0 ? numTotalTimelineSlots : 1;
+            }
+
+            if (totalWorkMinutes > 0) {
+                const allTechnicianGrids = timeGrids;
+                allTechnicianGrids.forEach(grid => {
+                    const masterTaskBars = Array.from(grid.querySelectorAll('.task-bar[style*="display: none"]'));
+                    grid.querySelectorAll('.task-bar:not([style*="display: none"])').forEach(bar => bar.remove());
+
+                    masterTaskBars.forEach(masterBar => {
+                        const assignmentStartWorkMinutes = parseFloat(masterBar.dataset.assignmentStart);
+                        const assignmentDurationWorkMinutes = parseFloat(masterBar.dataset.assignmentDuration);
+                        const taskIdText = masterBar.dataset.taskId;
+
+                        if (assignmentDurationWorkMinutes === 0) {
+                            const timelineSlotStartCssIndex = getTimelineSlotIndexForWorkStart(assignmentStartWorkMinutes);
+                            const segmentDiv = masterBar.cloneNode(true);
+                            segmentDiv.innerHTML = `<span>${taskIdText}</span>`;
+                            segmentDiv.style.gridColumn = `${timelineSlotStartCssIndex} / span 1`;
+                            segmentDiv.style.display = 'flex';
+                            segmentDiv.classList.add('zero-duration');
+                            grid.appendChild(segmentDiv);
+                            return;
+                        }
+
+                        let workMinutesProcessedForTask = 0;
+                        let currentSegmentStartTimelineSlot_0_based = -1;
+                        let timelineSlotCursor_0_based = 0;
+                        let cumulativeWorkTimeForCursorSearch = 0;
+                        let initialCursorFound = false;
+
+                        for (let i = 0; i < timelineSlots.length; i++) {
+                            if (timelineSlots[i].type === 'work') {
+                                if (assignmentStartWorkMinutes >= cumulativeWorkTimeForCursorSearch &&
+                                    assignmentStartWorkMinutes < cumulativeWorkTimeForCursorSearch + timelineSlots[i].workTimeCovered) {
+                                    timelineSlotCursor_0_based = i;
+                                    initialCursorFound = true;
+                                    break;
+                                }
+                                cumulativeWorkTimeForCursorSearch += timelineSlots[i].workTimeCovered;
+                            }
+                            if (assignmentStartWorkMinutes === 0 && cumulativeWorkTimeForCursorSearch === 0 && timelineSlots[i].type === 'work') {
+                                timelineSlotCursor_0_based = i;
+                                initialCursorFound = true;
+                                break;
+                            }
+                        }
+                        if (!initialCursorFound && assignmentStartWorkMinutes === totalWorkMinutes) {
+                            for (let i = timelineSlots.length - 1; i >= 0; i--) {
+                                if (timelineSlots[i].type === 'work') {
+                                    timelineSlotCursor_0_based = i;
+                                    initialCursorFound = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!initialCursorFound) {
+                            console.warn(`Could not find starting slot for task: ${masterBar.title}, start: ${assignmentStartWorkMinutes}`);
+                            return;
+                        }
+
+                        let previousSlotWasBreakForSegmentStart = false;
+
+                        while (workMinutesProcessedForTask < assignmentDurationWorkMinutes && timelineSlotCursor_0_based < timelineSlots.length) {
+                            const currentSlot = timelineSlots[timelineSlotCursor_0_based];
+
+                            if (currentSlot.type === 'work') {
+                                if (currentSegmentStartTimelineSlot_0_based === -1) {
+                                    currentSegmentStartTimelineSlot_0_based = timelineSlotCursor_0_based;
+                                    if (timelineSlotCursor_0_based > 0 &&
+                                        timelineSlots[timelineSlotCursor_0_based - 1].type !== 'work' &&
+                                        timelineSlots[timelineSlotCursor_0_based - 1].type !== 'placeholder') {
+                                        if (workMinutesProcessedForTask > 0) {
+                                            previousSlotWasBreakForSegmentStart = true;
+                                        } else {
+                                            previousSlotWasBreakForSegmentStart = false;
+                                        }
+                                    } else {
+                                        previousSlotWasBreakForSegmentStart = false;
+                                    }
+                                }
+
+                                const remainingWorkForTask = assignmentDurationWorkMinutes - workMinutesProcessedForTask;
+                                workMinutesProcessedForTask += Math.min(currentSlot.workTimeCovered, remainingWorkForTask);
+
+                                if (workMinutesProcessedForTask >= assignmentDurationWorkMinutes || timelineSlotCursor_0_based === timelineSlots.length - 1) {
+                                    const segmentDiv = masterBar.cloneNode(true);
+                                    segmentDiv.innerHTML = `<span>${taskIdText}</span>`;
+                                    const startCol = currentSegmentStartTimelineSlot_0_based + 1;
+                                    const endColExclusive = timelineSlotCursor_0_based + 1 + 1;
+                                    segmentDiv.style.gridColumn = `${startCol} / ${endColExclusive}`;
+                                    segmentDiv.style.display = 'flex';
+                                    if (previousSlotWasBreakForSegmentStart) {
+                                        segmentDiv.classList.add('task-segment-starts-after-break');
+                                    }
+                                    if (timelineSlotCursor_0_based < timelineSlots.length - 1 &&
+                                        timelineSlots[timelineSlotCursor_0_based + 1].type !== 'work' &&
+                                        timelineSlots[timelineSlotCursor_0_based + 1].type !== 'placeholder') {
+                                        if (workMinutesProcessedForTask < assignmentDurationWorkMinutes) {
+                                            segmentDiv.classList.add('task-segment-ends-before-break');
+                                        }
+                                    }
+                                    grid.appendChild(segmentDiv);
+                                    currentSegmentStartTimelineSlot_0_based = -1;
+                                    previousSlotWasBreakForSegmentStart = false;
+                                    break;
+                                }
+                            } else {
+                                if (currentSegmentStartTimelineSlot_0_based !== -1) {
+                                    const segmentDiv = masterBar.cloneNode(true);
+                                    segmentDiv.innerHTML = `<span>${taskIdText}</span>`;
+                                    const startCol = currentSegmentStartTimelineSlot_0_based + 1;
+                                    const endColExclusive = timelineSlotCursor_0_based + 1;
+                                    segmentDiv.style.gridColumn = `${startCol} / ${endColExclusive}`;
+                                    segmentDiv.style.display = 'flex';
+                                    if (previousSlotWasBreakForSegmentStart) {
+                                        segmentDiv.classList.add('task-segment-starts-after-break');
+                                    }
+                                    segmentDiv.classList.add('task-segment-ends-before-break');
+                                    grid.appendChild(segmentDiv);
+                                    currentSegmentStartTimelineSlot_0_based = -1;
+                                    previousSlotWasBreakForSegmentStart = false;
+                                }
+                            }
+                            timelineSlotCursor_0_based++;
+                        }
+                    });
+                });
+            }
+            setupGanttScrollSync();
         }
-        setupGanttScrollSync();
-    }
     </script>
 </body>
 </html>
