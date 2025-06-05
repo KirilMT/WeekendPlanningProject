@@ -817,7 +817,11 @@
 {% else %}
     <div class="gantt-container"
          data-total-work-minutes="{{ total_work_minutes | default(0) }}"
-         data-shift-start-time="{{ shift_start_time_str | default('06:00') }}">
+         data-shift-start-time="{{ shift_start_time_str | default('06:00') }}"
+         data-day="{{ week_date_day_shift.day|lower }}"
+         data-shift-total-minutes="{{ shift_total_minutes | default(720) }}"
+         data-shift-pm-start="{{ shift_pm_start_min | default(0) }}"
+         data-shift-pm-end="{{ shift_pm_end_min | default(0) }}">
 
         <div class="gantt-chart">
 
@@ -997,6 +1001,67 @@
         });
     }
 
+    function getBreaksForVisibleSection(day, totalWorkMinutes, shiftTotalMinutes, pmStartMin, pmEndMin) {
+        const break1Duration = 15;
+        const breakMainDuration = 60;
+        const break2Duration = 15;
+
+        // Main break: center of shift, but does NOT occupy time
+        const mainBreakStart = (shiftTotalMinutes / 2) - (breakMainDuration / 2);
+        // Work resumes at mainBreakStart (not after +breakMainDuration)
+        // First 15min break: center of first half (from 0 to main break start)
+        const break1Start = (mainBreakStart / 2) - (break1Duration / 2);
+
+        // Second 15min break: center between end of main break (mainBreakStart) and end of shift (660)
+        let break2Start;
+        if (shiftTotalMinutes === 720) {
+            // Center between 330 and 660
+            break2Start = 330 + ((660 - 330) / 2) - (break2Duration / 2); // 487.5
+        } else {
+            // fallback for other shift lengths
+            const intervalStart = mainBreakStart;
+            const intervalEnd = shiftTotalMinutes - (shiftTotalMinutes - pmEndMin); // fallback to shift end
+            break2Start = intervalStart + ((intervalEnd - intervalStart) / 2) - (break2Duration / 2);
+        }
+
+        const breaks = [
+            { start: break1Start, duration: break1Duration, type: 'break1' },
+            { start: mainBreakStart, duration: breakMainDuration, type: 'breakMain' },
+            { start: break2Start, duration: break2Duration, type: 'break2' }
+        ];
+
+        if (day === 'saturday') {
+            return breaks.map(b => ({
+                start: b.start,
+                duration: b.duration,
+                type: b.type
+            }));
+        }
+
+        // For Friday and Sunday, only part of the shift is PM section
+        const visibleBreaks = [];
+        for (const b of breaks) {
+            const breakStart = b.start;
+            const breakEnd = b.start + b.duration;
+            const overlapStart = Math.max(breakStart, pmStartMin);
+            const overlapEnd = Math.min(breakEnd, pmEndMin);
+            if (overlapStart < overlapEnd) {
+                visibleBreaks.push({
+                    start: overlapStart,
+                    duration: overlapEnd - overlapStart,
+                    type: b.type,
+                    offset: overlapStart - pmStartMin
+                });
+            }
+        }
+        // Map breaks to the visible section (0 to totalWorkMinutes)
+        return visibleBreaks.map(b => ({
+            start: b.offset,
+            duration: b.duration,
+            type: b.type
+        }));
+    }
+
     function generateDynamicGantt(shiftStartTimeStr, totalWorkMinutes) {
         const clockSpacerWrapper = document.querySelector('.clock-time-axis-spacer-wrapper');
         const workIntervalSpacerWrapper = document.querySelector('.work-interval-axis-spacer-wrapper');
@@ -1009,51 +1074,44 @@
         if (clockTicksWrapper) clockTicksWrapper.innerHTML = ''; else console.error('.clock-time-axis-ticks-wrapper not found');
         if (workIntervalTicksWrapper) workIntervalTicksWrapper.innerHTML = ''; else console.error('.work-interval-axis-ticks-wrapper not found');
 
+        // --- Get day and shift info for break calculation ---
+        const ganttContainer = document.querySelector('.gantt-container');
+        let day = 'saturday';
+        let shiftTotalMinutes = 720; // default 12h
+        let pmStartMin = 0;
+        let pmEndMin = totalWorkMinutes;
+        if (ganttContainer) {
+            day = ganttContainer.getAttribute('data-day') || 'saturday';
+            shiftTotalMinutes = parseInt(ganttContainer.getAttribute('data-shift-total-minutes')) || 720;
+            pmStartMin = parseInt(ganttContainer.getAttribute('data-shift-pm-start')) || 0;
+            pmEndMin = parseInt(ganttContainer.getAttribute('data-shift-pm-end')) || totalWorkMinutes;
+        }
+
+        // --- Calculate breaks for the visible section ---
+        const breaks = getBreaksForVisibleSection(day, totalWorkMinutes, shiftTotalMinutes, pmStartMin, pmEndMin);
+
+        // --- Build timelineSlots with breaks in the correct positions ---
         const workIntervalDuration = 15;
         const timelineSlots = [];
         let workTimeProcessed = 0;
-        const break1StartAfterWork = Math.floor(totalWorkMinutes * 0.25 / workIntervalDuration) * workIntervalDuration;
-        const breakMainStartAfterWork = Math.floor(totalWorkMinutes * 0.50 / workIntervalDuration) * workIntervalDuration;
-        const break2StartAfterWork = Math.floor(totalWorkMinutes * 0.75 / workIntervalDuration) * workIntervalDuration;
-        const break1Duration = 15;
-        const breakMainDuration = 60;
-        const break2Duration = 15;
+        let breakCursor = 0;
 
-        const breakPointsConfig = [
-            {triggerWorkTime: break1StartAfterWork, duration: break1Duration, type: 'break1', taken: false},
-            {triggerWorkTime: breakMainStartAfterWork, duration: breakMainDuration, type: 'breakMain', taken: false},
-            {triggerWorkTime: break2StartAfterWork, duration: break2Duration, type: 'break2', taken: false}
-        ].sort((a, b) => a.triggerWorkTime - b.triggerWorkTime);
-
-        if (totalWorkMinutes > 0) {
-            while (workTimeProcessed < totalWorkMinutes) {
-                let breakAddedInIteration = false;
-                for (const bp of breakPointsConfig) {
-                    if (!bp.taken && workTimeProcessed === bp.triggerWorkTime) {
-                        for (let i = 0; i < bp.duration / workIntervalDuration; i++) {
-                            timelineSlots.push({type: bp.type, workTimeCovered: 0});
-                        }
-                        bp.taken = true;
-                        breakAddedInIteration = true;
-                    }
+        while (workTimeProcessed < totalWorkMinutes) {
+            // Insert break if it starts at this point
+            if (
+                breakCursor < breaks.length &&
+                Math.abs(workTimeProcessed - Math.round(breaks[breakCursor].start / workIntervalDuration) * workIntervalDuration) < 1e-6
+            ) {
+                const breakSlots = Math.round(breaks[breakCursor].duration / workIntervalDuration);
+                for (let i = 0; i < breakSlots; i++) {
+                    timelineSlots.push({ type: breaks[breakCursor].type, workTimeCovered: 0 });
                 }
-                if (workTimeProcessed < totalWorkMinutes) {
-                    timelineSlots.push({type: 'work', workTimeCovered: workIntervalDuration});
-                    workTimeProcessed += workIntervalDuration;
-                } else if (!breakAddedInIteration && workTimeProcessed >= totalWorkMinutes) {
-                    break;
-                }
+                breakCursor++;
+                continue;
             }
-            for (const bp of breakPointsConfig) {
-                if (!bp.taken && workTimeProcessed === bp.triggerWorkTime) {
-                    for (let i = 0; i < bp.duration / workIntervalDuration; i++) {
-                        timelineSlots.push({type: bp.type, workTimeCovered: 0});
-                    }
-                    bp.taken = true;
-                }
-            }
-        } else {
-            timelineSlots.push({type: 'placeholder', workTimeCovered: 0});
+            // Add work slot
+            timelineSlots.push({ type: 'work', workTimeCovered: workIntervalDuration });
+            workTimeProcessed += workIntervalDuration;
         }
 
         const numTotalTimelineSlots = timelineSlots.length;
@@ -1067,8 +1125,36 @@
         if (clockSpacerWrapper) clockSpacerWrapper.appendChild(createSpacerTick());
         if (workIntervalSpacerWrapper) workIntervalSpacerWrapper.appendChild(createSpacerTick());
 
-        const [startHour, startMinute] = shiftStartTimeStr.split(':').map(Number);
-        let currentClock = new Date(2000, 0, 1, startHour, startMinute);
+        // --- Improved: Calculate the correct clock start time for the Gantt header ---
+        let startHour = 6, startMinute = 0;
+        let customClock = null;
+        if (day === 'friday') {
+            // Weekend tasks start at 22:00 on Friday
+            startHour = 22; startMinute = 0;
+            customClock = new Date(2000, 0, 1, startHour, startMinute);
+        } else if (day === 'sunday') {
+            // Weekend tasks start at 06:00 on Sunday
+            startHour = 6; startMinute = 0;
+            customClock = new Date(2000, 0, 1, startHour, startMinute);
+        } else {
+            // Saturday or default: use shiftStartTimeStr
+            [startHour, startMinute] = shiftStartTimeStr.split(':').map(Number);
+            customClock = new Date(2000, 0, 1, startHour, startMinute);
+        }
+
+        // For Friday, if the Gantt covers 22:00 to 06:00 (overnight), handle day wrap
+        function addMinutesWithWrap(dateObj, minutes) {
+            let newDate = new Date(dateObj.getTime());
+            newDate.setMinutes(newDate.getMinutes() + minutes);
+            // If hour >= 24, wrap to next day (for display, not real date)
+            if (newDate.getHours() >= 24) {
+                newDate.setHours(newDate.getHours() - 24);
+            }
+            return newDate;
+        }
+
+        // --- Use customClock for the time header ---
+        let currentClock = new Date(customClock.getTime());
         let cumulativeWorkMinutes = 0;
 
         timelineSlots.forEach((slot, index) => {
@@ -1087,7 +1173,13 @@
             }
             tickDivClock.textContent = labelClock;
             if (clockTicksWrapper) clockTicksWrapper.appendChild(tickDivClock);
-            currentClock.setMinutes(currentClock.getMinutes() + workIntervalDuration);
+
+            // --- Advance time, with wrap for Friday overnight ---
+            if (day === 'friday') {
+                currentClock = addMinutesWithWrap(currentClock, 15);
+            } else {
+                currentClock.setMinutes(currentClock.getMinutes() + 15);
+            }
 
             const tickDivWork = document.createElement('div');
             tickDivWork.classList.add('time-tick');
