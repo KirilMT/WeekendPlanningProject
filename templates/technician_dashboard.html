@@ -60,18 +60,128 @@
             align-items: flex-start;
         }
         .modal-content {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-            padding: 20px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+            padding: 0;
+            min-width: 340px;
+            max-width: 480px;
+            width: 90%;
+            position: absolute;
+            transition: width 0.2s;
+            overflow: hidden;
         }
-        .technician-checkboxes label {
-            display: block;
+        .modal-content.tasks-tab-active {
+            min-width: 480px;
+            max-width: 600px;
+            width: 98vw;
+        }
+        .modal-header-tabs {
+            display: flex;
+            border-bottom: 1px solid #e0e0e0;
+            background: #f7f7f7;
+        }
+        .modal-tab-btn {
+            flex: 1;
+            padding: 14px 0;
+            font-size: 1.08em;
+            font-weight: 500;
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            transition: background 0.15s, border-bottom 0.15s;
+            color: #444;
+        }
+        .modal-tab-btn.active {
+            background: #fff;
+            border-bottom: 2.5px solid #007bff;
+            color: #007bff;
+            font-weight: 600;
+        }
+        .modal-tab-content {
+            padding: 20px 22px 12px 22px;
+            max-height: 340px;
+            overflow-y: auto;
+            min-height: 220px;
+        }
+        .modal-tab-content label {
+            display: flex;
+            align-items: center;
             padding: 5px 0;
             cursor: pointer;
+            font-size: 1em;
+            gap: 8px;
+            user-select: none;
         }
-        .technician-checkboxes input[type="checkbox"] {
+        .modal-tab-content input[type="checkbox"] {
             margin-right: 8px;
+            accent-color: #007bff;
+        }
+        .modal-tab-content .task-checkbox-label {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 420px;
+            font-size: 1em;
+        }
+        .modal-content.tasks-tab-active .modal-tab-content .task-checkbox-label {
+            max-width: 540px;
+        }
+        .modal-tab-content .task-checkbox-label.long {
+            white-space: normal;
+            word-break: break-word;
+            overflow: visible;
+            text-overflow: unset;
+        }
+        .modal-search-input {
+            width: 100%;
+            margin-bottom: 12px;
+            padding: 8px 10px;
+            border: 1px solid #d0d0d0;
+            border-radius: 5px;
+            font-size: 1em;
+            background: #fafbfc;
+            transition: border 0.15s;
+        }
+        .modal-search-input:focus {
+            border: 1.5px solid #007bff;
+            outline: none;
+            background: #fff;
+        }
+        .modal-footer {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 22px 18px 22px;
+            background: #f7f7f7;
+            border-top: 1px solid #e0e0e0;
+        }
+        .modal-footer button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 5px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .modal-footer button#clearTechFilter {
+            background: #aaa;
+        }
+        .modal-footer button:hover {
+            filter: brightness(0.95);
+        }
+        @media (max-width: 600px) {
+            .modal-content, .modal-content.tasks-tab-active {
+                min-width: 0;
+                max-width: 98vw;
+                width: 98vw;
+            }
+            .modal-tab-content .task-checkbox-label,
+            .modal-content.tasks-tab-active .modal-tab-content .task-checkbox-label {
+                max-width: 90vw;
+            }
         }
 
         /* 5. Task Table */
@@ -678,15 +788,24 @@
     </tbody>
 </table>
 
-<!-- Technician Filter Modal -->
+<!-- Technician & Task Filter Modal -->
 <div id="techFilterModal" class="modal" style="display:none;">
-    <div class="modal-content" id="techFilterModalContent" style="max-width: 400px; width: 90%; padding: 20px; position: absolute;">
-        <h2>Filter by Technician</h2>
-        <input type="text" id="techFilterSearch" placeholder="Search technicians..." style="width:100%;margin-bottom:10px;padding:8px;">
-        <div class="technician-checkboxes" id="techFilterCheckboxes" style="max-height:250px;overflow-y:auto;margin-bottom:15px;"></div>
-        <div style="display:flex;justify-content:space-between;">
-            <button id="applyTechFilter" style="background:#007bff;color:white;border:none;padding:8px 16px;border-radius:4px;">Apply</button>
-            <button id="clearTechFilter" style="background:#aaa;color:white;border:none;padding:8px 16px;border-radius:4px;">Clear</button>
+    <div class="modal-content" id="techFilterModalContent">
+        <div class="modal-header-tabs">
+            <button class="modal-tab-btn active" id="tabTechBtn" type="button">Technicians</button>
+            <button class="modal-tab-btn" id="tabTaskBtn" type="button">Tasks</button>
+        </div>
+        <div class="modal-tab-content" id="tabTechContent">
+            <input type="text" id="techFilterSearch" class="modal-search-input" placeholder="Search technicians...">
+            <div class="technician-checkboxes" id="techFilterCheckboxes"></div>
+        </div>
+        <div class="modal-tab-content" id="tabTaskContent" style="display:none;">
+            <input type="text" id="taskFilterSearch" class="modal-search-input" placeholder="Search tasks...">
+            <div class="task-checkboxes" id="taskFilterCheckboxes"></div>
+        </div>
+        <div class="modal-footer">
+            <button id="applyTechFilter">Apply</button>
+            <button id="clearTechFilter">Clear</button>
         </div>
     </div>
 </div>
@@ -1208,11 +1327,40 @@
         const checkboxesDiv = document.getElementById('techFilterCheckboxes');
         const applyBtn = document.getElementById('applyTechFilter');
         const clearBtn = document.getElementById('clearTechFilter');
+        const taskSearchInput = document.getElementById('taskFilterSearch');
+        const taskCheckboxesDiv = document.getElementById('taskFilterCheckboxes');
+        // Tab elements
+        const tabTechBtn = document.getElementById('tabTechBtn');
+        const tabTaskBtn = document.getElementById('tabTaskBtn');
+        const tabTechContent = document.getElementById('tabTechContent');
+        const tabTaskContent = document.getElementById('tabTaskContent');
 
         // State
         let allTechs = [];
-        let selectedTechs = null; // null = no filter, [] = filter to none, [names...] = filter to those
-        let modalTempSelection = null; // Used for canceling changes if modal is closed without Apply/Clear
+        let allTasks = [];
+        let selectedTechs = null;
+        let selectedTasks = null;
+        let modalTempSelection = null;
+        let modalTempTaskSelection = null;
+
+        // Tab switching logic
+        function switchTab(tab) {
+            if (tab === 'tech') {
+                tabTechBtn.classList.add('active');
+                tabTaskBtn.classList.remove('active');
+                tabTechContent.style.display = '';
+                tabTaskContent.style.display = 'none';
+                modalContent.classList.remove('tasks-tab-active');
+            } else {
+                tabTechBtn.classList.remove('active');
+                tabTaskBtn.classList.add('active');
+                tabTechContent.style.display = 'none';
+                tabTaskContent.style.display = '';
+                modalContent.classList.add('tasks-tab-active');
+            }
+        }
+        tabTechBtn && tabTechBtn.addEventListener('click', () => switchTab('tech'));
+        tabTaskBtn && tabTaskBtn.addEventListener('click', () => switchTab('task'));
 
         // Get available technicians from .technician-labels-wrapper
         function getAvailableTechnicians() {
@@ -1220,23 +1368,32 @@
             return Array.from(labels).map(l => l.textContent.trim());
         }
 
+        // Get available tasks from table (unique task names)
+        function getAvailableTasks() {
+            const rows = document.querySelectorAll('.task-table tbody tr:not(.section-header)');
+            const taskNames = new Set();
+            rows.forEach(row => {
+                const cell = row.cells[1];
+                if (cell) {
+                    let name = cell.childNodes[0] && cell.childNodes[0].nodeType === 3 ? cell.childNodes[0].textContent.trim() : cell.textContent.trim();
+                    if (name) taskNames.add(name);
+                }
+            });
+            return Array.from(taskNames);
+        }
+
         // Render checkboxes in modal, reflecting last selection or default (all unchecked)
         function renderTechCheckboxes(filter = "") {
             checkboxesDiv.innerHTML = "";
-            // Always show all technicians, but hide those that don't match filter
             allTechs.forEach(tech => {
                 const label = document.createElement('label');
-                label.style.display = tech.toLowerCase().includes(filter.toLowerCase()) ? 'block' : 'none';
+                label.style.display = tech.toLowerCase().includes(filter.toLowerCase()) ? 'flex' : 'none';
                 const cb = document.createElement('input');
                 cb.type = 'checkbox';
                 cb.value = tech;
-                // If no filter has ever been applied, all unchecked by default
-                // If modalTempSelection is set, use it; else use selectedTechs
                 let checkedList = (modalTempSelection !== null) ? modalTempSelection : selectedTechs;
                 cb.checked = Array.isArray(checkedList) && checkedList.includes(tech);
-                // Add event to update modalTempSelection on change
                 cb.addEventListener('change', function() {
-                    // Update modalTempSelection to reflect current checked state
                     if (!Array.isArray(modalTempSelection)) modalTempSelection = [];
                     if (this.checked) {
                         if (!modalTempSelection.includes(tech)) modalTempSelection.push(tech);
@@ -1250,20 +1407,56 @@
             });
         }
 
+        // Render task checkboxes in modal
+        function renderTaskCheckboxes(filter = "") {
+            taskCheckboxesDiv.innerHTML = "";
+            allTasks.forEach(task => {
+                const label = document.createElement('label');
+                label.style.display = task.toLowerCase().includes(filter.toLowerCase()) ? 'flex' : 'none';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.value = task;
+                let checkedList = (modalTempTaskSelection !== null) ? modalTempTaskSelection : selectedTasks;
+                cb.checked = Array.isArray(checkedList) && checkedList.includes(task);
+                cb.addEventListener('change', function() {
+                    if (!Array.isArray(modalTempTaskSelection)) modalTempTaskSelection = [];
+                    if (this.checked) {
+                        if (!modalTempTaskSelection.includes(task)) modalTempTaskSelection.push(task);
+                    } else {
+                        modalTempTaskSelection = modalTempTaskSelection.filter(t => t !== task);
+                    }
+                });
+                // Task name: single line, ellipsis, unless very long
+                const span = document.createElement('span');
+                span.className = 'task-checkbox-label';
+                span.textContent = task;
+                if (task.length > 60) span.classList.add('long');
+                label.appendChild(cb);
+                label.appendChild(span);
+                taskCheckboxesDiv.appendChild(label);
+            });
+        }
+
         // Open modal and position it below the filter button
         function openModal() {
-            if (modal.style.display === 'flex') return; // Already open
+            if (modal.style.display === 'flex') return;
             allTechs = getAvailableTechnicians();
-            // If no filter has ever been applied, default to all unchecked
+            allTasks = getAvailableTasks();
             if (selectedTechs === null) {
                 modalTempSelection = [];
             } else {
-                // Clone the current selection for possible cancel
                 modalTempSelection = selectedTechs.slice();
             }
-            // Always clear the search input when opening
+            if (selectedTasks === null) {
+                modalTempTaskSelection = [];
+            } else {
+                modalTempTaskSelection = selectedTasks.slice();
+            }
             if (searchInput) searchInput.value = "";
+            if (taskSearchInput) taskSearchInput.value = "";
             renderTechCheckboxes("");
+            renderTaskCheckboxes("");
+            switchTab('tech');
             modal.style.display = 'flex';
             setTimeout(() => {
                 const btnRect = filterBtn.getBoundingClientRect();
@@ -1278,15 +1471,19 @@
         function closeModal(restorePrevious = true) {
             if (restorePrevious) {
                 modalTempSelection = null;
+                modalTempTaskSelection = null;
             }
             modal.style.display = 'none';
         }
 
         // Apply filter
         function applyFilter() {
-            const checked = Array.from(checkboxesDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-            selectedTechs = checked.length === allTechs.length ? null : checked;
+            const checkedTechs = Array.from(checkboxesDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+            selectedTechs = checkedTechs.length === allTechs.length ? null : checkedTechs;
+            const checkedTasks = Array.from(taskCheckboxesDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+            selectedTasks = checkedTasks.length === allTasks.length ? null : checkedTasks;
             modalTempSelection = null;
+            modalTempTaskSelection = null;
             applyTableFilter();
             applyGanttFilter();
             closeModal(false);
@@ -1295,13 +1492,15 @@
         // Clear filter
         function clearFilter() {
             selectedTechs = null;
+            selectedTasks = null;
             modalTempSelection = null;
+            modalTempTaskSelection = null;
             applyTableFilter();
             applyGanttFilter();
             closeModal(false);
         }
 
-        // Table filter: show only rows where at least one assigned technician is selected (or all if no filter)
+        // Table filter: show only rows where at least one assigned technician is selected AND/OR task is selected
         function applyTableFilter() {
             const table = document.querySelector('.task-table');
             if (!table) return;
@@ -1314,36 +1513,78 @@
                 }
                 // Get assigned techs cell (5th index, th structure is fixed)
                 const assignedCell = row.cells[4];
-                if (!assignedCell) { row.style.display = ''; return; }
+                const taskCell = row.cells[1];
+                if (!assignedCell || !taskCell) { row.style.display = ''; return; }
                 const assignedText = assignedCell.textContent || "";
-                if (!selectedTechs || selectedTechs.length === 0) {
+                const taskName = taskCell.childNodes[0] && taskCell.childNodes[0].nodeType === 3 ? taskCell.childNodes[0].textContent.trim() : taskCell.textContent.trim();
+
+                // If no filters, show all
+                if ((!selectedTechs || selectedTechs.length === 0) && (!selectedTasks || selectedTasks.length === 0)) {
                     row.style.display = '';
-                } else {
-                    // Extract technician names from group format: [Technician A & Technician B]
-                    // Find all groups in brackets
+                    return;
+                }
+
+                // Task filter
+                let taskMatch = true;
+                if (selectedTasks && selectedTasks.length > 0) {
+                    taskMatch = selectedTasks.includes(taskName);
+                }
+
+                // Technician filter
+                let techMatch = true;
+                if (selectedTechs && selectedTechs.length > 0) {
                     const groupMatches = assignedText.match(/\[([^\]]+)\]/g) || [];
-                    // Flatten all technician names from all groups
                     const assignedList = [];
                     groupMatches.forEach(group => {
-                        // Remove brackets and split by '&'
                         group.replace(/[\[\]]/g, '').split('&').forEach(name => {
                             assignedList.push(name.trim());
                         });
                     });
-                    // Show row if any selected technician is in the assignedList (exact match)
-                    const match = assignedList.some(name => selectedTechs.includes(name));
-                    row.style.display = match ? '' : 'none';
+                    techMatch = assignedList.some(name => selectedTechs.includes(name));
                 }
+
+                // AND logic: must match both if both filters are set
+                row.style.display = (taskMatch && techMatch) ? '' : 'none';
             });
         }
 
-        // Gantt filter: show only selected technician rows and their bars
+        // Gantt filter: show only selected technician rows and their bars, or only those involved in selected tasks
         function applyGanttFilter() {
             const techLabels = document.querySelectorAll('.technician-labels-wrapper .technician-label');
             const timeGrids = document.querySelectorAll('.time-grids-wrapper .time-grid');
+            // If task filter is active, show only techs involved in selected tasks
+            let techsForTasks = null;
+            if (selectedTasks && selectedTasks.length > 0) {
+                // Find all techs assigned to selected tasks
+                const table = document.querySelector('.task-table');
+                const rows = table.querySelectorAll('tbody tr:not(.section-header)');
+                const techSet = new Set();
+                rows.forEach(row => {
+                    const taskCell = row.cells[1];
+                    const assignedCell = row.cells[4];
+                    if (!taskCell || !assignedCell) return;
+                    const taskName = taskCell.childNodes[0] && taskCell.childNodes[0].nodeType === 3 ? taskCell.childNodes[0].textContent.trim() : taskCell.textContent.trim();
+                    if (selectedTasks.includes(taskName)) {
+                        const assignedText = assignedCell.textContent || "";
+                        const groupMatches = assignedText.match(/\[([^\]]+)\]/g) || [];
+                        groupMatches.forEach(group => {
+                            group.replace(/[\[\]]/g, '').split('&').forEach(name => {
+                                techSet.add(name.trim());
+                            });
+                        });
+                    }
+                });
+                techsForTasks = Array.from(techSet);
+            }
             techLabels.forEach((label, idx) => {
                 const tech = label.textContent.trim();
-                const show = !selectedTechs || selectedTechs.length === 0 || selectedTechs.includes(tech);
+                let show = true;
+                if (selectedTasks && selectedTasks.length > 0) {
+                    show = techsForTasks.includes(tech);
+                }
+                if (selectedTechs && selectedTechs.length > 0) {
+                    show = show && selectedTechs.includes(tech);
+                }
                 label.style.display = show ? '' : 'none';
                 if (timeGrids[idx]) timeGrids[idx].style.display = show ? '' : 'none';
             });
@@ -1353,11 +1594,13 @@
         searchInput && searchInput.addEventListener('input', function() {
             renderTechCheckboxes(this.value);
         });
+        taskSearchInput && taskSearchInput.addEventListener('input', function() {
+            renderTaskCheckboxes(this.value);
+        });
 
         // Button events
         filterBtn && filterBtn.addEventListener('click', function() {
             if (modal.style.display === 'flex') {
-                // If modal is open and filterBtn is clicked, close and restore previous selection (cancel)
                 closeModal(true);
             } else {
                 openModal();
@@ -1374,8 +1617,11 @@
         // On page load, no filter
         document.addEventListener('DOMContentLoaded', function() {
             allTechs = getAvailableTechnicians();
+            allTasks = getAvailableTasks();
             selectedTechs = null;
+            selectedTasks = null;
             modalTempSelection = null;
+            modalTempTaskSelection = null;
         });
     })();
 </script>
