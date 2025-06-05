@@ -11,29 +11,53 @@
             flex-direction: column;
             justify-content: center;
         }
+
         h1, h2, h4 {
             text-align: center;
             color: #333;
             font-weight: 500;
-            margin-top: 10px;
+            margin-top: 0px;
             margin-bottom: 10px;
         }
-        .heading-container {
+
+        #heading-container {
             display: flex;
             justify-content: center;
             align-items: baseline;
             gap: 15px;
+            position: relative;
         }
+
+        #filter {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        #filter-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 15px;
+            font-size: 1rem;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
         .task-table {
             width: 100%;
             border-collapse: separate;
             border-spacing: 0;
             margin-bottom: 20px;
             background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             border-radius: 8px;
             overflow: hidden;
         }
+
         .task-table th {
             background-color: #e3f2fd;
             font-weight: 600;
@@ -42,17 +66,31 @@
             text-align: left;
             border-bottom: 1px solid #ddd;
         }
+
         .task-table td {
             padding: 12px 16px;
             border-bottom: 1px solid #eee;
             color: #333;
         }
+
         .task-table tr:last-child td {
             border-bottom: none;
         }
-        .prio-a { background-color: #ff4d4d; color: #333; }
-        .prio-b { background-color: #ffd700; color: #333; }
-        .prio-c { background-color: #d2b48c; color: #333; }
+
+        .prio-a {
+            background-color: #ff4d4d;
+            color: #333;
+        }
+
+        .prio-b {
+            background-color: #ffd700;
+            color: #333;
+        }
+
+        .prio-c {
+            background-color: #d2b48c;
+            color: #333;
+        }
 
         .gantt-container {
             width: 100%;
@@ -60,7 +98,7 @@
             margin: 0 auto;
             padding: 20px;
             background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             border-radius: 8px;
             box-sizing: border-box;
             overflow: hidden;
@@ -97,6 +135,7 @@
             position: sticky;
             background-color: #fff;
         }
+
         .axis-container::after {
             content: "";
             display: block;
@@ -107,6 +146,7 @@
             border-bottom: 1px solid #ddd;
             z-index: 2;
         }
+
         /* Remove horizontal line for spacer wrappers */
         .clock-time-axis-spacer-wrapper.axis-container::after,
         .work-interval-axis-spacer-wrapper.axis-container::after {
@@ -118,6 +158,7 @@
             top: 0;
             z-index: 22;
         }
+
         .work-interval-axis-spacer-wrapper {
             height: 30px;
             top: 25px;
@@ -131,6 +172,7 @@
             width: auto; /* Allow it to stretch */
             min-width: 100%; /* Prevent shrinking */
         }
+
         .work-interval-axis-ticks-wrapper {
             height: 30px;
             top: 25px;
@@ -206,6 +248,7 @@
         .time-tick.spacer-tick {
             background-color: #f9f9f9;
         }
+
         .gantt-fixed-left-pane .time-tick.spacer-tick {
             border-right: none !important;
         }
@@ -217,10 +260,12 @@
             position: relative;
             z-index: 0;
         }
+
         .break-column-fill.break-type-break1,
         .break-column-fill.break-type-break2 {
             background-color: #dcdcdc;
         }
+
         .break-column-fill.break-type-breakMain {
             background-color: #c0c0c0;
         }
@@ -235,7 +280,7 @@
             color: #fff;
             font-size: 12px;
             font-weight: 500;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
             box-sizing: border-box;
             overflow: visible;
             text-overflow: ellipsis;
@@ -245,6 +290,7 @@
             position: relative;
             z-index: 1;
         }
+
         .task-bar.zero-duration {
             width: 6px !important;
             min-width: 6px !important;
@@ -255,6 +301,7 @@
             justify-self: center;
             padding: 0;
         }
+
         .task-bar.zero-duration span {
             display: none;
         }
@@ -262,6 +309,7 @@
         .task-segment-ends-before-break {
             margin-right: 4px;
         }
+
         .task-segment-ends-before-break::after {
             content: '';
             position: absolute;
@@ -269,9 +317,8 @@
             top: 0;
             bottom: 0;
             width: 5px;
-            background:
-                linear-gradient(135deg, transparent 48%, #404040 48%, #404040 52%, transparent 52%),
-                linear-gradient(45deg, transparent 48%, #404040 48%, #404040 52%, transparent 52%);
+            background: linear-gradient(135deg, transparent 48%, #404040 48%, #404040 52%, transparent 52%),
+            linear-gradient(45deg, transparent 48%, #404040 48%, #404040 52%, transparent 52%);
             background-size: 10px 10px;
             background-repeat: repeat-y;
         }
@@ -279,6 +326,7 @@
         .task-segment-starts-after-break {
             margin-left: 4px;
         }
+
         .task-segment-starts-after-break::before {
             content: '';
             position: absolute;
@@ -286,13 +334,13 @@
             top: 0;
             bottom: 0;
             width: 5px;
-            background:
-                linear-gradient(135deg, transparent 48%, #404040 48%, #404040 52%, transparent 52%),
-                linear-gradient(45deg, transparent 48%, #404040 48%, #404040 52%, transparent 52%);
+            background: linear-gradient(135deg, transparent 48%, #404040 48%, #404040 52%, transparent 52%),
+            linear-gradient(45deg, transparent 48%, #404040 48%, #404040 52%, transparent 52%);
             background-size: 10px 10px;
             background-repeat: repeat-y;
             transform: scaleX(-1);
         }
+
         .task-bar span {
             position: relative;
             z-index: 1;
@@ -303,10 +351,12 @@
             font-style: italic;
             color: #555;
         }
+
         .time-tick.break-interval.break-type-break1,
         .time-tick.break-interval.break-type-break2 {
             background-color: #dcdcdc;
         }
+
         .time-tick.break-interval.break-type-breakMain {
             background-color: #c0c0c0;
         }
@@ -314,6 +364,7 @@
         .hover-highlight-technician {
             background-color: gold !important;
         }
+
         .hover-highlight-time-tick {
             background-color: gold !important;
         }
@@ -329,61 +380,125 @@
         .task-table tr:not(.section-header):not(.task-row-rep):hover td:not(.prio-a):not(.prio-b):not(.prio-c) {
             background-color: #e9e9e9;
         }
+
         .task-table tr.section-header td {
             background-color: #d3d3d3;
             text-align: left;
             font-weight: bold;
             padding: 8px 16px;
         }
+
         .task-table tr.task-row-rep td {
             background-color: #e6e6e6;
         }
-        .task-table tr.task-row-rep td.prio-a { background-color: #ff4d4d; color: #333; }
-        .task-table tr.task-row-rep td.prio-b { background-color: #ffd700; color: #333; }
-        .task-table tr.task-row-rep td.prio-c { background-color: #d2b48c; color: #333; }
+
+        .task-table tr.task-row-rep td.prio-a {
+            background-color: #ff4d4d;
+            color: #333;
+        }
+
+        .task-table tr.task-row-rep td.prio-b {
+            background-color: #ffd700;
+            color: #333;
+        }
+
+        .task-table tr.task-row-rep td.prio-c {
+            background-color: #d2b48c;
+            color: #333;
+        }
+
         .task-table tr.task-row-rep:hover td:not(.prio-a):not(.prio-b):not(.prio-c) {
             background-color: #d1d1d1;
         }
-        .task-table tr:hover td.prio-a { background-color: #ff4d4d; color: #333; }
-        .task-table tr:hover td.prio-b { background-color: #ffd700; color: #333; }
-        .task-table tr:hover td.prio-c { background-color: #d2b48c; color: #333; }
+
+        .task-table tr:hover td.prio-a {
+            background-color: #ff4d4d;
+            color: #333;
+        }
+
+        .task-table tr:hover td.prio-b {
+            background-color: #ffd700;
+            color: #333;
+        }
+
+        .task-table tr:hover td.prio-c {
+            background-color: #d2b48c;
+            color: #333;
+        }
+
+        /* Modal styles (reuse from index.html) */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            justify-content: flex-start;
+            align-items: flex-start;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            padding: 20px;
+        }
+        .technician-checkboxes label {
+            display: block;
+            padding: 5px 0;
+            cursor: pointer;
+        }
+        .technician-checkboxes input[type="checkbox"] {
+            margin-right: 8px;
+        }
     </style>
 </head>
 <body>
-    <div class="heading-container">
-        <h1>Technician Dashboard</h1>
-        <h4>(KW{{ week_date_day_shift.week }} - {{ week_date_day_shift.date }} - {{ week_date_day_shift.day }} - {{ week_date_day_shift.shift }})</h4>
+<div id="heading-container">
+    <div id="filter">
+        <button id="filter-button">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="filter-icon"
+                 viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2zm1 .5v1.586l3.207 3.207a.5.5 0 0 1 .146.353V14l2-.666V7.308a.5.5 0 0 1 .146-.353L13.5 3.086V2h-11z"/>
+            </svg>
+            Filter
+        </button>
     </div>
+    <h1>Technician Dashboard</h1>
+    <h4>(KW{{ week_date_day_shift.week }} - {{ week_date_day_shift.date }} - {{ week_date_day_shift.day }}
+        - {{ week_date_day_shift.shift }})</h4>
+</div>
 
-    <!-- Task Table -->
-    <table class="task-table" border="1">
-        <thead>
-            <tr>
-                <th>Index</th>
-                <th>Tasks</th>
-                <th>Lines</th>
-                <th>Technicians</th>
-                <th>Assigned Technicians (prio index)</th>
-                <th>Time [min]</th>
-                <th>Prio</th>
-                <th>Qty</th>
-                <th>Ticket/MO</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% set pm_tasks = tasks | selectattr('task_type', 'equalto', 'PM') | list %}
-            {% set rep_tasks = tasks | selectattr('task_type', 'equalto', 'REP') | list %}
+<!-- Task Table -->
+<table class="task-table" border="1">
+    <thead>
+    <tr>
+        <th>Index</th>
+        <th>Tasks</th>
+        <th>Lines</th>
+        <th>Technicians</th>
+        <th>Assigned Technicians (prio index)</th>
+        <th>Time [min]</th>
+        <th>Prio</th>
+        <th>Qty</th>
+        <th>Ticket/MO</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% set pm_tasks = tasks | selectattr('task_type', 'equalto', 'PM') | list %}
+    {% set rep_tasks = tasks | selectattr('task_type', 'equalto', 'REP') | list %}
 
-            <!-- PM Section -->
-            {% if pm_tasks %}
-            <tr class="section-header">
-                <td colspan="9">
-                    PMs & PdMs
-                </td>
-            </tr>
-            {% for task in pm_tasks %}
+    <!-- PM Section -->
+    {% if pm_tasks %}
+        <tr class="section-header">
+            <td colspan="9">
+                PMs & PdMs
+            </td>
+        </tr>
+        {% for task in pm_tasks %}
             <tr>
-                <td class="index-cell" style="background-color: #{{ '%02x%02x%02x' % ((task.id | int | default(1)) * 97 % 200 + 55, (task.id | int | default(1)) * 53 % 200 + 55, (task.id | int | default(1)) * 37 % 200 + 55) }}; color: #fff;">
+                <td class="index-cell"
+                    style="background-color: #{{ '%02x%02x%02x' % ((task.id | int | default(1)) * 97 % 200 + 55, (task.id | int | default(1)) * 53 % 200 + 55, (task.id | int | default(1)) * 37 % 200 + 55) }}; color: #fff;">
                     {{ task.id }}
                 </td>
                 <td>
@@ -405,12 +520,14 @@
                         {% for detail in unassigned_instance_details %}
                             {% set _ = unassigned_reasons_tooltip_lines.append("Instance " ~ detail.num ~ ": " ~ detail.reason) %}
                         {% endfor %}
-                        <br><span style="color: red; font-size: 0.9em;" title="{{ unassigned_reasons_tooltip_lines | join('\n') }}">
+                        <br><span style="color: red; font-size: 0.9em;"
+                                  title="{{ unassigned_reasons_tooltip_lines | join('\n') }}">
                             Unassigned: {{ unassigned_numbers | join(', ') }}
                         </span>
                     {% endif %}
                     {% if incomplete_instances_list %}
-                        <br><span style="color: orange; font-size: 0.9em;" title="Instances {{ incomplete_instances_list | join(', ') }} were partially assigned due to shift end.">
+                        <br><span style="color: orange; font-size: 0.9em;"
+                                  title="Instances {{ incomplete_instances_list | join(', ') }} were partially assigned due to shift end.">
                             Partially Assigned: {{ incomplete_instances_list | join(', ') }}
                         </span>
                     {% endif %}
@@ -442,7 +559,7 @@
                 </td>
                 <td>{{ task.planned_worktime_min | default('0') }}</td>
                 <td class="{% if task.priority == 'A' %}prio-a{% elif task.priority == 'B' %}prio-b{% elif task.priority == 'C' %}prio-c{% else %}prio-c{% endif %}">
-                    {{ task.priority | default('C')}}
+                    {{ task.priority | default('C') }}
                 </td>
                 <td>{{ task.quantity | default('1') }}</td>
                 <td>
@@ -454,7 +571,8 @@
                         {% endif %}
                     {% elif task.task_type.upper() == 'PM' %}
                         {% set encoded_name = task.name | urlencode %}
-                        <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name={{ encoded_name }}" target="_blank">
+                        <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name={{ encoded_name }}"
+                           target="_blank">
                             Flux MOs
                         </a>
                     {% else %}
@@ -462,19 +580,20 @@
                     {% endif %}
                 </td>
             </tr>
-            {% endfor %}
-            {% endif %}
+        {% endfor %}
+    {% endif %}
 
-            <!-- REP Section -->
-            {% if rep_tasks %}
-            <tr class="section-header">
-                <td colspan="9">
-                    Tickets/MOs/Engineering Requests
-                </td>
-            </tr>
-            {% for task in rep_tasks %}
+    <!-- REP Section -->
+    {% if rep_tasks %}
+        <tr class="section-header">
+            <td colspan="9">
+                Tickets/MOs/Engineering Requests
+            </td>
+        </tr>
+        {% for task in rep_tasks %}
             <tr class="task-row-rep">
-                <td class="index-cell" style="background-color: #{{ '%02x%02x%02x' % ((task.id | int | default(1)) * 97 % 200 + 55, (task.id | int | default(1)) * 53 % 200 + 55, (task.id | int | default(1)) * 37 % 200 + 55) }}; color: #fff;">
+                <td class="index-cell"
+                    style="background-color: #{{ '%02x%02x%02x' % ((task.id | int | default(1)) * 97 % 200 + 55, (task.id | int | default(1)) * 53 % 200 + 55, (task.id | int | default(1)) * 37 % 200 + 55) }}; color: #fff;">
                     {{ task.id }}
                 </td>
                 <td>
@@ -496,12 +615,14 @@
                         {% for detail in unassigned_instance_details_rep %}
                             {% set _ = unassigned_reasons_tooltip_lines_rep.append("Instance " ~ detail.num ~ ": " ~ detail.reason) %}
                         {% endfor %}
-                        <br><span style="color: red; font-size: 0.9em;" title="{{ unassigned_reasons_tooltip_lines_rep | join('\n') }}">
+                        <br><span style="color: red; font-size: 0.9em;"
+                                  title="{{ unassigned_reasons_tooltip_lines_rep | join('\n') }}">
                             Unassigned: {{ unassigned_numbers_rep | join(', ') }}
                         </span>
                     {% endif %}
                     {% if incomplete_instances_list_rep %}
-                        <br><span style="color: orange; font-size: 0.9em;" title="Instances {{ incomplete_instances_list_rep | join(', ') }} were partially assigned due to shift end.">
+                        <br><span style="color: orange; font-size: 0.9em;"
+                                  title="Instances {{ incomplete_instances_list_rep | join(', ') }} were partially assigned due to shift end.">
                             Partially Assigned: {{ incomplete_instances_list_rep | join(', ') }}
                         </span>
                     {% endif %}
@@ -539,7 +660,8 @@
                         {% endif %}
                     {% elif task.task_type.upper() == 'PM' %}
                         {% set encoded_name = task.name | urlencode %}
-                        <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name={{ encoded_name }}" target="_blank">
+                        <a href="https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?status=NEW&status=IN_PRG&status=WT_PT&status=SCH_HD&status=RD_PICKUP&status=RDY_TO_ASSG&status=IN_PLAN&status=IN_BUILD&status=ASSGN&assetViewIds=2642&name={{ encoded_name }}"
+                           target="_blank">
                             Flux MOs
                         </a>
                     {% else %}
@@ -547,16 +669,29 @@
                     {% endif %}
                 </td>
             </tr>
-            {% endfor %}
-            {% endif %}
-        </tbody>
-    </table>
+        {% endfor %}
+    {% endif %}
+    </tbody>
+</table>
 
-    <!-- Gantt Chart -->
-    <h2>Gantt Chart: {{ total_work_minutes | default(0) }} min of work</h2>
-    {% if technicians | length == 0 %}
+<!-- Technician Filter Modal -->
+<div id="techFilterModal" class="modal" style="display:none;">
+    <div class="modal-content" id="techFilterModalContent" style="max-width: 400px; width: 90%; padding: 20px; position: absolute;">
+        <h2>Filter by Technician</h2>
+        <input type="text" id="techFilterSearch" placeholder="Search technicians..." style="width:100%;margin-bottom:10px;padding:8px;">
+        <div class="technician-checkboxes" id="techFilterCheckboxes" style="max-height:250px;overflow-y:auto;margin-bottom:15px;"></div>
+        <div style="display:flex;justify-content:space-between;">
+            <button id="applyTechFilter" style="background:#007bff;color:white;border:none;padding:8px 16px;border-radius:4px;">Apply</button>
+            <button id="clearTechFilter" style="background:#aaa;color:white;border:none;padding:8px 16px;border-radius:4px;">Clear</button>
+        </div>
+    </div>
+</div>
+
+<!-- Gantt Chart -->
+<h2>Gantt Chart: {{ total_work_minutes | default(0) }} min of work</h2>
+{% if technicians | length == 0 %}
     <p>No technicians available to display in the Gantt chart.</p>
-    {% else %}
+{% else %}
     <div class="gantt-container"
          data-total-work-minutes="{{ total_work_minutes | default(0) }}"
          data-shift-start-time="{{ shift_start_time_str | default('06:00') }}">
@@ -588,476 +723,653 @@
                 </div>
                 <div class="time-grids-wrapper">
                     {% for technician in technicians %}
-                    <div class="time-grid">
-                        {% for assignment in assignments %}
-                            {% if assignment.technician == technician %}
-                                {% set task_id_num = assignment.instance_id.split('_')[0] if assignment.instance_id and '_' in assignment.instance_id else '0' %}
-                                {% set color_r = ((task_id_num | int | default(1)) * 97 % 200 + 55) %}
-                                {% set color_g = ((task_id_num | int | default(1)) * 53 % 200 + 55) %}
-                                {% set color_b = ((task_id_num | int | default(1)) * 37 % 200 + 55) %}
-                                <div class="task-bar"
-                                     data-assignment-start="{{ assignment.start | default(0) }}"
-                                     data-assignment-duration="{{ assignment.duration | default(0) }}"
-                                     data-task-id="{{ task_id_num | default('0') }}"
-                                     style="
-                                        background-color: #{{ '%02x%02x%02x' % (color_r, color_g, color_b) }};
-                                        {% if assignment.is_incomplete %}border: 2px solid red;{% endif %}
-                                        display: none;
-                                     "
-                                     title="{{ assignment.task_name | default('Unknown') }} (Work Time: {{ assignment.start | default(0) }}-{{ (assignment.start | default(0)) + (assignment.duration | default(0)) }} min{% if assignment.is_incomplete %} - Partially assigned, full ideal duration for group: {{ assignment.original_duration | default(0) }} min{% endif %}{% if assignment.resource_mismatch_info %} - {{ assignment.resource_mismatch_info }}{% endif %})">
-                                     <span>{{ task_id_num | default('0') }}</span>
-                                </div>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
+                        <div class="time-grid">
+                            {% for assignment in assignments %}
+                                {% if assignment.technician == technician %}
+                                    {% set task_id_num = assignment.instance_id.split('_')[0] if assignment.instance_id and '_' in assignment.instance_id else '0' %}
+                                    {% set color_r = ((task_id_num | int | default(1)) * 97 % 200 + 55) %}
+                                    {% set color_g = ((task_id_num | int | default(1)) * 53 % 200 + 55) %}
+                                    {% set color_b = ((task_id_num | int | default(1)) * 37 % 200 + 55) %}
+                                    <div class="task-bar"
+                                         data-assignment-start="{{ assignment.start | default(0) }}"
+                                         data-assignment-duration="{{ assignment.duration | default(0) }}"
+                                         data-task-id="{{ task_id_num | default('0') }}"
+                                         style="
+                                                 background-color: #{{ '%02x%02x%02x' % (color_r, color_g, color_b) }};
+                                                 {% if assignment.is_incomplete %}border: 2px solid red;{% endif %}
+                                                 display: none;
+                                                 "
+                                         title="{{ assignment.task_name | default('Unknown') }} (Work Time: {{ assignment.start | default(0) }}-{{ (assignment.start | default(0)) + (assignment.duration | default(0)) }} min{% if assignment.is_incomplete %} - Partially assigned, full ideal duration for group: {{ assignment.original_duration | default(0) }} min{% endif %}{% if assignment.resource_mismatch_info %} - {{ assignment.resource_mismatch_info }}{% endif %})">
+                                        <span>{{ task_id_num | default('0') }}</span>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
                     {% endfor %}
                 </div>
             </div>
         </div>
     </div>
-    {% endif %}
+{% endif %}
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const ganttContainer = document.querySelector('.gantt-container');
-            if (!ganttContainer) return;
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const ganttContainer = document.querySelector('.gantt-container');
+        if (!ganttContainer) return;
 
-            const totalWorkMinutes = parseInt(ganttContainer.dataset.totalWorkMinutes);
-            const shiftStartTimeStr = ganttContainer.dataset.shiftStartTime;
+        const totalWorkMinutes = parseInt(ganttContainer.dataset.totalWorkMinutes);
+        const shiftStartTimeStr = ganttContainer.dataset.shiftStartTime;
 
-            if (isNaN(totalWorkMinutes) || !shiftStartTimeStr) {
-                console.error("Missing data for Gantt chart initialization.");
-                return;
-            }
-            if (totalWorkMinutes === 0 && {{technicians | length}} > 0) {
-                 generateDynamicGantt(shiftStartTimeStr, 0);
-            } else if (totalWorkMinutes > 0) {
-                generateDynamicGantt(shiftStartTimeStr, totalWorkMinutes);
-            } else if ({{ technicians | length }} === 0 && totalWorkMinutes === 0) {
-                generateDynamicGantt(shiftStartTimeStr, 0);
+        if (isNaN(totalWorkMinutes) || !shiftStartTimeStr) {
+            console.error("Missing data for Gantt chart initialization.");
+            return;
+        }
+        if (totalWorkMinutes === 0 && {{technicians | length}} > 0) {
+            generateDynamicGantt(shiftStartTimeStr, 0);
+        } else if (totalWorkMinutes > 0) {
+            generateDynamicGantt(shiftStartTimeStr, totalWorkMinutes);
+        } else if ({{ technicians | length }} === 0 && totalWorkMinutes === 0) {
+            generateDynamicGantt(shiftStartTimeStr, 0);
+        }
+    });
+
+    function formatTime(dateObj) {
+        const hours = dateObj.getHours().toString().padStart(2, '0');
+        const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+        return `${hours}:${minutes}`;
+    }
+
+    function setupGanttScrollSync() {
+        const rightPane = document.querySelector('.gantt-scrollable-right-pane');
+        const leftPaneLabelsWrapper = document.querySelector('.technician-labels-wrapper');
+        const clockTicksWrapper = document.querySelector('.clock-time-axis-ticks-wrapper');
+        const workIntervalTicksWrapper = document.querySelector('.work-interval-axis-ticks-wrapper');
+
+        if (rightPane && leftPaneLabelsWrapper && clockTicksWrapper && workIntervalTicksWrapper) {
+            rightPane.addEventListener('scroll', function () {
+                leftPaneLabelsWrapper.scrollTop = this.scrollTop;
+                if (clockTicksWrapper.offsetParent !== null) {
+                    clockTicksWrapper.scrollLeft = this.scrollLeft;
+                }
+                if (workIntervalTicksWrapper.offsetParent !== null) {
+                    workIntervalTicksWrapper.scrollLeft = this.scrollLeft;
+                }
+            });
+        } else {
+            console.error("Gantt scroll sync elements not found. Check selectors:",
+                {rightPane, leftPaneLabelsWrapper, clockTicksWrapper, workIntervalTicksWrapper}
+            );
+        }
+    }
+
+    function handleGanttCellHover(event) {
+        const cell = event.target;
+        const columnIndex = parseInt(cell.dataset.columnIndex);
+        const parentGrid = cell.closest('.time-grid');
+
+        if (!parentGrid || columnIndex === undefined || isNaN(columnIndex)) return;
+
+        const allGridsNodeList = document.querySelectorAll('.time-grids-wrapper .time-grid');
+        const allGridsArray = Array.from(allGridsNodeList);
+        const technicianIndex = allGridsArray.indexOf(parentGrid);
+        const technicianLabels = document.querySelectorAll('.technician-labels-wrapper .technician-label');
+
+        if (technicianLabels[technicianIndex]) {
+            technicianLabels[technicianIndex].classList.add('hover-highlight-technician');
+        }
+
+        const clockTicks = document.querySelectorAll('.clock-time-axis-ticks-wrapper .time-tick');
+        const workIntervalTicks = document.querySelectorAll('.work-interval-axis-ticks-wrapper .time-tick');
+
+        if (clockTicks[columnIndex]) {
+            clockTicks[columnIndex].classList.add('hover-highlight-time-tick');
+        }
+        if (workIntervalTicks[columnIndex]) {
+            workIntervalTicks[columnIndex].classList.add('hover-highlight-time-tick');
+        }
+
+        parentGrid.classList.add('hover-highlight-time-grid-row');
+
+        allGridsNodeList.forEach(grid => {
+            const cellInColumn = grid.querySelector(`[data-column-index="${columnIndex}"]`);
+            if (cellInColumn) {
+                cellInColumn.classList.add('hover-highlight-grid-cell-column');
             }
         });
+    }
 
-        function formatTime(dateObj) {
-            const hours = dateObj.getHours().toString().padStart(2, '0');
-            const minutes = dateObj.getMinutes().toString().padStart(2, '0');
-            return `${hours}:${minutes}`;
+    function handleGanttCellMouseOut(event) {
+        const cell = event.target;
+        const columnIndex = parseInt(cell.dataset.columnIndex);
+        const parentGrid = cell.closest('.time-grid');
+
+        if (!parentGrid || columnIndex === undefined || isNaN(columnIndex)) return;
+
+        const allGridsNodeList = document.querySelectorAll('.time-grids-wrapper .time-grid');
+        const allGridsArray = Array.from(allGridsNodeList);
+        const technicianIndex = allGridsArray.indexOf(parentGrid);
+        const technicianLabels = document.querySelectorAll('.technician-labels-wrapper .technician-label');
+
+        if (technicianLabels[technicianIndex]) {
+            technicianLabels[technicianIndex].classList.remove('hover-highlight-technician');
         }
 
-        function setupGanttScrollSync() {
-            const rightPane = document.querySelector('.gantt-scrollable-right-pane');
-            const leftPaneLabelsWrapper = document.querySelector('.technician-labels-wrapper');
-            const clockTicksWrapper = document.querySelector('.clock-time-axis-ticks-wrapper');
-            const workIntervalTicksWrapper = document.querySelector('.work-interval-axis-ticks-wrapper');
+        const clockTicks = document.querySelectorAll('.clock-time-axis-ticks-wrapper .time-tick');
+        const workIntervalTicks = document.querySelectorAll('.work-interval-axis-ticks-wrapper .time-tick');
 
-            if (rightPane && leftPaneLabelsWrapper && clockTicksWrapper && workIntervalTicksWrapper) {
-                rightPane.addEventListener('scroll', function() {
-                    leftPaneLabelsWrapper.scrollTop = this.scrollTop;
-                    if (clockTicksWrapper.offsetParent !== null) {
-                        clockTicksWrapper.scrollLeft = this.scrollLeft;
-                    }
-                    if (workIntervalTicksWrapper.offsetParent !== null) {
-                        workIntervalTicksWrapper.scrollLeft = this.scrollLeft;
-                    }
-                });
-            } else {
-                console.error("Gantt scroll sync elements not found. Check selectors:",
-                    {rightPane, leftPaneLabelsWrapper, clockTicksWrapper, workIntervalTicksWrapper}
-                );
-            }
+        if (clockTicks[columnIndex]) {
+            clockTicks[columnIndex].classList.remove('hover-highlight-time-tick');
+        }
+        if (workIntervalTicks[columnIndex]) {
+            workIntervalTicks[columnIndex].classList.remove('hover-highlight-time-tick');
         }
 
-        function handleGanttCellHover(event) {
-            const cell = event.target;
-            const columnIndex = parseInt(cell.dataset.columnIndex);
-            const parentGrid = cell.closest('.time-grid');
+        parentGrid.classList.remove('hover-highlight-time-grid-row');
 
-            if (!parentGrid || columnIndex === undefined || isNaN(columnIndex)) return;
-
-            const allGridsNodeList = document.querySelectorAll('.time-grids-wrapper .time-grid');
-            const allGridsArray = Array.from(allGridsNodeList);
-            const technicianIndex = allGridsArray.indexOf(parentGrid);
-            const technicianLabels = document.querySelectorAll('.technician-labels-wrapper .technician-label');
-
-            if (technicianLabels[technicianIndex]) {
-                technicianLabels[technicianIndex].classList.add('hover-highlight-technician');
+        allGridsNodeList.forEach(grid => {
+            const cellInColumn = grid.querySelector(`[data-column-index="${columnIndex}"]`);
+            if (cellInColumn) {
+                cellInColumn.classList.remove('hover-highlight-grid-cell-column');
             }
+        });
+    }
 
-            const clockTicks = document.querySelectorAll('.clock-time-axis-ticks-wrapper .time-tick');
-            const workIntervalTicks = document.querySelectorAll('.work-interval-axis-ticks-wrapper .time-tick');
+    function generateDynamicGantt(shiftStartTimeStr, totalWorkMinutes) {
+        const clockSpacerWrapper = document.querySelector('.clock-time-axis-spacer-wrapper');
+        const workIntervalSpacerWrapper = document.querySelector('.work-interval-axis-spacer-wrapper');
+        const clockTicksWrapper = document.querySelector('.clock-time-axis-ticks-wrapper');
+        const workIntervalTicksWrapper = document.querySelector('.work-interval-axis-ticks-wrapper');
+        const timeGrids = document.querySelectorAll('.time-grids-wrapper .time-grid');
 
-            if (clockTicks[columnIndex]) {
-                clockTicks[columnIndex].classList.add('hover-highlight-time-tick');
-            }
-            if (workIntervalTicks[columnIndex]) {
-                workIntervalTicks[columnIndex].classList.add('hover-highlight-time-tick');
-            }
+        if (clockSpacerWrapper) clockSpacerWrapper.innerHTML = ''; else console.error('.clock-time-axis-spacer-wrapper not found');
+        if (workIntervalSpacerWrapper) workIntervalSpacerWrapper.innerHTML = ''; else console.error('.work-interval-axis-spacer-wrapper not found');
+        if (clockTicksWrapper) clockTicksWrapper.innerHTML = ''; else console.error('.clock-time-axis-ticks-wrapper not found');
+        if (workIntervalTicksWrapper) workIntervalTicksWrapper.innerHTML = ''; else console.error('.work-interval-axis-ticks-wrapper not found');
 
-            parentGrid.classList.add('hover-highlight-time-grid-row');
+        const workIntervalDuration = 15;
+        const timelineSlots = [];
+        let workTimeProcessed = 0;
+        const break1StartAfterWork = Math.floor(totalWorkMinutes * 0.25 / workIntervalDuration) * workIntervalDuration;
+        const breakMainStartAfterWork = Math.floor(totalWorkMinutes * 0.50 / workIntervalDuration) * workIntervalDuration;
+        const break2StartAfterWork = Math.floor(totalWorkMinutes * 0.75 / workIntervalDuration) * workIntervalDuration;
+        const break1Duration = 15;
+        const breakMainDuration = 60;
+        const break2Duration = 15;
 
-            allGridsNodeList.forEach(grid => {
-                const cellInColumn = grid.querySelector(`[data-column-index="${columnIndex}"]`);
-                if (cellInColumn) {
-                    cellInColumn.classList.add('hover-highlight-grid-cell-column');
-                }
-            });
-        }
+        const breakPointsConfig = [
+            {triggerWorkTime: break1StartAfterWork, duration: break1Duration, type: 'break1', taken: false},
+            {triggerWorkTime: breakMainStartAfterWork, duration: breakMainDuration, type: 'breakMain', taken: false},
+            {triggerWorkTime: break2StartAfterWork, duration: break2Duration, type: 'break2', taken: false}
+        ].sort((a, b) => a.triggerWorkTime - b.triggerWorkTime);
 
-        function handleGanttCellMouseOut(event) {
-            const cell = event.target;
-            const columnIndex = parseInt(cell.dataset.columnIndex);
-            const parentGrid = cell.closest('.time-grid');
-
-            if (!parentGrid || columnIndex === undefined || isNaN(columnIndex)) return;
-
-            const allGridsNodeList = document.querySelectorAll('.time-grids-wrapper .time-grid');
-            const allGridsArray = Array.from(allGridsNodeList);
-            const technicianIndex = allGridsArray.indexOf(parentGrid);
-            const technicianLabels = document.querySelectorAll('.technician-labels-wrapper .technician-label');
-
-            if (technicianLabels[technicianIndex]) {
-                technicianLabels[technicianIndex].classList.remove('hover-highlight-technician');
-            }
-
-            const clockTicks = document.querySelectorAll('.clock-time-axis-ticks-wrapper .time-tick');
-            const workIntervalTicks = document.querySelectorAll('.work-interval-axis-ticks-wrapper .time-tick');
-
-            if (clockTicks[columnIndex]) {
-                clockTicks[columnIndex].classList.remove('hover-highlight-time-tick');
-            }
-            if (workIntervalTicks[columnIndex]) {
-                workIntervalTicks[columnIndex].classList.remove('hover-highlight-time-tick');
-            }
-
-            parentGrid.classList.remove('hover-highlight-time-grid-row');
-
-            allGridsNodeList.forEach(grid => {
-                const cellInColumn = grid.querySelector(`[data-column-index="${columnIndex}"]`);
-                if (cellInColumn) {
-                    cellInColumn.classList.remove('hover-highlight-grid-cell-column');
-                }
-            });
-        }
-
-        function generateDynamicGantt(shiftStartTimeStr, totalWorkMinutes) {
-            const clockSpacerWrapper = document.querySelector('.clock-time-axis-spacer-wrapper');
-            const workIntervalSpacerWrapper = document.querySelector('.work-interval-axis-spacer-wrapper');
-            const clockTicksWrapper = document.querySelector('.clock-time-axis-ticks-wrapper');
-            const workIntervalTicksWrapper = document.querySelector('.work-interval-axis-ticks-wrapper');
-            const timeGrids = document.querySelectorAll('.time-grids-wrapper .time-grid');
-
-            if (clockSpacerWrapper) clockSpacerWrapper.innerHTML = ''; else console.error('.clock-time-axis-spacer-wrapper not found');
-            if (workIntervalSpacerWrapper) workIntervalSpacerWrapper.innerHTML = ''; else console.error('.work-interval-axis-spacer-wrapper not found');
-            if (clockTicksWrapper) clockTicksWrapper.innerHTML = ''; else console.error('.clock-time-axis-ticks-wrapper not found');
-            if (workIntervalTicksWrapper) workIntervalTicksWrapper.innerHTML = ''; else console.error('.work-interval-axis-ticks-wrapper not found');
-
-            const workIntervalDuration = 15;
-            const timelineSlots = [];
-            let workTimeProcessed = 0;
-            const break1StartAfterWork = Math.floor(totalWorkMinutes * 0.25 / workIntervalDuration) * workIntervalDuration;
-            const breakMainStartAfterWork = Math.floor(totalWorkMinutes * 0.50 / workIntervalDuration) * workIntervalDuration;
-            const break2StartAfterWork = Math.floor(totalWorkMinutes * 0.75 / workIntervalDuration) * workIntervalDuration;
-            const break1Duration = 15;
-            const breakMainDuration = 60;
-            const break2Duration = 15;
-
-            const breakPointsConfig = [
-                { triggerWorkTime: break1StartAfterWork, duration: break1Duration, type: 'break1', taken: false },
-                { triggerWorkTime: breakMainStartAfterWork, duration: breakMainDuration, type: 'breakMain', taken: false },
-                { triggerWorkTime: break2StartAfterWork, duration: break2Duration, type: 'break2', taken: false }
-            ].sort((a, b) => a.triggerWorkTime - b.triggerWorkTime);
-
-            if (totalWorkMinutes > 0) {
-                while (workTimeProcessed < totalWorkMinutes) {
-                    let breakAddedInIteration = false;
-                    for (const bp of breakPointsConfig) {
-                        if (!bp.taken && workTimeProcessed === bp.triggerWorkTime) {
-                            for (let i = 0; i < bp.duration / workIntervalDuration; i++) {
-                                timelineSlots.push({ type: bp.type, workTimeCovered: 0 });
-                            }
-                            bp.taken = true;
-                            breakAddedInIteration = true;
-                        }
-                    }
-                    if (workTimeProcessed < totalWorkMinutes) {
-                        timelineSlots.push({ type: 'work', workTimeCovered: workIntervalDuration });
-                        workTimeProcessed += workIntervalDuration;
-                    } else if (!breakAddedInIteration && workTimeProcessed >= totalWorkMinutes) {
-                        break;
-                    }
-                }
+        if (totalWorkMinutes > 0) {
+            while (workTimeProcessed < totalWorkMinutes) {
+                let breakAddedInIteration = false;
                 for (const bp of breakPointsConfig) {
                     if (!bp.taken && workTimeProcessed === bp.triggerWorkTime) {
                         for (let i = 0; i < bp.duration / workIntervalDuration; i++) {
-                            timelineSlots.push({ type: bp.type, workTimeCovered: 0 });
+                            timelineSlots.push({type: bp.type, workTimeCovered: 0});
                         }
                         bp.taken = true;
+                        breakAddedInIteration = true;
                     }
                 }
+                if (workTimeProcessed < totalWorkMinutes) {
+                    timelineSlots.push({type: 'work', workTimeCovered: workIntervalDuration});
+                    workTimeProcessed += workIntervalDuration;
+                } else if (!breakAddedInIteration && workTimeProcessed >= totalWorkMinutes) {
+                    break;
+                }
+            }
+            for (const bp of breakPointsConfig) {
+                if (!bp.taken && workTimeProcessed === bp.triggerWorkTime) {
+                    for (let i = 0; i < bp.duration / workIntervalDuration; i++) {
+                        timelineSlots.push({type: bp.type, workTimeCovered: 0});
+                    }
+                    bp.taken = true;
+                }
+            }
+        } else {
+            timelineSlots.push({type: 'placeholder', workTimeCovered: 0});
+        }
+
+        const numTotalTimelineSlots = timelineSlots.length;
+
+        const createSpacerTick = () => {
+            const spacer = document.createElement('div');
+            spacer.classList.add('time-tick', 'spacer-tick');
+            return spacer;
+        };
+
+        if (clockSpacerWrapper) clockSpacerWrapper.appendChild(createSpacerTick());
+        if (workIntervalSpacerWrapper) workIntervalSpacerWrapper.appendChild(createSpacerTick());
+
+        const [startHour, startMinute] = shiftStartTimeStr.split(':').map(Number);
+        let currentClock = new Date(2000, 0, 1, startHour, startMinute);
+        let cumulativeWorkMinutes = 0;
+
+        timelineSlots.forEach((slot, index) => {
+            const isLastRealSlot = (index === numTotalTimelineSlots - 1);
+            const headerTickBorderStyle = isLastRealSlot ? "none" : "1px solid #e0e0e0";
+
+            const tickDivClock = document.createElement('div');
+            tickDivClock.classList.add('time-tick');
+            tickDivClock.style.borderRight = headerTickBorderStyle;
+            let labelClock = formatTime(currentClock);
+            if (slot.type !== 'work' && slot.type !== 'placeholder') {
+                tickDivClock.classList.add('break-interval', `break-type-${slot.type}`);
+            }
+            if (slot.type === 'placeholder') {
+                labelClock = `${formatTime(currentClock)} (No Work Scheduled)`;
+            }
+            tickDivClock.textContent = labelClock;
+            if (clockTicksWrapper) clockTicksWrapper.appendChild(tickDivClock);
+            currentClock.setMinutes(currentClock.getMinutes() + workIntervalDuration);
+
+            const tickDivWork = document.createElement('div');
+            tickDivWork.classList.add('time-tick');
+            tickDivWork.style.borderRight = headerTickBorderStyle;
+            if (slot.type === 'work') {
+                tickDivWork.textContent = `${cumulativeWorkMinutes}-${cumulativeWorkMinutes + slot.workTimeCovered}`;
+                cumulativeWorkMinutes += slot.workTimeCovered;
+            } else if (slot.type === 'placeholder') {
+                tickDivWork.textContent = "0-0";
             } else {
-                 timelineSlots.push({ type: 'placeholder', workTimeCovered: 0 });
+                tickDivWork.textContent = 'Break';
+                tickDivWork.classList.add('break-interval', `break-type-${slot.type}`);
             }
+            if (workIntervalTicksWrapper) workIntervalTicksWrapper.appendChild(tickDivWork);
+        });
 
-            const numTotalTimelineSlots = timelineSlots.length;
+        const ganttColumnMinWidth = '50px';
+        const ganttColumnMinWidthPx = parseInt(ganttColumnMinWidth);
+        const totalWidth = numTotalTimelineSlots * ganttColumnMinWidthPx;
 
-            const createSpacerTick = () => {
-                const spacer = document.createElement('div');
-                spacer.classList.add('time-tick', 'spacer-tick');
-                return spacer;
-            };
+        // Set widths for scrollable axis containers to ensure horizontal lines extend to the end
+        if (clockTicksWrapper) {
+            clockTicksWrapper.style.width = `${totalWidth}px`;
+        }
+        if (workIntervalTicksWrapper) {
+            workIntervalTicksWrapper.style.width = `${totalWidth}px`;
+        }
+        const timeGridsWrapper = document.querySelector('.time-grids-wrapper');
+        if (timeGridsWrapper) {
+            timeGridsWrapper.style.width = `${totalWidth}px`;
+        }
 
-            if (clockSpacerWrapper) clockSpacerWrapper.appendChild(createSpacerTick());
-            if (workIntervalSpacerWrapper) workIntervalSpacerWrapper.appendChild(createSpacerTick());
+        if (clockSpacerWrapper) clockSpacerWrapper.style.gridTemplateColumns = '1fr';
+        if (workIntervalSpacerWrapper) workIntervalSpacerWrapper.style.gridTemplateColumns = '1fr';
 
-            const [startHour, startMinute] = shiftStartTimeStr.split(':').map(Number);
-            let currentClock = new Date(2000, 0, 1, startHour, startMinute);
-            let cumulativeWorkMinutes = 0;
-
-            timelineSlots.forEach((slot, index) => {
-                const isLastRealSlot = (index === numTotalTimelineSlots - 1);
-                const headerTickBorderStyle = isLastRealSlot ? "none" : "1px solid #e0e0e0";
-
-                const tickDivClock = document.createElement('div');
-                tickDivClock.classList.add('time-tick');
-                tickDivClock.style.borderRight = headerTickBorderStyle;
-                let labelClock = formatTime(currentClock);
-                if (slot.type !== 'work' && slot.type !== 'placeholder') {
-                    tickDivClock.classList.add('break-interval', `break-type-${slot.type}`);
-                }
-                if (slot.type === 'placeholder') {
-                     labelClock = `${formatTime(currentClock)} (No Work Scheduled)`;
-                }
-                tickDivClock.textContent = labelClock;
-                if (clockTicksWrapper) clockTicksWrapper.appendChild(tickDivClock);
-                currentClock.setMinutes(currentClock.getMinutes() + workIntervalDuration);
-
-                const tickDivWork = document.createElement('div');
-                tickDivWork.classList.add('time-tick');
-                tickDivWork.style.borderRight = headerTickBorderStyle;
-                if (slot.type === 'work') {
-                    tickDivWork.textContent = `${cumulativeWorkMinutes}-${cumulativeWorkMinutes + slot.workTimeCovered}`;
-                    cumulativeWorkMinutes += slot.workTimeCovered;
-                } else if (slot.type === 'placeholder') {
-                    tickDivWork.textContent = "0-0";
-                } else {
-                    tickDivWork.textContent = 'Break';
-                    tickDivWork.classList.add('break-interval', `break-type-${slot.type}`);
-                }
-                if (workIntervalTicksWrapper) workIntervalTicksWrapper.appendChild(tickDivWork);
-            });
-
-            const ganttColumnMinWidth = '50px';
-            const ganttColumnMinWidthPx = parseInt(ganttColumnMinWidth);
-            const totalWidth = numTotalTimelineSlots * ganttColumnMinWidthPx;
-
-            // Set widths for scrollable axis containers to ensure horizontal lines extend to the end
-            if (clockTicksWrapper) {
-                clockTicksWrapper.style.width = `${totalWidth}px`;
-            }
-            if (workIntervalTicksWrapper) {
-                workIntervalTicksWrapper.style.width = `${totalWidth}px`;
-            }
-            const timeGridsWrapper = document.querySelector('.time-grids-wrapper');
-            if (timeGridsWrapper) {
-                timeGridsWrapper.style.width = `${totalWidth}px`;
-            }
-
-            if (clockSpacerWrapper) clockSpacerWrapper.style.gridTemplateColumns = '1fr';
-            if (workIntervalSpacerWrapper) workIntervalSpacerWrapper.style.gridTemplateColumns = '1fr';
-
-            if (numTotalTimelineSlots > 0) {
-                const ticksGridColsStyle = `repeat(${numTotalTimelineSlots}, minmax(${ganttColumnMinWidth}, 1fr))`;
-                if (clockTicksWrapper) clockTicksWrapper.style.gridTemplateColumns = ticksGridColsStyle;
-                if (workIntervalTicksWrapper) workIntervalTicksWrapper.style.gridTemplateColumns = ticksGridColsStyle;
-                timeGrids.forEach(grid => {
-                    grid.style.gridTemplateColumns = ticksGridColsStyle;
-                });
-            } else {
-                const fallbackTicksGridColsStyle = `minmax(${ganttColumnMinWidth}, 1fr)`;
-                if (clockTicksWrapper) clockTicksWrapper.style.gridTemplateColumns = fallbackTicksGridColsStyle;
-                if (workIntervalTicksWrapper) workIntervalTicksWrapper.style.gridTemplateColumns = fallbackTicksGridColsStyle;
-                timeGrids.forEach(grid => {
-                    grid.style.gridTemplateColumns = fallbackTicksGridColsStyle;
-                });
-            }
-
+        if (numTotalTimelineSlots > 0) {
+            const ticksGridColsStyle = `repeat(${numTotalTimelineSlots}, minmax(${ganttColumnMinWidth}, 1fr))`;
+            if (clockTicksWrapper) clockTicksWrapper.style.gridTemplateColumns = ticksGridColsStyle;
+            if (workIntervalTicksWrapper) workIntervalTicksWrapper.style.gridTemplateColumns = ticksGridColsStyle;
             timeGrids.forEach(grid => {
-                grid.querySelectorAll('.break-column-fill, .work-column-border-carrier').forEach(el => el.remove());
-                timelineSlots.forEach((slot, index) => {
-                    const isLastSlot = (index === numTotalTimelineSlots - 1);
-                    const contentGridLineBorderStyle = isLastSlot ? "none" : "1px solid #e0e0e0";
-                    let columnElement = null;
-                    if (slot.type !== 'work' && slot.type !== 'placeholder') {
-                        columnElement = document.createElement('div');
-                        columnElement.classList.add('break-column-fill', `break-type-${slot.type}`);
-                    } else {
-                        columnElement = document.createElement('div');
-                        columnElement.classList.add('work-column-border-carrier');
-                    }
-                    if (columnElement) {
-                        columnElement.style.gridColumn = `${index + 1} / span 1`;
-                        columnElement.style.borderRight = contentGridLineBorderStyle;
-
-                        columnElement.dataset.columnIndex = index;
-                        columnElement.addEventListener('mouseover', handleGanttCellHover);
-                        columnElement.addEventListener('mouseout', handleGanttCellMouseOut);
-
-                        grid.appendChild(columnElement);
-                    }
-                });
+                grid.style.gridTemplateColumns = ticksGridColsStyle;
             });
+        } else {
+            const fallbackTicksGridColsStyle = `minmax(${ganttColumnMinWidth}, 1fr)`;
+            if (clockTicksWrapper) clockTicksWrapper.style.gridTemplateColumns = fallbackTicksGridColsStyle;
+            if (workIntervalTicksWrapper) workIntervalTicksWrapper.style.gridTemplateColumns = fallbackTicksGridColsStyle;
+            timeGrids.forEach(grid => {
+                grid.style.gridTemplateColumns = fallbackTicksGridColsStyle;
+            });
+        }
 
-            function getTimelineSlotIndexForWorkStart(targetWorkMinutes) {
-                if (totalWorkMinutes === 0 && timelineSlots.length > 0 && timelineSlots[0].type === 'placeholder') return 1;
-                let cumulativeWorkTime = 0;
-                for (let i = 0; i < timelineSlots.length; i++) {
-                    const slot = timelineSlots[i];
-                    if (slot.type === 'work') {
-                        if (targetWorkMinutes >= cumulativeWorkTime && targetWorkMinutes < cumulativeWorkTime + slot.workTimeCovered) {
-                            return i + 1;
-                        }
-                        cumulativeWorkTime += slot.workTimeCovered;
-                    }
-                    if (targetWorkMinutes === 0 && cumulativeWorkTime === 0 && slot.type === 'work') return i + 1;
+        timeGrids.forEach(grid => {
+            grid.querySelectorAll('.break-column-fill, .work-column-border-carrier').forEach(el => el.remove());
+            timelineSlots.forEach((slot, index) => {
+                const isLastSlot = (index === numTotalTimelineSlots - 1);
+                const contentGridLineBorderStyle = isLastSlot ? "none" : "1px solid #e0e0e0";
+                let columnElement = null;
+                if (slot.type !== 'work' && slot.type !== 'placeholder') {
+                    columnElement = document.createElement('div');
+                    columnElement.classList.add('break-column-fill', `break-type-${slot.type}`);
+                } else {
+                    columnElement = document.createElement('div');
+                    columnElement.classList.add('work-column-border-carrier');
                 }
-                if (targetWorkMinutes === totalWorkMinutes && totalWorkMinutes > 0) {
-                    let tempWorkTime = 0;
-                    for (let i = 0; i < timelineSlots.length; i++) {
-                        if (timelineSlots[i].type === 'work') tempWorkTime += timelineSlots[i].workTimeCovered;
-                        if (tempWorkTime === totalWorkMinutes) return i + 1;
-                    }
+                if (columnElement) {
+                    columnElement.style.gridColumn = `${index + 1} / span 1`;
+                    columnElement.style.borderRight = contentGridLineBorderStyle;
+
+                    columnElement.dataset.columnIndex = index;
+                    columnElement.addEventListener('mouseover', handleGanttCellHover);
+                    columnElement.addEventListener('mouseout', handleGanttCellMouseOut);
+
+                    grid.appendChild(columnElement);
                 }
-                return numTotalTimelineSlots > 0 ? numTotalTimelineSlots : 1;
+            });
+        });
+
+        function getTimelineSlotIndexForWorkStart(targetWorkMinutes) {
+            if (totalWorkMinutes === 0 && timelineSlots.length > 0 && timelineSlots[0].type === 'placeholder') return 1;
+            let cumulativeWorkTime = 0;
+            for (let i = 0; i < timelineSlots.length; i++) {
+                const slot = timelineSlots[i];
+                if (slot.type === 'work') {
+                    if (targetWorkMinutes >= cumulativeWorkTime && targetWorkMinutes < cumulativeWorkTime + slot.workTimeCovered) {
+                        return i + 1;
+                    }
+                    cumulativeWorkTime += slot.workTimeCovered;
+                }
+                if (targetWorkMinutes === 0 && cumulativeWorkTime === 0 && slot.type === 'work') return i + 1;
             }
+            if (targetWorkMinutes === totalWorkMinutes && totalWorkMinutes > 0) {
+                let tempWorkTime = 0;
+                for (let i = 0; i < timelineSlots.length; i++) {
+                    if (timelineSlots[i].type === 'work') tempWorkTime += timelineSlots[i].workTimeCovered;
+                    if (tempWorkTime === totalWorkMinutes) return i + 1;
+                }
+            }
+            return numTotalTimelineSlots > 0 ? numTotalTimelineSlots : 1;
+        }
 
-            if (totalWorkMinutes > 0) {
-                const allTechnicianGrids = timeGrids;
-                allTechnicianGrids.forEach(grid => {
-                    const masterTaskBars = Array.from(grid.querySelectorAll('.task-bar[style*="display: none"]'));
-                    grid.querySelectorAll('.task-bar:not([style*="display: none"])').forEach(bar => bar.remove());
+        if (totalWorkMinutes > 0) {
+            const allTechnicianGrids = timeGrids;
+            allTechnicianGrids.forEach(grid => {
+                const masterTaskBars = Array.from(grid.querySelectorAll('.task-bar[style*="display: none"]'));
+                grid.querySelectorAll('.task-bar:not([style*="display: none"])').forEach(bar => bar.remove());
 
-                    masterTaskBars.forEach(masterBar => {
-                        const assignmentStartWorkMinutes = parseFloat(masterBar.dataset.assignmentStart);
-                        const assignmentDurationWorkMinutes = parseFloat(masterBar.dataset.assignmentDuration);
-                        const taskIdText = masterBar.dataset.taskId;
+                masterTaskBars.forEach(masterBar => {
+                    const assignmentStartWorkMinutes = parseFloat(masterBar.dataset.assignmentStart);
+                    const assignmentDurationWorkMinutes = parseFloat(masterBar.dataset.assignmentDuration);
+                    const taskIdText = masterBar.dataset.taskId;
 
-                        if (assignmentDurationWorkMinutes === 0) {
-                            const timelineSlotStartCssIndex = getTimelineSlotIndexForWorkStart(assignmentStartWorkMinutes);
-                            const segmentDiv = masterBar.cloneNode(true);
-                            segmentDiv.innerHTML = `<span>${taskIdText}</span>`;
-                            segmentDiv.style.gridColumn = `${timelineSlotStartCssIndex} / span 1`;
-                            segmentDiv.style.display = 'flex';
-                            segmentDiv.classList.add('zero-duration');
-                            grid.appendChild(segmentDiv);
-                            return;
-                        }
+                    if (assignmentDurationWorkMinutes === 0) {
+                        const timelineSlotStartCssIndex = getTimelineSlotIndexForWorkStart(assignmentStartWorkMinutes);
+                        const segmentDiv = masterBar.cloneNode(true);
+                        segmentDiv.innerHTML = `<span>${taskIdText}</span>`;
+                        segmentDiv.style.gridColumn = `${timelineSlotStartCssIndex} / span 1`;
+                        segmentDiv.style.display = 'flex';
+                        segmentDiv.classList.add('zero-duration');
+                        grid.appendChild(segmentDiv);
+                        return;
+                    }
 
-                        let workMinutesProcessedForTask = 0;
-                        let currentSegmentStartTimelineSlot_0_based = -1;
-                        let timelineSlotCursor_0_based = 0;
-                        let cumulativeWorkTimeForCursorSearch = 0;
-                        let initialCursorFound = false;
+                    let workMinutesProcessedForTask = 0;
+                    let currentSegmentStartTimelineSlot_0_based = -1;
+                    let timelineSlotCursor_0_based = 0;
+                    let cumulativeWorkTimeForCursorSearch = 0;
+                    let initialCursorFound = false;
 
-                        for (let i = 0; i < timelineSlots.length; i++) {
-                            if (timelineSlots[i].type === 'work') {
-                                if (assignmentStartWorkMinutes >= cumulativeWorkTimeForCursorSearch &&
-                                    assignmentStartWorkMinutes < cumulativeWorkTimeForCursorSearch + timelineSlots[i].workTimeCovered) {
-                                    timelineSlotCursor_0_based = i;
-                                    initialCursorFound = true;
-                                    break;
-                                }
-                                cumulativeWorkTimeForCursorSearch += timelineSlots[i].workTimeCovered;
+                    for (let i = 0; i < timelineSlots.length; i++) {
+                        if (timelineSlots[i].type === 'work') {
+                            if (assignmentStartWorkMinutes >= cumulativeWorkTimeForCursorSearch &&
+                                assignmentStartWorkMinutes < cumulativeWorkTimeForCursorSearch + timelineSlots[i].workTimeCovered) {
+                                timelineSlotCursor_0_based = i;
+                                initialCursorFound = true;
+                                break;
                             }
-                            if (assignmentStartWorkMinutes === 0 && cumulativeWorkTimeForCursorSearch === 0 && timelineSlots[i].type === 'work') {
+                            cumulativeWorkTimeForCursorSearch += timelineSlots[i].workTimeCovered;
+                        }
+                        if (assignmentStartWorkMinutes === 0 && cumulativeWorkTimeForCursorSearch === 0 && timelineSlots[i].type === 'work') {
+                            timelineSlotCursor_0_based = i;
+                            initialCursorFound = true;
+                            break;
+                        }
+                    }
+                    if (!initialCursorFound && assignmentStartWorkMinutes === totalWorkMinutes) {
+                        for (let i = timelineSlots.length - 1; i >= 0; i--) {
+                            if (timelineSlots[i].type === 'work') {
                                 timelineSlotCursor_0_based = i;
                                 initialCursorFound = true;
                                 break;
                             }
                         }
-                        if (!initialCursorFound && assignmentStartWorkMinutes === totalWorkMinutes) {
-                            for (let i = timelineSlots.length - 1; i >= 0; i--) {
-                                if (timelineSlots[i].type === 'work') {
-                                    timelineSlotCursor_0_based = i;
-                                    initialCursorFound = true;
-                                    break;
-                                }
-                            }
-                        }
-                        if (!initialCursorFound) {
-                            console.warn(`Could not find starting slot for task: ${masterBar.title}, start: ${assignmentStartWorkMinutes}`);
-                            return;
-                        }
+                    }
+                    if (!initialCursorFound) {
+                        console.warn(`Could not find starting slot for task: ${masterBar.title}, start: ${assignmentStartWorkMinutes}`);
+                        return;
+                    }
 
-                        let previousSlotWasBreakForSegmentStart = false;
+                    let previousSlotWasBreakForSegmentStart = false;
 
-                        while (workMinutesProcessedForTask < assignmentDurationWorkMinutes && timelineSlotCursor_0_based < timelineSlots.length) {
-                            const currentSlot = timelineSlots[timelineSlotCursor_0_based];
+                    while (workMinutesProcessedForTask < assignmentDurationWorkMinutes && timelineSlotCursor_0_based < timelineSlots.length) {
+                        const currentSlot = timelineSlots[timelineSlotCursor_0_based];
 
-                            if (currentSlot.type === 'work') {
-                                if (currentSegmentStartTimelineSlot_0_based === -1) {
-                                    currentSegmentStartTimelineSlot_0_based = timelineSlotCursor_0_based;
-                                    if (timelineSlotCursor_0_based > 0 &&
-                                        timelineSlots[timelineSlotCursor_0_based - 1].type !== 'work' &&
-                                        timelineSlots[timelineSlotCursor_0_based - 1].type !== 'placeholder') {
-                                        if (workMinutesProcessedForTask > 0) {
-                                            previousSlotWasBreakForSegmentStart = true;
-                                        } else {
-                                            previousSlotWasBreakForSegmentStart = false;
-                                        }
+                        if (currentSlot.type === 'work') {
+                            if (currentSegmentStartTimelineSlot_0_based === -1) {
+                                currentSegmentStartTimelineSlot_0_based = timelineSlotCursor_0_based;
+                                if (timelineSlotCursor_0_based > 0 &&
+                                    timelineSlots[timelineSlotCursor_0_based - 1].type !== 'work' &&
+                                    timelineSlots[timelineSlotCursor_0_based - 1].type !== 'placeholder') {
+                                    if (workMinutesProcessedForTask > 0) {
+                                        previousSlotWasBreakForSegmentStart = true;
                                     } else {
                                         previousSlotWasBreakForSegmentStart = false;
                                     }
-                                }
-
-                                const remainingWorkForTask = assignmentDurationWorkMinutes - workMinutesProcessedForTask;
-                                workMinutesProcessedForTask += Math.min(currentSlot.workTimeCovered, remainingWorkForTask);
-
-                                if (workMinutesProcessedForTask >= assignmentDurationWorkMinutes || timelineSlotCursor_0_based === timelineSlots.length - 1) {
-                                    const segmentDiv = masterBar.cloneNode(true);
-                                    segmentDiv.innerHTML = `<span>${taskIdText}</span>`;
-                                    const startCol = currentSegmentStartTimelineSlot_0_based + 1;
-                                    const endColExclusive = timelineSlotCursor_0_based + 1 + 1;
-                                    segmentDiv.style.gridColumn = `${startCol} / ${endColExclusive}`;
-                                    segmentDiv.style.display = 'flex';
-                                    if (previousSlotWasBreakForSegmentStart) {
-                                        segmentDiv.classList.add('task-segment-starts-after-break');
-                                    }
-                                    if (timelineSlotCursor_0_based < timelineSlots.length - 1 &&
-                                        timelineSlots[timelineSlotCursor_0_based + 1].type !== 'work' &&
-                                        timelineSlots[timelineSlotCursor_0_based + 1].type !== 'placeholder') {
-                                        if (workMinutesProcessedForTask < assignmentDurationWorkMinutes) {
-                                            segmentDiv.classList.add('task-segment-ends-before-break');
-                                        }
-                                    }
-                                    grid.appendChild(segmentDiv);
-                                    currentSegmentStartTimelineSlot_0_based = -1;
-                                    previousSlotWasBreakForSegmentStart = false;
-                                    break;
-                                }
-                            } else {
-                                if (currentSegmentStartTimelineSlot_0_based !== -1) {
-                                    const segmentDiv = masterBar.cloneNode(true);
-                                    segmentDiv.innerHTML = `<span>${taskIdText}</span>`;
-                                    const startCol = currentSegmentStartTimelineSlot_0_based + 1;
-                                    const endColExclusive = timelineSlotCursor_0_based + 1;
-                                    segmentDiv.style.gridColumn = `${startCol} / ${endColExclusive}`;
-                                    segmentDiv.style.display = 'flex';
-                                    if (previousSlotWasBreakForSegmentStart) {
-                                        segmentDiv.classList.add('task-segment-starts-after-break');
-                                    }
-                                    segmentDiv.classList.add('task-segment-ends-before-break');
-                                    grid.appendChild(segmentDiv);
-                                    currentSegmentStartTimelineSlot_0_based = -1;
+                                } else {
                                     previousSlotWasBreakForSegmentStart = false;
                                 }
                             }
-                            timelineSlotCursor_0_based++;
+
+                            const remainingWorkForTask = assignmentDurationWorkMinutes - workMinutesProcessedForTask;
+                            workMinutesProcessedForTask += Math.min(currentSlot.workTimeCovered, remainingWorkForTask);
+
+                            if (workMinutesProcessedForTask >= assignmentDurationWorkMinutes || timelineSlotCursor_0_based === timelineSlots.length - 1) {
+                                const segmentDiv = masterBar.cloneNode(true);
+                                segmentDiv.innerHTML = `<span>${taskIdText}</span>`;
+                                const startCol = currentSegmentStartTimelineSlot_0_based + 1;
+                                const endColExclusive = timelineSlotCursor_0_based + 1 + 1;
+                                segmentDiv.style.gridColumn = `${startCol} / ${endColExclusive}`;
+                                segmentDiv.style.display = 'flex';
+                                if (previousSlotWasBreakForSegmentStart) {
+                                    segmentDiv.classList.add('task-segment-starts-after-break');
+                                }
+                                if (timelineSlotCursor_0_based < timelineSlots.length - 1 &&
+                                    timelineSlots[timelineSlotCursor_0_based + 1].type !== 'work' &&
+                                    timelineSlots[timelineSlotCursor_0_based + 1].type !== 'placeholder') {
+                                    if (workMinutesProcessedForTask < assignmentDurationWorkMinutes) {
+                                        segmentDiv.classList.add('task-segment-ends-before-break');
+                                    }
+                                }
+                                grid.appendChild(segmentDiv);
+                                currentSegmentStartTimelineSlot_0_based = -1;
+                                previousSlotWasBreakForSegmentStart = false;
+                                break;
+                            }
+                        } else {
+                            if (currentSegmentStartTimelineSlot_0_based !== -1) {
+                                const segmentDiv = masterBar.cloneNode(true);
+                                segmentDiv.innerHTML = `<span>${taskIdText}</span>`;
+                                const startCol = currentSegmentStartTimelineSlot_0_based + 1;
+                                const endColExclusive = timelineSlotCursor_0_based + 1;
+                                segmentDiv.style.gridColumn = `${startCol} / ${endColExclusive}`;
+                                segmentDiv.style.display = 'flex';
+                                if (previousSlotWasBreakForSegmentStart) {
+                                    segmentDiv.classList.add('task-segment-starts-after-break');
+                                }
+                                segmentDiv.classList.add('task-segment-ends-before-break');
+                                grid.appendChild(segmentDiv);
+                                currentSegmentStartTimelineSlot_0_based = -1;
+                                previousSlotWasBreakForSegmentStart = false;
+                            }
                         }
-                    });
+                        timelineSlotCursor_0_based++;
+                    }
                 });
-            }
-            setupGanttScrollSync();
+            });
         }
-    </script>
+        setupGanttScrollSync();
+    }
+
+    // --- Technician Filter Modal Logic ---
+    (function() {
+        // Modal elements
+        const filterBtn = document.getElementById('filter-button');
+        const modal = document.getElementById('techFilterModal');
+        const modalContent = document.getElementById('techFilterModalContent');
+        const searchInput = document.getElementById('techFilterSearch');
+        const checkboxesDiv = document.getElementById('techFilterCheckboxes');
+        const applyBtn = document.getElementById('applyTechFilter');
+        const clearBtn = document.getElementById('clearTechFilter');
+
+        // State
+        let allTechs = [];
+        let selectedTechs = null; // null = no filter, [] = filter to none, [names...] = filter to those
+        let modalTempSelection = null; // Used for canceling changes if modal is closed without Apply/Clear
+
+        // Get available technicians from .technician-labels-wrapper
+        function getAvailableTechnicians() {
+            const labels = document.querySelectorAll('.technician-labels-wrapper .technician-label');
+            return Array.from(labels).map(l => l.textContent.trim());
+        }
+
+        // Render checkboxes in modal, reflecting last selection or default (all unchecked)
+        function renderTechCheckboxes(filter = "") {
+            checkboxesDiv.innerHTML = "";
+            // Always show all technicians, but hide those that don't match filter
+            allTechs.forEach(tech => {
+                const label = document.createElement('label');
+                label.style.display = tech.toLowerCase().includes(filter.toLowerCase()) ? 'block' : 'none';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.value = tech;
+                // If no filter has ever been applied, all unchecked by default
+                // If modalTempSelection is set, use it; else use selectedTechs
+                let checkedList = (modalTempSelection !== null) ? modalTempSelection : selectedTechs;
+                cb.checked = Array.isArray(checkedList) && checkedList.includes(tech);
+                // Add event to update modalTempSelection on change
+                cb.addEventListener('change', function() {
+                    // Update modalTempSelection to reflect current checked state
+                    if (!Array.isArray(modalTempSelection)) modalTempSelection = [];
+                    if (this.checked) {
+                        if (!modalTempSelection.includes(tech)) modalTempSelection.push(tech);
+                    } else {
+                        modalTempSelection = modalTempSelection.filter(t => t !== tech);
+                    }
+                });
+                label.appendChild(cb);
+                label.appendChild(document.createTextNode(tech));
+                checkboxesDiv.appendChild(label);
+            });
+        }
+
+        // Open modal and position it below the filter button
+        function openModal() {
+            if (modal.style.display === 'flex') return; // Already open
+            allTechs = getAvailableTechnicians();
+            // If no filter has ever been applied, default to all unchecked
+            if (selectedTechs === null) {
+                modalTempSelection = [];
+            } else {
+                // Clone the current selection for possible cancel
+                modalTempSelection = selectedTechs.slice();
+            }
+            // Always clear the search input when opening
+            if (searchInput) searchInput.value = "";
+            renderTechCheckboxes("");
+            modal.style.display = 'flex';
+            setTimeout(() => {
+                const btnRect = filterBtn.getBoundingClientRect();
+                const scrollTop = window.scrollY || document.documentElement.scrollTop;
+                const scrollLeft = window.scrollX || document.documentElement.scrollLeft;
+                modalContent.style.left = (btnRect.left + scrollLeft) + "px";
+                modalContent.style.top = (btnRect.bottom + scrollTop) + "px";
+            }, 0);
+        }
+
+        // Close modal (restore previous selection if not applied)
+        function closeModal(restorePrevious = true) {
+            if (restorePrevious) {
+                modalTempSelection = null;
+            }
+            modal.style.display = 'none';
+        }
+
+        // Apply filter
+        function applyFilter() {
+            const checked = Array.from(checkboxesDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+            selectedTechs = checked.length === allTechs.length ? null : checked;
+            modalTempSelection = null;
+            applyTableFilter();
+            applyGanttFilter();
+            closeModal(false);
+        }
+
+        // Clear filter
+        function clearFilter() {
+            selectedTechs = null;
+            modalTempSelection = null;
+            applyTableFilter();
+            applyGanttFilter();
+            closeModal(false);
+        }
+
+        // Table filter: show only rows where at least one assigned technician is selected (or all if no filter)
+        function applyTableFilter() {
+            const table = document.querySelector('.task-table');
+            if (!table) return;
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                // Section headers always show
+                if (row.classList.contains('section-header')) {
+                    row.style.display = '';
+                    return;
+                }
+                // Get assigned techs cell (5th index, th structure is fixed)
+                const assignedCell = row.cells[4];
+                if (!assignedCell) { row.style.display = ''; return; }
+                const assignedText = assignedCell.textContent || "";
+                if (!selectedTechs || selectedTechs.length === 0) {
+                    row.style.display = '';
+                } else {
+                    // Extract technician names (before parenthesis, trim)
+                    const assignedList = assignedText.split(',').map(s => {
+                        let name = s.trim();
+                        const parenIdx = name.indexOf('(');
+                        if (parenIdx > 0) name = name.substring(0, parenIdx).trim();
+                        return name;
+                    }).filter(Boolean);
+                    // Show row if any selected technician is in the assignedList (exact match)
+                    const match = assignedList.some(name => selectedTechs.includes(name));
+                    row.style.display = match ? '' : 'none';
+                }
+            });
+        }
+
+        // Gantt filter: show only selected technician rows and their bars
+        function applyGanttFilter() {
+            const techLabels = document.querySelectorAll('.technician-labels-wrapper .technician-label');
+            const timeGrids = document.querySelectorAll('.time-grids-wrapper .time-grid');
+            techLabels.forEach((label, idx) => {
+                const tech = label.textContent.trim();
+                const show = !selectedTechs || selectedTechs.length === 0 || selectedTechs.includes(tech);
+                label.style.display = show ? '' : 'none';
+                if (timeGrids[idx]) timeGrids[idx].style.display = show ? '' : 'none';
+            });
+        }
+
+        // Search filter in modal
+        searchInput && searchInput.addEventListener('input', function() {
+            renderTechCheckboxes(this.value);
+        });
+
+        // Button events
+        filterBtn && filterBtn.addEventListener('click', function() {
+            if (modal.style.display === 'flex') {
+                // If modal is open and filterBtn is clicked, close and restore previous selection (cancel)
+                closeModal(true);
+            } else {
+                openModal();
+            }
+        });
+        applyBtn && applyBtn.addEventListener('click', applyFilter);
+        clearBtn && clearBtn.addEventListener('click', clearFilter);
+
+        // Modal click outside closes modal and restores previous selection (cancel)
+        modal && modal.addEventListener('mousedown', function(e) {
+            if (e.target === modal) closeModal(true);
+        });
+
+        // On page load, no filter
+        document.addEventListener('DOMContentLoaded', function() {
+            allTechs = getAvailableTechnicians();
+            selectedTechs = null;
+            modalTempSelection = null;
+        });
+    })();
+</script>
 </body>
 </html>
