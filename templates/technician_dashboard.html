@@ -397,25 +397,24 @@
         /* Current time indicator styles */
         .current-time-indicator {
             position: absolute;
-            top: 0; /* Start from the very top */
-            height: 100%; /* Extend through the entire height */
+            height: 100%;
             width: 2px;
-            background-color: #ff5252;
-            z-index: 100; /* Significantly increase z-index to appear above all elements */
-            pointer-events: none;
+            background-color: red;
+            z-index: 1; /* Lower z-index to stay behind task bars */
+            pointer-events: none; /* Allows clicking through the line */
         }
 
         .current-time-pointer {
             position: absolute;
-            top: 0px;
             width: 0;
             height: 0;
             border-left: 6px solid transparent;
             border-right: 6px solid transparent;
-            border-top: 8px solid #ff5252; /* Changed to border-top to point downward */
-            border-bottom: none; /* Remove bottom border */
-            z-index: 101; /* Ensure pointer is above the line */
-            pointer-events: none;
+            border-top: 8px solid red;
+            top: 0;
+            left: -5px;
+            z-index: 1; /* Same as the line */
+            pointer-events: none; /* Allows clicking through the pointer */
         }
 
         /* Add a pulsing animation for better visibility */
@@ -441,9 +440,16 @@
             justify-content: center;
             box-sizing: border-box;
             white-space: nowrap;
+            z-index: 10;
         }
         .time-tick.spacer-tick {
             background-color: #f9f9f9;
+        }
+        .time-tick span {
+            position: relative;
+            z-index: 1000; /* Much higher than the time indicator */
+            background-color: inherit; /* Makes the text background match its parent */
+            padding: 0 3px; /* Small padding around text to prevent red line showing through thin letters */
         }
         .gantt-fixed-left-pane .time-tick.spacer-tick {
             border-right: none !important;
@@ -482,7 +488,7 @@
             text-align: center;
             margin: 8px 2px;
             position: relative;
-            z-index: 1;
+            z-index: 100;
         }
         .task-bar.zero-duration {
             width: 6px !important;
@@ -774,6 +780,7 @@
 
 <!-- Gantt Chart -->
 <h2>Gantt Chart: {{ total_work_minutes | default(0) }} min of work</h2>
+<div class="gantt-container" data-shift-start-time="{{ shift_start_time_str }}" data-day="{{ week_date_day_shift.day | lower }}" data-total-work-minutes="{{ total_work_minutes }}">
 {% if technicians | length == 0 %}
     <p>No technicians available to display in the Gantt chart.</p>
 {% else %}
@@ -1059,6 +1066,8 @@
 
         const shiftStartTimeStr = ganttContainer.dataset.shiftStartTime;
         const day = ganttContainer.dataset.day || 'saturday';
+        // Get total work minutes from the data attribute
+        const totalWorkMinutes = parseInt(ganttContainer.dataset.totalWorkMinutes, 10);
         const tickWidth = 50; // Width of each time column in pixels
 
         // Parse shift start time
@@ -1073,12 +1082,19 @@
             shiftStart.setHours(22, 0, 0, 0);
         }
 
-        // Use hardcoded time (8 PM = 20:00)
+        // Actual current time
         const now = new Date();
-        now.setHours(20, 0, 0, 0); // Set to 8 PM (20:00)
 
         // Calculate time difference in minutes
         let diffMinutes = (now - shiftStart) / (1000 * 60);
+
+        console.log("Current time:", now);
+        console.log("Shift start:", shiftStart);
+        console.log("Diff minutes:", diffMinutes);
+
+        // Ensure indicator is visible within chart boundaries
+        if (diffMinutes < 0) diffMinutes = 0;
+        if (diffMinutes > totalWorkMinutes) diffMinutes = totalWorkMinutes;
 
         // Calculate fixed position (15 min per column)
         let fixedPosition = (diffMinutes / 15) * tickWidth;
