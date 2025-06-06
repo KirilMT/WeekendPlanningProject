@@ -1,5 +1,5 @@
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import re
 
@@ -20,8 +20,13 @@ def get_current_week_number():
 # Step 1: Determine the current day
 def get_current_day():
     current_date = datetime.now()
-    # current_date = datetime(2025, 4, 19)  # Hardcoded for testing
-    return current_date.strftime("%A")  # e.g., "Monday"
+    # current_date = datetime(2025, 4, 19, 0, 45)  # Hardcoded for testing Saturday 00:45
+    # If current time is before 6 AM, it's part of the previous day's night shift
+    if current_date.hour < 6:
+        effective_date = current_date - timedelta(days=1)
+        return effective_date.strftime("%A")  # e.g., "Friday"
+    else:
+        return current_date.strftime("%A")  # e.g., "Monday"
 
 # Step 2: Determine the current shift
 def get_current_shift():
