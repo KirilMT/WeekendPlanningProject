@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, render_template
+from flask import Flask, request, jsonify, send_from_directory, render_template  # Added render_template
 import os
 import json
 from jinja2 import Environment, FileSystemLoader
@@ -222,10 +222,6 @@ def sanitize_data(data):
         sanitized_row = row.copy() if isinstance(row, dict) else {}
         task_name_original = row.get('scheduler_group_task', 'Unknown')
 
-        # Handle custom task IDs (starting with "custom_")
-        if isinstance(row.get('id', ''), str) and row.get('id', '').startswith('custom_'):
-            sanitized_row['id'] = row['id']  # Preserve custom IDs
-
         for field in required_fields:
             if field not in sanitized_row or sanitized_row[field] is None or pd.isna(sanitized_row[field]):
                 sanitized_row[field] = 'Unknown' if field == 'scheduler_group_task' else (
@@ -282,19 +278,13 @@ def validate_assignments_flat_input(assignments_list):
                 print(
                     f"Warning: Invalid start={start} or duration={duration} in assignment at index {idx}: {assignment}")
                 continue
-                
-            # Handle both standard IDs and custom task IDs
-            if isinstance(assignment['instance_id'], str):
-                if '_' in assignment['instance_id']:
-                    # Standard format: "task_id_instance_num"
-                    valid_assignments.append(assignment)
-                elif assignment['instance_id'].startswith('custom_'):
-                    # Custom task format: "custom_XXXX_1"
-                    valid_assignments.append(assignment)
-                else:
-                    print(f"Warning: Invalid instance_id format '{assignment['instance_id']}' in assignment at index {idx}")
-            else:
-                print(f"Warning: instance_id is not a string in assignment at index {idx}: {assignment}")
+            if not isinstance(assignment['instance_id'], str) or '_' not in assignment['instance_id']:
+                print(
+                    f"Warning: Invalid instance_id='{assignment['instance_id']}' in assignment at index {idx}: {assignment}")
+                continue
+            task_id_part = assignment['instance_id'].split('_')[0]
+            int(task_id_part)
+            valid_assignments.append(assignment)
         except (ValueError, TypeError) as e:
             print(f"Warning: Invalid assignment at index {idx}: {str(e)} - {assignment}")
     print(f"Validated {len(valid_assignments)} assignments from {len(assignments_list)}")
@@ -526,18 +516,13 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
         base_duration_rep = int(task.get('planned_worktime_min', 0))
         num_technicians_needed_rep = int(task.get('mitarbeiter_pro_aufgabe', 1))
 
-        # Handle both standard numeric IDs and custom task IDs (starting with "custom_")
-        is_custom_task = isinstance(task_id, str) and task_id.startswith('custom_')
-        task_lookup_id = task_id  # The ID we'll use to look up in rep_assignments_dict
-
-        if task_lookup_id in rep_assignments_dict:
-            assignment_info = rep_assignments_dict[task_lookup_id]
+        if task_id in rep_assignments_dict:
+            assignment_info = rep_assignments_dict[task_id]
             if assignment_info.get('skipped'):
                 # Use the reason directly from the UI if available, otherwise a generic "skipped"
                 reason_for_unassignment = assignment_info.get('skip_reason', "Skipped by user (reason not specified).")
                 for i in range(quantity_rep): # Apply reason to all instances of this skipped task
-                    instance_id_format = f"{task_id}_{i + 1}"
-                    unassigned_tasks_reasons[instance_id_format] = reason_for_unassignment
+                    unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason_for_unassignment
                 print(f"  REP Task {task_name} (ID: {task_id}) was skipped. Reason: {reason_for_unassignment}")
                 continue # Process next REP task
             else:
@@ -549,10 +534,10 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
             # This implies it wasn't presented for selection or skip, or data mismatch.
             reason = "Skipped (REP): Task data not received from UI for assignment/skip."
             for i in range(quantity_rep): # Apply reason to all instances
-                instance_id_format = f"{task_id}_{i + 1}" 
-                unassigned_tasks_reasons[instance_id_format] = reason
+                unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
             print(f"  REP Task {task_name} (ID: {task_id}) was not found in rep_assignments_dict. Marked as unassigned.")
             continue # Process next REP task
+
 
         # --- This is the existing logic for REP tasks that are NOT skipped ---
         # --- and ARE in rep_assignments_dict. It starts after the skip check. ---
@@ -562,9 +547,7 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                 num_technicians_needed_rep = 0 # Explicitly set for clarity
             else:
                 reason = f"Skipped (REP): Invalid 'Mitarbeiter pro Aufgabe' ({num_technicians_needed_rep}) for non-zero duration task."
-                for i in range(quantity_rep): 
-                    instance_id_format = f"{task_id}_{i + 1}"
-                    unassigned_tasks_reasons[instance_id_format] = reason
+                for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
                 continue
         if quantity_rep <= 0: # This check might be redundant if tasks with qty <=0 are filtered earlier
             reason = f"Skipped (REP): Invalid 'Quantity' ({quantity_rep})."
@@ -582,29 +565,17 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
         eligible_technicians_for_this_rep_task = []
         raw_user_selection_count = len(selected_techs_from_ui) # selected_techs_from_ui is from the 'else' block above
 
-        # For custom tasks, we are more lenient about line restrictions
-        if is_custom_task:
-            for tech_name_from_ui in selected_techs_from_ui:
-                if tech_name_from_ui in present_technicians:
+        for tech_name_from_ui in selected_techs_from_ui:
+            if tech_name_from_ui in present_technicians:
+                if not task_lines_rep or any(line in TECHNICIAN_LINES.get(tech_name_from_ui, []) for line in task_lines_rep):
                     min_acceptable_time_for_eligibility = base_duration_rep * 0.75
                     if (base_duration_rep > 0 and available_time_after_pm.get(tech_name_from_ui, 0) >= min_acceptable_time_for_eligibility) or \
                        (base_duration_rep == 0):
                         eligible_technicians_for_this_rep_task.append(tech_name_from_ui)
-        else:
-            # Standard task behavior with line checking
-            for tech_name_from_ui in selected_techs_from_ui:
-                if tech_name_from_ui in present_technicians:
-                    if not task_lines_rep or any(line in TECHNICIAN_LINES.get(tech_name_from_ui, []) for line in task_lines_rep):
-                        min_acceptable_time_for_eligibility = base_duration_rep * 0.75
-                        if (base_duration_rep > 0 and available_time_after_pm.get(tech_name_from_ui, 0) >= min_acceptable_time_for_eligibility) or \
-                           (base_duration_rep == 0):
-                            eligible_technicians_for_this_rep_task.append(tech_name_from_ui)
 
         if not eligible_technicians_for_this_rep_task and num_technicians_needed_rep > 0 :
             reason = "Skipped (REP): None of the user-selected technicians are eligible (present, lines, >=75% gross time after PMs)."
-            for i in range(quantity_rep): 
-                instance_id_format = f"{task_id}_{i + 1}"
-                unassigned_tasks_reasons[instance_id_format] = reason
+            for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
             continue
         elif not eligible_technicians_for_this_rep_task and num_technicians_needed_rep == 0 and base_duration_rep == 0:
             pass
@@ -773,20 +744,10 @@ def prepare_dashboard_data(tasks, assignments, unassigned_tasks, incomplete_task
     def compute_task_data(task):
         task_id = str(task['id'])
         quantity = int(task.get('quantity', 1))
-        
-        # Color for row/bar - handle both normal IDs and custom IDs
-        if task_id.startswith('custom_'):
-            # Use a consistent color for custom tasks (greenish)
-            hash_value = sum(ord(c) for c in task_id)
-            color_r = (hash_value * 13) % 100 + 50  # Lower red component for greener look
-            color_g = (hash_value * 29) % 100 + 150 # Higher green component
-            color_b = (hash_value * 7) % 100 + 50   # Lower blue component
-        else:
-            # Original color calculation
-            color_r = ((int(task_id) if task_id.isdigit() else 1) * 97 % 200 + 55)
-            color_g = ((int(task_id) if task_id.isdigit() else 1) * 53 % 200 + 55)
-            color_b = ((int(task_id) if task_id.isdigit() else 1) * 37 % 200 + 55)
-            
+        # Color for row/bar
+        color_r = ((int(task_id) if task_id.isdigit() else 1) * 97 % 200 + 55)
+        color_g = ((int(task_id) if task_id.isdigit() else 1) * 53 % 200 + 55)
+        color_b = ((int(task_id) if task_id.isdigit() else 1) * 37 % 200 + 55)
         color_hex = f"#{color_r:02x}{color_g:02x}{color_b:02x}"
 
         # Group assignments by instance
@@ -809,16 +770,12 @@ def prepare_dashboard_data(tasks, assignments, unassigned_tasks, incomplete_task
             if incomplete_tasks and instance_id in incomplete_tasks:
                 incomplete_instances_list.append(i + 1)
 
-        # Mark custom tasks in the dashboard
-        is_custom = task_id.startswith('custom_')
-        
         return {
             **task,
             'color_hex': color_hex,
             'group_counter': group_counter,
             'unassigned_instance_details': unassigned_instance_details,
             'incomplete_instances_list': incomplete_instances_list,
-            'is_custom_task': is_custom
         }
 
     pm_tasks_data = [compute_task_data(task) for task in pm_tasks]
@@ -1182,11 +1139,9 @@ def upload_file_route():  # Renamed
                 "message": "PM tasks processed. Please assign technicians for REP tasks.",
                 "repTasks": rep_tasks_for_ui_selection,
                 "eligibleTechnicians": eligible_rep_technicians_ui,
-                "availableTimePerTechnician": available_time_after_pm,  # NEW: Send available time per technician
-                "filename": original_filename_from_cache,
+                "filename": original_filename_from_cache,  # Use filename from cache
                 "session_id": session_id
             })
-
         except Exception as e:
             print(f"Error processing cached data: {str(e)}")
             print(traceback.format_exc())

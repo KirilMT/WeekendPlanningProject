@@ -39,7 +39,7 @@
             width: 100%;
             box-sizing: border-box;
         }
-        button[type="submit"], #openDashboardButton, #confirmAbsent, #validateRep, #skipRep, #addNewTaskBtn {
+        button[type="submit"], #openDashboardButton, #confirmAbsent, #validateRep, #skipRep {
             padding: 12px 25px;
             border: none;
             border-radius: 25px;
@@ -65,12 +65,12 @@
             background-color: #2ab7c2;
             transform: scale(1.05);
         }
-        #confirmAbsent, #validateRep, #saveNewTaskBtn {
+        #confirmAbsent, #validateRep {
             background-color: #ffeb3b;
             color: black;
             border-radius: 5px;
         }
-        #confirmAbsent:hover, #validateRep:hover, #saveNewTaskBtn:hover {
+        #confirmAbsent:hover, #validateRep:hover {
             background-color: #fdd835;
             transform: scale(1.05);
         }
@@ -81,16 +81,6 @@
         }
         #skipRep:hover {
             background-color: #ff4f41;
-            transform: scale(1.05);
-        }
-        #addNewTaskBtn {
-            background-color: #4CAF50;
-            color: white;
-            border-radius: 5px;
-            margin-right: auto; /* Push to the left */
-        }
-        #addNewTaskBtn:hover {
-            background-color: #3e8e41;
             transform: scale(1.05);
         }
         #message {
@@ -284,62 +274,11 @@
             flex-shrink: 0; /* Prevent this container from shrinking */
         }
 
-        /* NEW: Custom Task Modal Styles */
-        #newTaskModal .modal-content {
-            width: 90%;
-            max-width: 600px;
-            display: flex;
-            flex-direction: column;
-            padding: 25px;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-            text-align: left;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        
-        .form-group input, .form-group textarea {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        
-        .form-group input[type="number"] {
-            width: 100%;
-        }
-        
-        .new-task-buttons {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 20px;
-        }
-        
-        #cancelNewTaskBtn {
-            background-color: #6c757d;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            padding: 10px 20px;
-            cursor: pointer;
-        }
-        
-        #cancelNewTaskBtn:hover {
-            background-color: #5a6268;
-        }
-        
-        .task-progress-indicator {
-            margin-top: 10px;
-            font-size: 14px;
-            color: #666;
-            text-align: right;
+        /* Individual button styling within the REP modal can remain as is or be adjusted */
+        /* #repModal .modal-content > button was too general, targeting specific buttons is better */
+        #validateRep, #skipRep {
+            /* General button styles are already applied */
+            /* You can add specific margins here if needed, e.g., margin: 0; */
         }
     </style>
 </head>
@@ -374,44 +313,10 @@
             <div id="ticketInfo"></div>
             <input type="text" id="repSearch" placeholder="Search for technicians...">
             <div class="technician-checkboxes" id="repTechnicians"></div>
-            <!-- MODIFIED: Added "Add New Task" button and wrapped buttons in a div -->
+            <!-- MODIFIED: Wrap buttons in a div -->
             <div class="rep-modal-buttons">
-                <button id="addNewTaskBtn">Add New Task</button>
-                <div>
-                    <button id="validateRep">Validate Selection</button>
-                    <button id="skipRep">Skip Task</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- NEW: Custom Task Creation Modal -->
-    <div id="newTaskModal" class="modal">
-        <div class="modal-content">
-            <h2>Add Custom REP Task</h2>
-            <div class="form-group">
-                <label for="customTaskName">Task Name*:</label>
-                <input type="text" id="customTaskName" required placeholder="Enter task name">
-            </div>
-            <div class="form-group">
-                <label for="customTicketMO">Ticket/MO Number:</label>
-                <input type="text" id="customTicketMO" placeholder="Enter ticket or MO number">
-            </div>
-            <div class="form-group">
-                <label for="customTicketURL">Ticket Link:</label>
-                <input type="url" id="customTicketURL" placeholder="https://...">
-            </div>
-            <div class="form-group">
-                <label for="customTechCount">Technicians Planned:</label>
-                <input type="number" id="customTechCount" min="0" value="1">
-            </div>
-            <div class="form-group">
-                <label for="customDuration">Planned Duration (minutes):</label>
-                <input type="number" id="customDuration" min="0" value="60">
-            </div>
-            <div class="new-task-buttons">
-                <button id="cancelNewTaskBtn">Cancel</button>
-                <button id="saveNewTaskBtn">Add Task</button>
+                <button id="validateRep">Validate Selection</button>
+                <button id="skipRep">Skip Task</button>
             </div>
         </div>
     </div>
@@ -426,9 +331,6 @@
         let eligibleTechnicians = {}; // This is key for the REP modal
         let filename = '';
         let sessionId = '';
-        let nextCustomTaskId = 10000; // Use high numbers to avoid conflicts with Excel task IDs
-        // NEW: Track available time per technician
-        let technicianAvailableTime = {};
 
         // Generate a simple session ID
         function generateSessionId() {
@@ -515,142 +417,65 @@
         }
 
         function showRepModal() {
-            console.log('INDEX.HTML: showRepModal called. Current REP task index:', currentRepTaskIndex, 'Total REP tasks:', repTasks.length);
-            if (currentRepTaskIndex < repTasks.length) {
-                const task = repTasks[currentRepTaskIndex];
-                console.log('INDEX.HTML: Current REP task for modal:', JSON.stringify(task)); // Stringify to see all props
-                const ticketInfoDiv = document.getElementById('ticketInfo');
-                if (ticketInfoDiv) {
-                    ticketInfoDiv.innerHTML = `
-                        <p><strong>Task:</strong> ${task.name || task.scheduler_group_task || 'Unknown Task'}</p>
-                        <p><strong>Ticket/MO:</strong> ${task.ticket_mo || 'N/A'}</p>
-                        ${task.ticket_url ? `<p><strong>Link:</strong> <a href="${task.ticket_url}" target="_blank">${task.ticket_url}</a></p>` : ''}
-                        <p><strong>Technicians Planned:</strong> ${task.mitarbeiter_pro_aufgabe}</p>
-                        <p><strong>Duration:</strong> ${task.planned_worktime_min} minutes</p>
-                        <p class="task-progress-indicator"><strong>Progress:</strong> ${currentRepTaskIndex + 1} of ${repTasks.length}</p>
-                    `;
-                } else {
-                    console.error("INDEX.HTML: ticketInfo div not found!");
-                }
-                populateRepTechnicians(task);
-                const repSearchInput = document.getElementById('repSearch');
-                if (repSearchInput) repSearchInput.value = '';
-                const repModalDiv = document.getElementById('repModal');
-                if (repModalDiv) repModalDiv.style.display = 'flex';
-                else console.error("INDEX.HTML: REP modal div not found!");
-            } else {
-                console.log('INDEX.HTML: All Rep tasks processed, submitting final assignments...');
-                const formData = new FormData();
-                const allTechnicians = Object.values(technicianGroups).flat();
-                const absentTechnicians = allTechnicians.filter(tech => !presentTechnicians.includes(tech));
-                formData.append('absentTechnicians', JSON.stringify(absentTechnicians));
-                formData.append('repAssignments', JSON.stringify(repAssignments));
-                formData.append('filename', filename);
-                formData.append('session_id', sessionId);
-                fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => {
-                    console.log('INDEX.HTML: Final upload response status:', response.status);
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('INDEX.HTML: Final upload response data:', data);
-                    showMessage(data.message, data.message.includes('Error') ? 'error' : 'success');
-                    if (!data.message.includes('Error')) {
-                        const openDashboardButton = document.getElementById('openDashboardButton');
-                        if (openDashboardButton) openDashboardButton.style.display = 'inline-block';
+                console.log('INDEX.HTML: showRepModal called. Current REP task index:', currentRepTaskIndex, 'Total REP tasks:', repTasks.length);
+                if (currentRepTaskIndex < repTasks.length) {
+                    const task = repTasks[currentRepTaskIndex];
+                    console.log('INDEX.HTML: Current REP task for modal:', JSON.stringify(task)); // Stringify to see all props
+                    const ticketInfoDiv = document.getElementById('ticketInfo');
+                    if (ticketInfoDiv) {
+                        ticketInfoDiv.innerHTML = `
+                            <p><strong>Task:</strong> ${task.name || task.scheduler_group_task || 'Unknown Task'}</p>
+                            <p><strong>Ticket/MO:</strong> ${task.ticket_mo || 'N/A'}</p>
+                            ${task.ticket_url ? `<p><strong>Link:</strong> <a href="${task.ticket_url}" target="_blank">${task.ticket_url}</a></p>` : ''}
+                            <p><strong>Technicians Planned:</strong> ${task.mitarbeiter_pro_aufgabe}</p>
+                            <p><strong>Duration:</strong> ${task.planned_worktime_min} minutes</p>
+                            <p><strong>Progress:</strong> ${currentRepTaskIndex + 1} of ${repTasks.length}</p>
+                        `;
+                    } else {
+                        console.error("INDEX.HTML: ticketInfo div not found!");
                     }
-                })
-                .catch(error => {
-                    console.error('INDEX.HTML: Error in final upload:', error);
-                    showMessage('An error occurred: ' + error.message, 'error');
-                });
+                    populateRepTechnicians(task);
+                    const repSearchInput = document.getElementById('repSearch');
+                    if (repSearchInput) repSearchInput.value = '';
+                    const repModalDiv = document.getElementById('repModal');
+                    if (repModalDiv) repModalDiv.style.display = 'flex';
+                    else console.error("INDEX.HTML: REP modal div not found!");
+                } else {
+                    console.log('INDEX.HTML: All Rep tasks processed, submitting final assignments...');
+                    const formData = new FormData();
+                    const allTechnicians = Object.values(technicianGroups).flat();
+                    const absentTechnicians = allTechnicians.filter(tech => !presentTechnicians.includes(tech));
+                    formData.append('absentTechnicians', JSON.stringify(absentTechnicians));
+                    formData.append('repAssignments', JSON.stringify(repAssignments));
+                    formData.append('filename', filename);
+                    formData.append('session_id', sessionId);
+                    fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => {
+                        console.log('INDEX.HTML: Final upload response status:', response.status);
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('INDEX.HTML: Final upload response data:', data);
+                        showMessage(data.message, data.message.includes('Error') ? 'error' : 'success');
+                        if (!data.message.includes('Error')) {
+                            const openDashboardButton = document.getElementById('openDashboardButton');
+                            if (openDashboardButton) openDashboardButton.style.display = 'inline-block';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('INDEX.HTML: Error in final upload:', error);
+                        showMessage('An error occurred: ' + error.message, 'error');
+                    });
+                }
             }
-        }
 
         function hideRepModal() {
             console.log('INDEX.HTML: Hiding Rep modal...');
             const repModalDiv = document.getElementById('repModal');
             if (repModalDiv) repModalDiv.style.display = 'none';
-        }
-
-        // NEW: Show/hide new task modal
-        function showNewTaskModal() {
-            const newTaskModal = document.getElementById('newTaskModal');
-            if (newTaskModal) newTaskModal.style.display = 'flex';
-            else console.error("INDEX.HTML: New task modal not found!");
-        }
-
-        function hideNewTaskModal() {
-            const newTaskModal = document.getElementById('newTaskModal');
-            if (newTaskModal) newTaskModal.style.display = 'none';
-        }
-
-        // NEW: Create custom task
-        function createCustomTask() {
-            const taskName = document.getElementById('customTaskName').value.trim();
-            const ticketMO = document.getElementById('customTicketMO').value.trim();
-            const ticketURL = document.getElementById('customTicketURL').value.trim();
-            const techCount = parseInt(document.getElementById('customTechCount').value) || 0;
-            const duration = parseInt(document.getElementById('customDuration').value) || 0;
-            
-            if (!taskName) {
-                alert("Task name is required!");
-                return;
-            }
-            
-            // Create a new task object
-            const newTask = {
-                id: `custom_${nextCustomTaskId++}`,
-                name: taskName,
-                scheduler_group_task: taskName,
-                ticket_mo: ticketMO,
-                ticket_url: ticketURL,
-                mitarbeiter_pro_aufgabe: techCount,
-                planned_worktime_min: duration,
-                task_type: 'REP',
-                quantity: 1,
-                priority: 'C',
-                lines: ''
-            };
-            
-            console.log('INDEX.HTML: Created custom task:', JSON.stringify(newTask));
-            
-            // Add to repTasks array
-            repTasks.push(newTask);
-            
-            // Clear the form
-            document.getElementById('customTaskName').value = '';
-            document.getElementById('customTicketMO').value = '';
-            document.getElementById('customTicketURL').value = '';
-            document.getElementById('customTechCount').value = '1';
-            document.getElementById('customDuration').value = '60';
-            
-            // Calculate minimum acceptable time for eligibility (75% of task duration)
-            const minAcceptableTime = duration * 0.75;
-            
-            // Create eligibility entry for this task with ACTUAL available time
-            eligibleTechnicians[newTask.id] = presentTechnicians.map(tech => {
-                // For custom tasks, use the actual available time for each technician
-                const actualAvailableTime = technicianAvailableTime[tech] || 0;
-                
-                return {
-                    name: tech,
-                    available_time: actualAvailableTime,
-                    task_full_duration: duration
-                };
-            }).filter(tech => {
-                // Only include technicians with at least 75% of the required time
-                if (duration > 0) {
-                    return tech.available_time >= minAcceptableTime;
-                }
-                return true; // For 0 duration tasks, include all technicians
-            });
-            
-            hideNewTaskModal();
-            showMessage(`Custom task "${taskName}" added successfully!`, 'success');
         }
 
         function populateRepTechnicians(task) {
@@ -831,13 +656,6 @@
                             eligibleTechnicians = data.eligibleTechnicians || {}; // CRITICAL: eligibleTechnicians populated here
                             filename = data.filename || filename;
                             sessionId = data.session_id || sessionId;
-                            
-                            // NEW: Store available time per technician
-                            if (data.availableTimePerTechnician) {
-                                technicianAvailableTime = data.availableTimePerTechnician;
-                                console.log('INDEX.HTML: Stored available time per technician:', technicianAvailableTime);
-                            }
-                            
                             console.log('INDEX.HTML: repTasks after PM processing:', JSON.stringify(repTasks));
                             console.log('INDEX.HTML: eligibleTechnicians for REP tasks after PM processing:', JSON.stringify(eligibleTechnicians));
                             hideAbsentModal();
@@ -987,28 +805,6 @@
                 });
             } else {
                 console.error("INDEX.HTML: skipRep button not found!");
-            }
-
-            // NEW: Add New Task button handlers
-            const addNewTaskBtn = document.getElementById('addNewTaskBtn');
-            if (addNewTaskBtn) {
-                addNewTaskBtn.addEventListener('click', showNewTaskModal);
-            } else {
-                console.error("INDEX.HTML: addNewTaskBtn not found!");
-            }
-
-            const saveNewTaskBtn = document.getElementById('saveNewTaskBtn');
-            if (saveNewTaskBtn) {
-                saveNewTaskBtn.addEventListener('click', createCustomTask);
-            } else {
-                console.error("INDEX.HTML: saveNewTaskBtn not found!");
-            }
-
-            const cancelNewTaskBtn = document.getElementById('cancelNewTaskBtn');
-            if (cancelNewTaskBtn) {
-                cancelNewTaskBtn.addEventListener('click', hideNewTaskModal);
-            } else {
-                console.error("INDEX.HTML: cancelNewTaskBtn not found!");
             }
 
             const openDashboardButton = document.getElementById('openDashboardButton');
