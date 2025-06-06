@@ -963,7 +963,7 @@
                 // Only include breaks that fall after 22:00 (the 240-minute mark)
                 if (b.start >= weekendTasksOffset) {
                     fridayBreaks.push({
-                        start: b.start - weekendTasksOffset, // Adjust to start from 22:00
+                        start: b.start - weekendTasksOffset + 15, // Add 15 minutes to align with Saturday's break slots
                         duration: b.duration,
                         type: b.type
                     });
