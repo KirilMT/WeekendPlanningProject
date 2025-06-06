@@ -933,41 +933,55 @@
         const breakMainDuration = 60;
         const break2Duration = 15;
 
-        // Main break: center of shift, but does NOT occupy time
-        const mainBreakStart = (shiftTotalMinutes / 2) - (breakMainDuration / 2);
-        // Work resumes at mainBreakStart (not after +breakMainDuration)
-        // First 15min break: center of first half (from 0 to main break start)
-        const break1Start = (mainBreakStart / 2) - (break1Duration / 2);
+        // For standard shifts, use 651 minutes of workable time (excluding breaks)
+        const workableTime = 651;
+        
+        // Break calculations based on workable time
+        const halfWorkTime = workableTime / 2;
+        const quarterWorkTime = halfWorkTime / 2;
+        const threeQuarterWorkTime = halfWorkTime + quarterWorkTime;
+        
+        // Round to nearest 15min slots
+        const mainBreakStart = Math.round(halfWorkTime / 15) * 15;
+        const break1Start = Math.round(quarterWorkTime / 15) * 15;
+        const break2Start = Math.round(threeQuarterWorkTime / 15) * 15;
 
-        // Second 15min break: center between end of main break (mainBreakStart) and end of shift (660)
-        let break2Start;
-        if (shiftTotalMinutes === 720) {
-            // Center between 330 and 660
-            break2Start = 330 + ((660 - 330) / 2) - (break2Duration / 2); // 487.5
-        } else {
-            // fallback for other shift lengths
-            const intervalStart = mainBreakStart;
-            const intervalEnd = shiftTotalMinutes - (shiftTotalMinutes - pmEndMin); // fallback to shift end
-            break2Start = intervalStart + ((intervalEnd - intervalStart) / 2) - (break2Duration / 2);
-        }
-
-        const breaks = [
+        // Define breaks for a standard late shift
+        const standardLateBreaks = [
             { start: break1Start, duration: break1Duration, type: 'break1' },
             { start: mainBreakStart, duration: breakMainDuration, type: 'breakMain' },
             { start: break2Start, duration: break2Duration, type: 'break2' }
         ];
 
-        if (day === 'saturday') {
-            return breaks.map(b => ({
+        if (day === 'friday') {
+            // For Friday, we need to map the standard late shift breaks to weekend tasks time
+            // Weekend tasks start at 22:00, which is 4 hours (240 min) into the late shift
+            const weekendTasksOffset = 240; // Minutes from 18:00 to 22:00
+            
+            const fridayBreaks = [];
+            for (const b of standardLateBreaks) {
+                // Only include breaks that fall after 22:00 (the 240-minute mark)
+                if (b.start >= weekendTasksOffset) {
+                    fridayBreaks.push({
+                        start: b.start - weekendTasksOffset, // Adjust to start from 22:00
+                        duration: b.duration,
+                        type: b.type
+                    });
+                }
+            }
+            return fridayBreaks;
+        } else if (day === 'saturday' || day === 'sunday') {
+            // Regular breaks for weekend shifts
+            return standardLateBreaks.map(b => ({
                 start: b.start,
                 duration: b.duration,
                 type: b.type
             }));
         }
 
-        // For Friday and Sunday, only part of the shift is PM section
+        // For other days, only part of the shift is PM section
         const visibleBreaks = [];
-        for (const b of breaks) {
+        for (const b of standardLateBreaks) {
             const breakStart = b.start;
             const breakEnd = b.start + b.duration;
             const overlapStart = Math.max(breakStart, pmStartMin);
