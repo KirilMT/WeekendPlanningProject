@@ -559,9 +559,6 @@
     </tr>
     </thead>
     <tbody>
-    {% set pm_tasks = tasks | selectattr('task_type', 'equalto', 'PM') | list %}
-    {% set rep_tasks = tasks | selectattr('task_type', 'equalto', 'REP') | list %}
-
     <!-- PM Section -->
     {% if pm_tasks %}
         <tr class="section-header">
@@ -572,37 +569,21 @@
         {% for task in pm_tasks %}
             <tr>
                 <td class="index-cell"
-                    style="background-color: #{{ '%02x%02x%02x' % ((task.id | int | default(1)) * 97 % 200 + 55, (task.id | int | default(1)) * 53 % 200 + 55, (task.id | int | default(1)) * 37 % 200 + 55) }}; color: #fff;">
+                    style="background-color: {{ task.color_hex }}; color: #fff;">
                     {{ task.id }}
                 </td>
                 <td>
                     {{ task.name }}
-                    {% set unassigned_instance_details = [] %}
-                    {% set incomplete_instances_list = [] %}
-                    {% for i in range(task.quantity | int | default(1)) %}
-                        {% set current_instance_id = task.id ~ '_' ~ (i + 1) %}
-                        {% if unassigned_tasks and current_instance_id in unassigned_tasks %}
-                            {% set _ = unassigned_instance_details.append({'num': i + 1, 'reason': unassigned_tasks[current_instance_id]}) %}
-                        {% endif %}
-                        {% if incomplete_tasks and current_instance_id in incomplete_tasks %}
-                            {% set _ = incomplete_instances_list.append(i + 1) %}
-                        {% endif %}
-                    {% endfor %}
-                    {% if unassigned_instance_details %}
-                        {% set unassigned_numbers = unassigned_instance_details | map(attribute='num') | list %}
-                        {% set unassigned_reasons_tooltip_lines = [] %}
-                        {% for detail in unassigned_instance_details %}
-                            {% set _ = unassigned_reasons_tooltip_lines.append("Instance " ~ detail.num ~ ": " ~ detail.reason) %}
-                        {% endfor %}
+                    {% if task.unassigned_instance_details %}
                         <br><span style="color: red; font-size: 0.9em;"
-                                  title="{{ unassigned_reasons_tooltip_lines | join('\n') }}">
-                            Unassigned: {{ unassigned_numbers | join(', ') }}
+                                  title="{{ task.unassigned_instance_details | map(attribute='reason') | join('\n') }}">
+                            Unassigned: {{ task.unassigned_instance_details | map(attribute='num') | join(', ') }}
                         </span>
                     {% endif %}
-                    {% if incomplete_instances_list %}
+                    {% if task.incomplete_instances_list %}
                         <br><span style="color: orange; font-size: 0.9em;"
-                                  title="Instances {{ incomplete_instances_list | join(', ') }} were partially assigned due to shift end.">
-                            Partially Assigned: {{ incomplete_instances_list | join(', ') }}
+                                  title="Instances {{ task.incomplete_instances_list | join(', ') }} were partially assigned due to shift end.">
+                            Partially Assigned: {{ task.incomplete_instances_list | join(', ') }}
                         </span>
                     {% endif %}
                 </td>
@@ -615,30 +596,11 @@
                 </td>
                 <td>{{ task.mitarbeiter_pro_aufgabe | default('1') }}</td>
                 <td>
-                    {# Group assignments by unique technician sets for the whole task #}
-                    {% set group_counter = {} %}
-                    {% if assignments %}
-                        {% for i in range(task.quantity | int | default(1)) %}
-                            {% set instance_id = task.id ~ '_' ~ (i + 1) %}
-                            {% set group_assignments = assignments | selectattr('instance_id', 'equalto', instance_id) | list %}
-                            {% if group_assignments %}
-                                {% set group_names = group_assignments | map(attribute='technician') | list %}
-                                {% set group_display = group_names | join(' & ') %}
-                                {% set group_key = group_display %}
-                                {% if group_counter[group_key] is defined %}
-                                    {% set _ = group_counter.update({group_key: group_counter[group_key] + 1}) %}
-                                {% else %}
-                                    {% set _ = group_counter.update({group_key: 1}) %}
-                                {% endif %}
-                            {% endif %}
-                        {% endfor %}
-                    {% endif %}
-                    {% set group_keys = group_counter.keys() | list %}
-                    {% if group_keys %}
+                    {% if task.group_counter %}
                         <div>
                         {% set highlight_colors = ['#e3f2fd', '#bbf7d0', '#ffe082', '#ffd6e0'] %}
-                        {% for group_key in group_keys %}
-                            {% set color = highlight_colors[loop.index0 % highlight_colors|length] if group_keys|length > 1 else '#e3f2fd' %}
+                        {% for group_key in task.group_counter.keys() %}
+                            {% set color = highlight_colors[loop.index0 % highlight_colors|length] if task.group_counter|length > 1 else '#e3f2fd' %}
                             <span style="display:inline-block; background:{{ color }}; color:#007bff; border-radius:4px; padding:2px 6px; margin-bottom:2px; margin-right:2px;">
                                 [{{ group_key }}]
                             </span><br>
@@ -684,37 +646,21 @@
         {% for task in rep_tasks %}
             <tr class="task-row-rep">
                 <td class="index-cell"
-                    style="background-color: #{{ '%02x%02x%02x' % ((task.id | int | default(1)) * 97 % 200 + 55, (task.id | int | default(1)) * 53 % 200 + 55, (task.id | int | default(1)) * 37 % 200 + 55) }}; color: #fff;">
+                    style="background-color: {{ task.color_hex }}; color: #fff;">
                     {{ task.id }}
                 </td>
                 <td>
                     {{ task.name }}
-                    {% set unassigned_instance_details_rep = [] %}
-                    {% set incomplete_instances_list_rep = [] %}
-                    {% for i in range(task.quantity | int | default(1)) %}
-                        {% set current_instance_id = task.id ~ '_' ~ (i + 1) %}
-                        {% if unassigned_tasks and current_instance_id in unassigned_tasks %}
-                            {% set _ = unassigned_instance_details_rep.append({'num': i + 1, 'reason': unassigned_tasks[current_instance_id]}) %}
-                        {% endif %}
-                        {% if incomplete_tasks and current_instance_id in incomplete_tasks %}
-                            {% set _ = incomplete_instances_list_rep.append(i + 1) %}
-                        {% endif %}
-                    {% endfor %}
-                    {% if unassigned_instance_details_rep %}
-                        {% set unassigned_numbers_rep = unassigned_instance_details_rep | map(attribute='num') | list %}
-                        {% set unassigned_reasons_tooltip_lines_rep = [] %}
-                        {% for detail in unassigned_instance_details_rep %}
-                            {% set _ = unassigned_reasons_tooltip_lines_rep.append("Instance " ~ detail.num ~ ": " ~ detail.reason) %}
-                        {% endfor %}
+                    {% if task.unassigned_instance_details %}
                         <br><span style="color: red; font-size: 0.9em;"
-                                  title="{{ unassigned_reasons_tooltip_lines_rep | join('\n') }}">
-                            Unassigned: {{ unassigned_numbers_rep | join(', ') }}
+                                  title="{{ task.unassigned_instance_details | map(attribute='reason') | join('\n') }}">
+                            Unassigned: {{ task.unassigned_instance_details | map(attribute='num') | join(', ') }}
                         </span>
                     {% endif %}
-                    {% if incomplete_instances_list_rep %}
+                    {% if task.incomplete_instances_list %}
                         <br><span style="color: orange; font-size: 0.9em;"
-                                  title="Instances {{ incomplete_instances_list_rep | join(', ') }} were partially assigned due to shift end.">
-                            Partially Assigned: {{ incomplete_instances_list_rep | join(', ') }}
+                                  title="Instances {{ task.incomplete_instances_list | join(', ') }} were partially assigned due to shift end.">
+                            Partially Assigned: {{ task.incomplete_instances_list | join(', ') }}
                         </span>
                     {% endif %}
                 </td>
@@ -727,30 +673,11 @@
                 </td>
                 <td>{{ task.mitarbeiter_pro_aufgabe | default('1') }}</td>
                 <td>
-                    {# Same logic for REP section #}
-                    {% set group_counter_rep = {} %}
-                    {% if assignments %}
-                        {% for i in range(task.quantity | int | default(1)) %}
-                            {% set instance_id = task.id ~ '_' ~ (i + 1) %}
-                            {% set group_assignments = assignments | selectattr('instance_id', 'equalto', instance_id) | list %}
-                            {% if group_assignments %}
-                                {% set group_names = group_assignments | map(attribute='technician') | list %}
-                                {% set group_display = group_names | join(' & ') %}
-                                {% set group_key = group_display %}
-                                {% if group_counter_rep[group_key] is defined %}
-                                    {% set _ = group_counter_rep.update({group_key: group_counter_rep[group_key] + 1}) %}
-                                {% else %}
-                                    {% set _ = group_counter_rep.update({group_key: 1}) %}
-                                {% endif %}
-                            {% endif %}
-                        {% endfor %}
-                    {% endif %}
-                    {% set group_keys_rep = group_counter_rep.keys() | list %}
-                    {% if group_keys_rep %}
+                    {% if task.group_counter %}
                         <div>
                         {% set highlight_colors = ['#ffe082', '#bbf7d0', '#e3f2fd', '#ffd6e0'] %}
-                        {% for group_key in group_keys_rep %}
-                            {% set color = highlight_colors[loop.index0 % highlight_colors|length] if group_keys_rep|length > 1 else '#ffe082' %}
+                        {% for group_key in task.group_counter.keys() %}
+                            {% set color = highlight_colors[loop.index0 % highlight_colors|length] if task.group_counter|length > 1 else '#ffe082' %}
                             <span style="display:inline-block; background:{{ color }}; color:#b26a00; border-radius:4px; padding:2px 6px; margin-bottom:2px; margin-right:2px;">
                                 [{{ group_key }}]
                             </span><br>

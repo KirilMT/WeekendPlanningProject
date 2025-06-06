@@ -730,6 +730,60 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
     return all_task_assignments, unassigned_tasks_reasons, incomplete_tasks_ids, final_available_time
 
 
+def prepare_dashboard_data(tasks, assignments, unassigned_tasks, incomplete_tasks):
+    # Split tasks into PM and REP
+    pm_tasks = []
+    rep_tasks = []
+    for task in tasks:
+        if task.get('task_type', '').upper() == 'PM':
+            pm_tasks.append(task)
+        elif task.get('task_type', '').upper() == 'REP':
+            rep_tasks.append(task)
+
+    # Precompute assignment groups, unassigned/incomplete lists, and colors for each task
+    def compute_task_data(task):
+        task_id = str(task['id'])
+        quantity = int(task.get('quantity', 1))
+        # Color for row/bar
+        color_r = ((int(task_id) if task_id.isdigit() else 1) * 97 % 200 + 55)
+        color_g = ((int(task_id) if task_id.isdigit() else 1) * 53 % 200 + 55)
+        color_b = ((int(task_id) if task_id.isdigit() else 1) * 37 % 200 + 55)
+        color_hex = f"#{color_r:02x}{color_g:02x}{color_b:02x}"
+
+        # Group assignments by instance
+        group_counter = {}
+        for i in range(quantity):
+            instance_id = f"{task_id}_{i + 1}"
+            group_assignments = [a for a in assignments if a['instance_id'] == instance_id]
+            if group_assignments:
+                group_names = [a['technician'] for a in group_assignments]
+                group_display = " & ".join(group_names)
+                group_counter[group_display] = group_counter.get(group_display, 0) + 1
+
+        # Unassigned/incomplete instance lists
+        unassigned_instance_details = []
+        incomplete_instances_list = []
+        for i in range(quantity):
+            instance_id = f"{task_id}_{i + 1}"
+            if unassigned_tasks and instance_id in unassigned_tasks:
+                unassigned_instance_details.append({'num': i + 1, 'reason': unassigned_tasks[instance_id]})
+            if incomplete_tasks and instance_id in incomplete_tasks:
+                incomplete_instances_list.append(i + 1)
+
+        return {
+            **task,
+            'color_hex': color_hex,
+            'group_counter': group_counter,
+            'unassigned_instance_details': unassigned_instance_details,
+            'incomplete_instances_list': incomplete_instances_list,
+        }
+
+    pm_tasks_data = [compute_task_data(task) for task in pm_tasks]
+    rep_tasks_data = [compute_task_data(task) for task in rep_tasks]
+
+    return pm_tasks_data, rep_tasks_data
+
+
 def generate_html_files(data, present_technicians, rep_assignments=None):
     try:
         sanitized_data = sanitize_data(data)
@@ -769,14 +823,22 @@ def generate_html_files(data, present_technicians, rep_assignments=None):
         }
 
         validated_assignments_to_render = validate_assignments_flat_input(assignments_flat)
+
+        # --- Move template logic here ---
+        pm_tasks, rep_tasks = prepare_dashboard_data(
+            tasks_for_processing,
+            validated_assignments_to_render,
+            unassigned_reasons_dict,
+            incomplete_ids
+        )
+
         technician_template = env.get_template('technician_dashboard.html')
         technician_html = technician_template.render(
-            tasks=tasks_for_processing,
+            pm_tasks=pm_tasks,
+            rep_tasks=rep_tasks,
             technicians=present_technicians,
             total_work_minutes=total_work_minutes,
             assignments=validated_assignments_to_render,
-            unassigned_tasks=unassigned_reasons_dict,
-            incomplete_tasks=incomplete_ids,
             shift_start_time_str=shift_start_time_str,
             week_date_day_shift=week_date_day_shift
         )
