@@ -5,28 +5,28 @@ import re
 
 # Step 0: Determine the current week (KW)
 def get_current_week():
-    # current_date = datetime.now()
-    current_date = datetime(2025, 4, 19)  # Hardcoded for testing
+    current_date = datetime.now()
+    # current_date = datetime(2025, 4, 19)  # Hardcoded for testing
     week_number = current_date.isocalendar().week
     return f"Summary KW{week_number:02d}", current_date
 
 # Helper function to get the current week number (e.g., "17")
 def get_current_week_number():
-    # current_date = datetime.now()
-    current_date = datetime(2025, 4, 19)  # Hardcoded for testing
+    current_date = datetime.now()
+    #current_date = datetime(2025, 4, 19)  # Hardcoded for testing
     week_number = current_date.isocalendar().week
     return f"{week_number:02d}"
 
 # Step 1: Determine the current day
 def get_current_day():
-    # current_date = datetime.now()
-    current_date = datetime(2025, 4, 19)  # Hardcoded for testing
+    current_date = datetime.now()
+    # current_date = datetime(2025, 4, 19)  # Hardcoded for testing
     return current_date.strftime("%A")  # e.g., "Monday"
 
 # Step 2: Determine the current shift
 def get_current_shift():
-    # current_time = datetime.now().hour
-    current_time = 10  # Hardcoded for testing (3 PM)
+    current_time = datetime.now().hour
+    # current_time = 10  # Hardcoded for testing (3 PM)
     if 6 <= current_time < 18:  # 6 AM to 6 PM
         return "early"
     else:  # 6 PM to 6 AM
