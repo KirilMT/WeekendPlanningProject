@@ -394,6 +394,41 @@
             z-index: 5 !important;
         }
 
+        /* Current time indicator styles */
+        .current-time-indicator {
+            position: absolute;
+            top: 0; /* Start from the very top */
+            height: 100%; /* Extend through the entire height */
+            width: 2px;
+            background-color: #ff5252;
+            z-index: 100; /* Significantly increase z-index to appear above all elements */
+            pointer-events: none;
+        }
+
+        .current-time-pointer {
+            position: absolute;
+            top: 0px;
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 8px solid #ff5252; /* Changed to border-top to point downward */
+            border-bottom: none; /* Remove bottom border */
+            z-index: 101; /* Ensure pointer is above the line */
+            pointer-events: none;
+        }
+
+        /* Add a pulsing animation for better visibility */
+        @keyframes pulse {
+            0% { opacity: 0.7; }
+            50% { opacity: 1; }
+            100% { opacity: 0.7; }
+        }
+
+        .current-time-indicator, .current-time-pointer {
+            animation: pulse 2s infinite;
+        }
+
         /* 10. Gantt Ticks and Breaks */
         .time-tick {
             text-align: center;
@@ -825,6 +860,9 @@
         } else if ({{ technicians | length }} === 0 && totalWorkMinutes === 0) {
             generateDynamicGantt(shiftStartTimeStr, 0);
         }
+
+        // Set up the current time indicator after the Gantt chart is initialized
+        setTimeout(setupCurrentTimeIndicator, 500); // Short delay to ensure Gantt is ready
     });
 
     function formatTime(dateObj) {
@@ -1001,6 +1039,81 @@
             duration: b.duration,
             type: b.type
         }));
+    }
+
+    function setupCurrentTimeIndicator() {
+        // Create the indicator elements
+        const indicator = document.createElement('div');
+        indicator.className = 'current-time-indicator';
+
+        const pointer = document.createElement('div');
+        pointer.className = 'current-time-pointer';
+
+        // Add them to the DOM
+        const scrollablePane = document.querySelector('.gantt-scrollable-right-pane');
+        if (!scrollablePane) return;
+
+        // Calculate the fixed position for the current time
+        const ganttContainer = document.querySelector('.gantt-container');
+        if (!ganttContainer) return;
+
+        const shiftStartTimeStr = ganttContainer.dataset.shiftStartTime;
+        const day = ganttContainer.dataset.day || 'saturday';
+        const tickWidth = 50; // Width of each time column in pixels
+
+        // Parse shift start time
+        const [startHour, startMinute] = shiftStartTimeStr.split(':').map(Number);
+
+        // Create shift start time
+        let shiftStart = new Date();
+        shiftStart.setHours(startHour, startMinute, 0, 0);
+
+        // Handle special days like Friday (starting at 22:00)
+        if (day === 'friday') {
+            shiftStart.setHours(22, 0, 0, 0);
+        }
+
+        // Use hardcoded time (8 PM = 20:00)
+        const now = new Date();
+        now.setHours(20, 0, 0, 0); // Set to 8 PM (20:00)
+
+        // Calculate time difference in minutes
+        let diffMinutes = (now - shiftStart) / (1000 * 60);
+
+        // Calculate fixed position (15 min per column)
+        let fixedPosition = (diffMinutes / 15) * tickWidth;
+
+        // Create a container that will move with the content
+        const indicatorContainer = document.createElement('div');
+        indicatorContainer.style.position = 'absolute';
+        indicatorContainer.style.top = '0';
+        indicatorContainer.style.left = '0';
+        indicatorContainer.style.width = '0';
+        indicatorContainer.style.height = '100%';
+        indicatorContainer.style.pointerEvents = 'none';
+        indicatorContainer.style.zIndex = '99';
+        indicatorContainer.style.transform = `translateX(${fixedPosition}px)`;
+
+        // Add indicators to the container
+        indicatorContainer.appendChild(indicator);
+        indicatorContainer.appendChild(pointer);
+
+        // Position the indicator and pointer relative to the container
+        indicator.style.position = 'absolute';
+        indicator.style.left = '0';
+        indicator.style.height = '100%';
+
+        pointer.style.position = 'absolute';
+        pointer.style.left = '-5px';
+        pointer.style.top = '0';
+
+        // Add the container to the scrollable pane
+        scrollablePane.appendChild(indicatorContainer);
+
+        // Make visible if time is within displayed timeframe
+        const maxWidth = scrollablePane.scrollWidth;
+        const isVisible = fixedPosition >= 0 && fixedPosition <= maxWidth;
+        indicatorContainer.style.display = isVisible ? 'block' : 'none';
     }
 
     function generateDynamicGantt(shiftStartTimeStr, totalWorkMinutes) {
