@@ -583,31 +583,33 @@
                 } else {
                     console.log('INDEX.HTML: All Rep tasks processed, submitting final assignments...');
                     const formData = new FormData();
-                    const allTechnicians = Object.values(technicianGroups).flat();
-                    const absentTechnicians = allTechnicians.filter(tech => !presentTechnicians.includes(tech));
-                    formData.append('absentTechnicians', JSON.stringify(absentTechnicians));
-                    formData.append('repAssignments', JSON.stringify(repAssignments));
-                    formData.append('filename', filename);
+                    // MODIFIED: Send present_technicians directly
+                    formData.append('present_technicians', JSON.stringify(presentTechnicians));
+                    formData.append('rep_assignments', JSON.stringify(repAssignments));
                     formData.append('session_id', sessionId);
-                    fetch('/upload', {
+                    // MODIFIED: Call /generate_dashboard
+                    fetch('/generate_dashboard', {
                         method: 'POST',
                         body: formData
                     })
                     .then(response => {
-                        console.log('INDEX.HTML: Final upload response status:', response.status);
+                        console.log('INDEX.HTML: /generate_dashboard response status:', response.status);
                         return response.json();
                     })
                     .then(data => {
-                        console.log('INDEX.HTML: Final upload response data:', data);
+                        console.log('INDEX.HTML: /generate_dashboard response data:', data);
                         showMessage(data.message, data.message.includes('Error') ? 'error' : 'success');
-                        if (!data.message.includes('Error')) {
+                        if (data.dashboard_url) { // Check for dashboard_url
                             const openDashboardButton = document.getElementById('openDashboardButton');
-                            if (openDashboardButton) openDashboardButton.style.display = 'inline-block';
+                            if (openDashboardButton) {
+                                openDashboardButton.href = data.dashboard_url; // Set the correct URL
+                                openDashboardButton.style.display = 'inline-block';
+                            }
                         }
                     })
                     .catch(error => {
-                        console.error('INDEX.HTML: Error in final upload:', error);
-                        showMessage('An error occurred: ' + error.message, 'error');
+                        console.error('INDEX.HTML: Error in /generate_dashboard call:', error);
+                        showMessage('An error occurred generating dashboard: ' + error.message, 'error');
                     });
                 }
             }
@@ -940,20 +942,24 @@
                             } else {
                                 showMessage('No REP tasks to assign. Generating dashboard...', 'success');
                                 const finalFormData = new FormData();
-                                finalFormData.append('absentTechnicians', JSON.stringify(absentTechnicians));
-                                finalFormData.append('repAssignments', JSON.stringify([]));
-                                finalFormData.append('filename', filename);
+                                // MODIFIED: Send present_technicians directly
+                                finalFormData.append('present_technicians', JSON.stringify(presentTechnicians));
+                                finalFormData.append('rep_assignments', JSON.stringify([])); // No REP assignments
                                 finalFormData.append('session_id', sessionId);
-                                fetch('/upload', {
+                                // MODIFIED: Call /generate_dashboard
+                                fetch('/generate_dashboard', {
                                     method: 'POST',
                                     body: finalFormData
                                 })
                                 .then(response => response.json())
                                 .then(finalData => {
                                     showMessage(finalData.message, finalData.message.includes('Error') ? 'error' : 'success');
-                                    if (!finalData.message.includes('Error')) {
+                                    if (finalData.dashboard_url) { // Check for dashboard_url
                                         const openDashboardButton = document.getElementById('openDashboardButton');
-                                        if (openDashboardButton) openDashboardButton.style.display = 'inline-block';
+                                        if (openDashboardButton) {
+                                            openDashboardButton.href = finalData.dashboard_url; // Set the correct URL
+                                            openDashboardButton.style.display = 'inline-block';
+                                        }
                                     }
                                 })
                                 .catch(error => {

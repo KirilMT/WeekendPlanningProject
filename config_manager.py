@@ -38,8 +38,10 @@ def load_app_config(database_path, logger=None): # Added logger argument
                 logger.warning(message)
             elif level == 'error':
                 logger.error(message)
-            elif level == 'debug': # Added debug logging
-                logger.debug(message)
+            # Removed explicit debug level handling here to reduce verbosity
+            # If a message was intended for debug, it won't be printed unless logger's global level is DEBUG
+            # and the call to _log specifies 'debug'.
+            # For very detailed, less frequent debugging, direct logger.debug() calls can be used.
         else:
             print(f"{level.upper()}: {message}") # Fallback
 
@@ -52,10 +54,8 @@ def load_app_config(database_path, logger=None): # Added logger argument
             return
         _log("  Successfully connected to the database for config load.")
         cursor = conn.cursor()
-        _log("  Cursor created for config load.")
 
         sql_query = "SELECT id, name, sattelite_point, lines FROM technicians ORDER BY name"
-        _log(f"  Executing query for config load: {sql_query}", 'debug') # Changed to debug
         cursor.execute(sql_query)
         db_technicians = cursor.fetchall()
         _log(f"  Query executed. Number of rows fetched from 'technicians' table: {len(db_technicians)}")
@@ -69,8 +69,6 @@ def load_app_config(database_path, logger=None): # Added logger argument
             sattelite_point = row['sattelite_point']
             lines_str = row['lines']
 
-            _log(f"    Processing DB row {row_idx + 1}: ID={tech_id}, Name='{tech_name}', Sattelite='{sattelite_point}', Lines='{lines_str}'", 'debug')
-
             if not tech_name or not sattelite_point or sattelite_point not in valid_groups:
                 _log(f"      SKIPPING row {row_idx + 1} (ID {tech_id}, Name '{tech_name}', Sattelite '{sattelite_point}') due to missing/invalid critical data.", 'warning')
                 continue
@@ -80,7 +78,6 @@ def load_app_config(database_path, logger=None): # Added logger argument
             if sattelite_point in TECHNICIAN_GROUPS:
                 TECHNICIAN_GROUPS[sattelite_point].append(tech_name)
             # else: # This case was already handled by the skip condition
-            #     _log(f"    Warning: sattelite_point '{sattelite_point}' for technician '{tech_name}' (ID {tech_id}) is not a predefined group.", 'warning')
 
             task_assignments_query = "SELECT task_name, priority FROM technician_task_assignments WHERE technician_id = ? ORDER BY priority ASC"
             cursor.execute(task_assignments_query, (tech_id,))
@@ -89,7 +86,6 @@ def load_app_config(database_path, logger=None): # Added logger argument
             for assign_row in db_assignments:
                 assignments_for_tech.append({'task': assign_row['task_name'], 'prio': assign_row['priority']})
             TECHNICIAN_TASKS[tech_name] = assignments_for_tech
-            _log(f"    SUCCESS: Loaded technician '{tech_name}' (ID {tech_id}) with {len(assignments_for_tech)} tasks.", 'debug')
 
         _log(f"Successfully loaded configuration for {len(TECHNICIANS)} technicians from database via config_manager.")
 
@@ -101,7 +97,6 @@ def load_app_config(database_path, logger=None): # Added logger argument
         _log(traceback.format_exc(), 'error')
     finally:
         if conn:
-            _log("  Closing database connection in config_manager.", 'debug') # Changed to debug
             conn.close()
         else:
             _log("  No active database connection to close in config_manager.", 'warning')

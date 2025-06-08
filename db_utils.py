@@ -34,8 +34,3 @@ def init_db(database_path, logger=None): # Added logger argument
     ''')
     conn.commit()
     conn.close()
-    log_message = "Database initialized via db_utils."
-    if logger:
-        logger.info(log_message)
-    else:
-        print(log_message) # Fallback

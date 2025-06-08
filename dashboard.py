@@ -54,18 +54,30 @@ def prepare_dashboard_data(tasks, assignments, unassigned_tasks, incomplete_task
     print("Dashboard data prepared via dashboard.py")
     return pm_tasks_data, rep_tasks_data
 
-def generate_html_files(data, present_technicians, rep_assignments, jinja_env, output_folder_path, config_technicians, config_technician_groups):
+def _log(logger, level, message, *args):
+    """Helper function to log or print."""
+    if logger:
+        if level == "info":
+            logger.info(message, *args)
+        elif level == "debug":
+            logger.debug(message, *args)
+        elif level == "warning":
+            logger.warning(message, *args)
+        elif level == "error":
+            logger.error(message, *args)
+    else:
+        print(f"[{level.upper()}] {message % args if args else message}")
+
+def generate_html_files(data, present_technicians, rep_assignments, jinja_env, output_folder_path, config_technicians, config_technician_groups, logger=None):
     try:
-        # Add logging here to inspect the received technician data
-        if jinja_env.globals.get('logger'): # Check if logger is available (passed via app or direct)
-            logger = jinja_env.globals['logger']
-            logger.debug(f"dashboard.py: generate_html_files received present_technicians: {present_technicians}")
-            logger.debug(f"dashboard.py: generate_html_files received config_technicians (all): {config_technicians}")
-            logger.debug(f"dashboard.py: generate_html_files received config_technician_groups: {config_technician_groups}")
-        else: # Fallback if no logger
-            print(f"DEBUG dashboard.py: generate_html_files received present_technicians: {present_technicians}")
-            print(f"DEBUG dashboard.py: generate_html_files received config_technicians (all): {config_technicians}")
-            print(f"DEBUG dashboard.py: generate_html_files received config_technician_groups: {config_technician_groups}")
+        # if logger: # Use the passed logger directly
+        #     logger.debug(f"dashboard.py: generate_html_files received present_technicians: {present_technicians}")
+        #     logger.debug(f"dashboard.py: generate_html_files received config_technicians (all): {config_technicians}")
+        #     logger.debug(f"dashboard.py: generate_html_files received config_technician_groups: {config_technician_groups}")
+        # else: # Fallback if no logger
+        #     print(f"DEBUG dashboard.py: generate_html_files received present_technicians: {present_technicians}")
+        #     print(f"DEBUG dashboard.py: generate_html_files received config_technicians (all): {config_technicians}")
+        #     print(f"DEBUG dashboard.py: generate_html_files received config_technician_groups: {config_technician_groups}")
 
         sanitized_data_list = sanitize_data(data)
         tasks_for_processing = []
@@ -92,7 +104,8 @@ def generate_html_files(data, present_technicians, rep_assignments, jinja_env, o
             tasks_for_processing,
             present_technicians,
             total_work_minutes,
-            rep_assignments
+            rep_assignments,
+            logger=logger  # Pass the logger instance
         )
 
         week_date_day_shift = {
@@ -127,7 +140,7 @@ def generate_html_files(data, present_technicians, rep_assignments, jinja_env, o
         output_path = os.path.join(output_folder_path, "technician_dashboard.html")
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(technician_html)
-        print(f"Written output to {output_path} via dashboard.py")
+        _log(logger, "info", f"Written output to {output_path} via dashboard.py")
 
         return final_available_time
 

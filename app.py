@@ -2,20 +2,23 @@ from flask import Flask, request, jsonify, send_from_directory, render_template
 import os
 import json
 from jinja2 import Environment, FileSystemLoader
-from extract_data import extract_data, get_current_week, get_current_week_number, get_current_day, get_current_shift
+from extract_data import extract_data, get_current_day #, get_current_week, get_current_week_number, get_current_shift
 import traceback
 import random
 import sqlite3 # Used for specific error handling in routes
+import logging # Import logging
 
 # Import from new modules
 from db_utils import get_db_connection, init_db
-from config_manager import load_app_config, TECHNICIAN_TASKS, TECHNICIAN_LINES, TECHNICIANS, TECHNICIAN_GROUPS, TASK_NAME_MAPPING
-from data_processing import calculate_available_time, sanitize_data, validate_assignments_flat_input, calculate_work_time
-from task_assigner import assign_tasks, calculate_pm_assignments_and_availability # MODIFIED: Import new helper
-from dashboard import prepare_dashboard_data, generate_html_files
+from config_manager import load_app_config, TECHNICIAN_LINES, TECHNICIANS, TECHNICIAN_GROUPS #, TASK_NAME_MAPPING, TECHNICIAN_TASKS
+from data_processing import sanitize_data, calculate_work_time #, calculate_available_time, validate_assignments_flat_input
+from task_assigner import calculate_pm_assignments_and_availability # MODIFIED: Import new helper, removed assign_tasks
+from dashboard import generate_html_files #, prepare_dashboard_data
 
 
 app = Flask(__name__)
+app.logger.setLevel(logging.DEBUG) # Explicitly set logger level to DEBUG
+
 app.config['UPLOAD_FOLDER'] = 'Uploads'
 app.config['OUTPUT_FOLDER'] = 'output'
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -85,7 +88,8 @@ def save_technician_mappings_api():
         for tech_name, tech_payload_data in technicians_from_payload.items():
             sattelite_point = tech_payload_data.get('sattelite_point')
             lines_list = tech_payload_data.get('technician_lines', [])
-            lines_str = ",".join(map(str, filter(lambda x: isinstance(x, int), lines_list))) if lines_list else ""
+            # Ensure all elements in lines_list are integers before joining
+            lines_str = ",".join(map(str, [l for l in lines_list if isinstance(l, int)])) if lines_list else ""
             task_assignments_payload = sorted(filter(lambda ta: isinstance(ta, dict) and 'task' in ta and 'prio' in ta and isinstance(ta['prio'], int) and ta['prio'] >= 1, tech_payload_data.get('task_assignments', [])), key=lambda x: x.get('prio'))
             cursor.execute("SELECT id FROM technicians WHERE name = ?", (tech_name,))
             tech_row = cursor.fetchone()
@@ -171,6 +175,7 @@ def upload_file_route():
         if session_id not in session_excel_data_cache:
             return jsonify({"message": "Session expired or data not found. Please re-upload."}), 400
         excel_data_rows = session_excel_data_cache[session_id]
+        app.logger.info(f"Stage 2 processing for session_id: {session_id} with {len(excel_data_rows) if excel_data_rows else 'no' } cached rows.")
 
         try:
             absent_technicians = json.loads(request.form.get('absentTechnicians', '[]'))
@@ -193,7 +198,7 @@ def upload_file_route():
 
             pm_tasks_from_excel = [t for t in all_tasks_for_processing if t['task_type'].upper() == 'PM']
             _ , available_time_after_pm = calculate_pm_assignments_and_availability(
-                pm_tasks_from_excel, present_technicians, total_work_minutes
+                pm_tasks_from_excel, present_technicians, total_work_minutes, logger=app.logger
             )
 
             rep_tasks_for_ui = []
@@ -246,34 +251,8 @@ def upload_file_route():
 
     # Fallback if neither excelFile nor absentTechnicians is in the request form
     # This case should ideally not be reached if frontend logic is correct.
+    app.logger.warning(f"Invalid request for session_id: {session_id}. No excelFile or absentTechnicians provided.")
     return jsonify({"message": "Invalid request. No file or absent technician data provided."}), 400
-
-
-@app.route('/get_rep_tasks', methods=['POST'])
-def get_rep_tasks_route():
-    # This route might be deprecated or refactored if /upload handles REP task list generation
-    data = request.get_json()
-    session_id = data.get('session_id')
-    if not session_id or session_id not in session_excel_data_cache:
-        return jsonify({"message": "Invalid session or no data found."}), 400
-    excel_data_rows = session_excel_data_cache[session_id]
-    sanitized_data_for_rep = sanitize_data(excel_data_rows)
-    rep_tasks_for_ui = []
-    for idx, task_data in enumerate(sanitized_data_for_rep):
-        if task_data.get('task_type', '').upper() == 'REP':
-            rep_tasks_for_ui.append({
-                "id": str(idx + 1), "name": task_data.get("scheduler_group_task", "Unknown REP Task"),
-                "lines": task_data.get("lines", ""), "mitarbeiter_pro_aufgabe": int(task_data.get("mitarbeiter_pro_aufgabe", 1)),
-                "planned_worktime_min": int(task_data.get("planned_worktime_min", 0)), "priority": task_data.get("priority", "C"),
-                "quantity": int(task_data.get("quantity", 1)), "task_type": "REP",
-                "ticket_mo": task_data.get("ticket_mo", ""), "ticket_url": task_data.get("ticket_url", "")
-            })
-    if not rep_tasks_for_ui:
-        return jsonify({"message": "No REP tasks found in the uploaded file."}), 200
-    return jsonify({
-        "message": "REP tasks extracted successfully.", "rep_tasks": rep_tasks_for_ui,
-        "technicians": TECHNICIANS, "technician_groups": TECHNICIAN_GROUPS
-    })
 
 @app.route('/generate_dashboard', methods=['POST'])
 def generate_dashboard_route():
@@ -298,20 +277,29 @@ def generate_dashboard_route():
             return jsonify({"message": "Invalid format for present_technicians or rep_assignments."}),400
 
         available_time_result = generate_html_files(
-            excel_data_to_process, present_technicians, rep_assignments_from_ui, session_id, app.logger
+            excel_data_to_process,
+            present_technicians,
+            rep_assignments_from_ui,
+            env, # Pass the Jinja environment
+            OUTPUT_FOLDER_ABS, # Pass the absolute output folder path
+            TECHNICIANS, # Pass all configured technicians
+            TECHNICIAN_GROUPS, # Pass configured technician groups
+            app.logger # Pass the Flask app logger
         )
 
+        dashboard_url = request.host_url + f'output/technician_dashboard.html?cache_bust={random.randint(1,100000)}'
         return jsonify({
             "message": "Dashboard data processed and HTML files generated.",
             "html_files": available_time_result.get('html_files', []),
-            "session_id": session_id
+            "session_id": session_id,
+            "dashboard_url": dashboard_url # Return the dashboard URL
         })
     except Exception as e:
         print(f"Error in generate_dashboard_route: {e}")
         print(traceback.format_exc()) # It's good practice to log the full traceback for debugging
         return jsonify({"message": f"Error processing dashboard data: {str(e)}"}), 500
 
-@app.route('/output/<filename>')
+@app.route('/output/<path:filename>') # Added path converter for filename
 def output_file_route(filename):
     return send_from_directory(OUTPUT_FOLDER_ABS, filename)
 

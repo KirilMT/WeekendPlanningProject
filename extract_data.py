@@ -51,10 +51,10 @@ def fill_merged_cells(row):
 # Step 3: Find the correct column and apply filter
 def find_and_filter_data(df, current_day, current_shift):
     headers = fill_merged_cells(df.iloc[0])  # Fill merged cells in row 1
-    print("Headers in row 1 (cleaned):", headers.tolist())  # Debug
+    # print("Headers in row 1 (cleaned):", headers.tolist())  # Debug
 
     if isinstance(df.columns, pd.MultiIndex):
-        print("Detected MultiIndex columns. Flattening...")
+        # print("Detected MultiIndex columns. Flattening...")
         col_names = ["_".join(str(level).strip() for level in col if str(level) != "nan") for col in df.columns]
     else:
         col_names = df.columns.astype(str).tolist()
@@ -64,10 +64,10 @@ def find_and_filter_data(df, current_day, current_shift):
     target_header = f"{target_day} CW-{current_week}"  # e.g., "Monday CW-17"
     matching_columns = []
 
-    print("Column names:", col_names)  # Debug
+    # print("Column names:", col_names)  # Debug
     for idx, col in enumerate(col_names):
         header_value = str(headers.iloc[idx]).strip()
-        print(f"Checking column {idx}: header='{header_value}', col_name='{col}'")  # Debug
+        # print(f"Checking column {idx}: header='{header_value}', col_name='{col}'")  # Debug
         if header_value == target_header:
             matching_columns.append(idx)
 
@@ -78,7 +78,7 @@ def find_and_filter_data(df, current_day, current_shift):
     target_col = None
     for col_idx in matching_columns:
         shift_value = str(shift_row.iloc[col_idx]).lower().strip()
-        print(f"Column {col_idx} shift: {shift_value}")  # Debug
+        # print(f"Column {col_idx} shift: {shift_value}")  # Debug
         if shift_value == current_shift:
             target_col = col_idx
             break
@@ -88,18 +88,18 @@ def find_and_filter_data(df, current_day, current_shift):
 
     df.iloc[:, target_col] = pd.to_numeric(df.iloc[:, target_col], errors='coerce')
 
-    print(f"Values in target_col (index {target_col}) before filtering (first 15 rows):")
-    print(df.iloc[:15, target_col].tolist())
+    # print(f"Values in target_col (index {target_col}) before filtering (first 15 rows):")
+    # print(df.iloc[:15, target_col].tolist())
 
     filtered_df = df[df.iloc[:, target_col].notna() & (df.iloc[:, target_col] >= 1)]
 
-    print(f"Filtered DataFrame indices before slicing: {filtered_df.index.tolist()}")
-    print(f"Values in target_col after filtering:")
-    print(filtered_df.iloc[:, target_col].tolist())
+    # print(f"Filtered DataFrame indices before slicing: {filtered_df.index.tolist()}")
+    # print(f"Values in target_col after filtering:")
+    # print(filtered_df.iloc[:, target_col].tolist())
 
     filtered_df = filtered_df[filtered_df.index >= 8]
 
-    print(f"Filtered DataFrame indices after slicing: {filtered_df.index.tolist()}")
+    # print(f"Filtered DataFrame indices after slicing: {filtered_df.index.tolist()}")
 
     if filtered_df.empty:
         raise ValueError("No rows remain after filtering and slicing. Check if any rows have values >= 1 in the target column after row 9.")
@@ -122,15 +122,15 @@ def extract_data(excel_file_object):  # MODIFIED: Changed argument name
         # MODIFIED: Read from the excel_file_object (stream)
         df = pd.read_excel(excel_file_object, sheet_name=sheet_name, engine=engine_to_use, header=None)
 
-        print("First 10 rows of DataFrame:")
-        print(df.head(10))
-        print("DataFrame columns:", df.columns.tolist())
-        print("Raw row 2 (headers):", df.iloc[1].fillna("").to_list())
+        # print("First 10 rows of DataFrame:")
+        # print(df.head(10))
+        # print("DataFrame columns:", df.columns.tolist())
+        # print("Raw row 2 (headers):", df.iloc[1].fillna("").to_list())
 
         filtered_df, target_col = find_and_filter_data(df, current_day, current_shift)
 
         headers = fill_merged_cells(df.iloc[1])  # Row 2 (index 1)
-        print("Headers in row 2 (cleaned):", headers.to_list())
+        # print("Headers in row 2 (cleaned):", headers.to_list())
 
         required_columns = {
             "scheduler_col": "Scheduler Group /  Task",
@@ -161,8 +161,8 @@ def extract_data(excel_file_object):  # MODIFIED: Changed argument name
                     )
                 ]
                 if matching_columns.empty and col_name not in ["planning_notes_col", "priority_col", "ticket_mo_col"]:
-                    print(f"Error: Column '{header}' not found in row 2. Available headers:")
-                    print(headers.to_list())
+                    # print(f"Error: Column '{header}' not found in row 2. Available headers:")
+                    # print(headers.to_list())
                     raise ValueError(f"Column '{header}' not found in row 2 of the Excel file.")
                 elif matching_columns.empty and col_name == "planning_notes_col":
                     print(f"Warning: Column '{header}' not found in row 2. Setting planning_notes to empty.")
