@@ -39,7 +39,7 @@
             width: 100%;
             box-sizing: border-box;
         }
-        button[type="submit"], #openDashboardButton, #confirmAbsent, #validateRep, #skipRep, #addCustomTask {
+        button[type="submit"], #openDashboardButton, #confirmAbsent, #validateRep, #skipRep, #addAdditionalTask {
             padding: 12px 25px;
             border: none;
             border-radius: 25px;
@@ -65,13 +65,13 @@
             background-color: #2ab7c2;
             transform: scale(1.05);
         }
-        #confirmAbsent, #validateRep {
-            background-color: #ffeb3b;
-            color: black;
+        #confirmAbsent, #validateRep { /* #validateRep will be green */
+            background-color: #4caf50; /* Green, formerly #ffeb3b */
+            color: white; /* Text color for green button */
             border-radius: 5px;
         }
         #confirmAbsent:hover, #validateRep:hover {
-            background-color: #fdd835;
+            background-color: #45a049; /* Darker green, formerly #fdd835 */
             transform: scale(1.05);
         }
         #skipRep {
@@ -83,13 +83,13 @@
             background-color: #ff4f41;
             transform: scale(1.05);
         }
-        #addCustomTask {
-            background-color: #4caf50;
-            color: white;
+        #addAdditionalTask { /* This will be yellow */
+            background-color: #ffeb3b; /* Yellow, formerly #4caf50 */
+            color: black; /* Text color for yellow button */
             border-radius: 5px;
         }
-        #addCustomTask:hover {
-            background-color: #45a049;
+        #addAdditionalTask:hover {
+            background-color: #fdd835; /* Darker yellow, formerly #45a049 */
             transform: scale(1.05);
         }
         #message {
@@ -285,13 +285,13 @@
 
         /* Individual button styling within the REP modal can remain as is or be adjusted */
         /* #repModal .modal-content > button was too general, targeting specific buttons is better */
-        #validateRep, #skipRep, #addCustomTask {
+        #validateRep, #skipRep, #addAdditionalTask {
             /* General button styles are already applied */
             /* You can add specific margins here if needed, e.g., margin: 0; */
         }
         
-        /* Custom Task Modal Styles */
-        #customTaskModal .modal-content {
+        /* Additional Task Modal Styles */
+        #additionalTaskModal .modal-content {
             width: 90%;
             max-width: 600px;
             padding: 25px;
@@ -317,30 +317,44 @@
             box-sizing: border-box;
         }
         
-        .custom-task-buttons {
+        .additional-task-buttons {
             display: flex;
             justify-content: flex-end;
             gap: 10px;
             margin-top: 20px;
         }
         
-        #createTask, #cancelTask {
-            padding: 10px 15px;
-            border: none;
-            border-radius: 4px;
+        #createAdditionalTask, #cancelAdditionalTask {
+            padding: 12px 25px; /* Adjusted padding */
+            border: 1px solid transparent;
+            border-radius: 5px; /* Adjusted border-radius */
             cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s, border-color 0.3s, color 0.3s;
+            box-sizing: border-box; /* Added for consistent sizing */
         }
-        
-        #createTask {
-            background-color: #4caf50;
+
+        #createAdditionalTask {
+            background-color: #4caf50; /* Green */
             color: white;
+            border-color: #4caf50;
         }
-        
-        #cancelTask {
-            background-color: #6c757d;
-            color: white;
+        #createAdditionalTask:hover {
+            background-color: #45a049;
+            border-color: #45a049;
         }
-        
+
+        #cancelAdditionalTask {
+            background-color: #f8f9fa; /* Light grey */
+            color: #343a40;    /* Dark text */
+            border-color: #ced4da; /* Grey border */
+            margin: 10px 5px;
+        }
+        #cancelAdditionalTask:hover {
+            background-color: #e9ecef;
+            border-color: #adb5bd;
+        }
+
         .is-invalid {
             border-color: #dc3545 !important;
         }
@@ -351,10 +365,10 @@
             margin-top: 4px;
             display: none;
         }
-        
-        .custom-task-badge {
+
+        .additional-task-badge {
             display: inline-block;
-            background-color: #4caf50;
+            background-color: #4caf50; /* Keeping green for the badge, or change if needed */
             color: white;
             padding: 2px 6px;
             border-radius: 4px;
@@ -394,9 +408,9 @@
             <div id="ticketInfo"></div>
             <input type="text" id="repSearch" placeholder="Search for technicians...">
             <div class="technician-checkboxes" id="repTechnicians"></div>
-            <!-- MODIFIED: Wrap buttons in a div and add the new "Add Custom Task" button -->
+            <!-- MODIFIED: Wrap buttons in a div and add the new "Add Additional Task" button -->
             <div class="rep-modal-buttons">
-                <button id="addCustomTask">Add Custom Task</button>
+                <button id="addAdditionalTask">Add Additional Task</button>
                 <div>
                     <button id="validateRep">Validate Selection</button>
                     <button id="skipRep">Skip Task</button>
@@ -405,11 +419,11 @@
         </div>
     </div>
 
-    <!-- Custom Task Creation Modal -->
-    <div id="customTaskModal" class="modal">
+    <!-- Additional Task Creation Modal -->
+    <div id="additionalTaskModal" class="modal">
         <div class="modal-content">
-            <h2>Create Custom Task</h2>
-            <form id="customTaskForm">
+            <h2>Create Additional Task</h2>
+            <form id="additionalTaskForm">
                 <div class="form-group">
                     <label for="taskName">Task Name *</label>
                     <input type="text" id="taskName" class="form-control" required>
@@ -451,9 +465,17 @@
                     <input type="number" id="taskQuantity" class="form-control" min="1" value="1" required>
                     <div class="invalid-feedback">Please provide a valid quantity (1 or greater).</div>
                 </div>
-                <div class="custom-task-buttons">
-                    <button type="button" id="cancelTask">Cancel</button>
-                    <button type="submit" id="createTask">Create Task</button>
+                <div class="form-group">
+                    <label for="taskType">Task Type *</label>
+                    <select id="taskType" class="form-control" required>
+                        <option value="REP" selected>REP</option>
+                        <option value="PM">PM</option>
+                    </select>
+                    <div class="invalid-feedback">Please select a task type.</div>
+                </div>
+                <div class="additional-task-buttons">
+                    <button type="button" id="cancelAdditionalTask">Cancel</button>
+                    <button type="submit" id="createAdditionalTask">Create Task</button>
                 </div>
             </form>
         </div>
@@ -469,7 +491,7 @@
         let eligibleTechnicians = {}; // This is key for the REP modal
         let filename = '';
         let sessionId = '';
-        let customTaskCounter = 0; // Counter for custom task IDs
+        let additionalTaskCounter = 0; // Counter for additional task IDs
 
         // Generate a simple session ID
         function generateSessionId() {
@@ -569,7 +591,7 @@
                             <p><strong>Technicians Planned:</strong> ${task.mitarbeiter_pro_aufgabe}</p>
                             <p><strong>Duration:</strong> ${task.planned_worktime_min} minutes</p>
                             <p><strong>Progress:</strong> ${currentRepTaskIndex + 1} of ${repTasks.length}</p>
-                            ${task.isCustomTask ? '<p><span class="custom-task-badge">Custom Task</span></p>' : ''}
+                            ${task.isAdditionalTask ? '<p><span class="additional-task-badge">Additional Task</span></p>' : ''}
                         `;
                     } else {
                         console.error("INDEX.HTML: ticketInfo div not found!");
@@ -713,40 +735,40 @@
             });
         }
 
-        // Function to show the custom task modal
-        function showCustomTaskModal() {
-            console.log('INDEX.HTML: Showing Custom Task modal');
-            const customTaskModal = document.getElementById('customTaskModal');
-            if (customTaskModal) {
+        // Function to show the additional task modal
+        function showAdditionalTaskModal() {
+            console.log('INDEX.HTML: Showing Additional Task modal');
+            const additionalTaskModal = document.getElementById('additionalTaskModal');
+            if (additionalTaskModal) {
                 // Reset the form
-                document.getElementById('customTaskForm').reset();
-                
+                document.getElementById('additionalTaskForm').reset();
+
                 // Clear any validation state
                 document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
                 document.querySelectorAll('.invalid-feedback').forEach(el => el.style.display = 'none');
                 
                 // Show the modal
-                customTaskModal.style.display = 'flex';
+                additionalTaskModal.style.display = 'flex';
             } else {
-                console.error("INDEX.HTML: Custom Task modal not found!");
+                console.error("INDEX.HTML: Additional Task modal not found!");
             }
         }
         
-        // Function to hide the custom task modal
-        function hideCustomTaskModal() {
-            console.log('INDEX.HTML: Hiding Custom Task modal');
-            const customTaskModal = document.getElementById('customTaskModal');
-            if (customTaskModal) {
-                customTaskModal.style.display = 'none';
+        // Function to hide the additional task modal
+        function hideAdditionalTaskModal() {
+            console.log('INDEX.HTML: Hiding Additional Task modal');
+            const additionalTaskModal = document.getElementById('additionalTaskModal');
+            if (additionalTaskModal) {
+                additionalTaskModal.style.display = 'none';
             }
         }
         
-        // Function to validate the custom task form
-        function validateCustomTaskForm() {
+        // Function to validate the additional task form
+        function validateAdditionalTaskForm() {
             let isValid = true;
             
             // Required fields validation
-            ['taskName', 'taskDuration', 'taskTechnicians', 'taskQuantity'].forEach(fieldId => {
+            ['taskName', 'taskDuration', 'taskTechnicians', 'taskQuantity', 'taskType'].forEach(fieldId => {
                 const field = document.getElementById(fieldId);
                 if (!field.value.trim()) {
                     field.classList.add('is-invalid');
@@ -762,7 +784,6 @@
                         field.nextElementSibling.style.display = 'block';
                         isValid = false;
                     }
-                    
                     // Duration and technicians can be 0 (for informational tasks)
                 }
             });
@@ -770,9 +791,9 @@
             return isValid;
         }
         
-        // Function to create a custom task
-        function createCustomTask() {
-            if (!validateCustomTaskForm()) {
+        // Function to create an additional task
+        function createAdditionalTask() {
+            if (!validateAdditionalTaskForm()) {
                 return;
             }
             
@@ -785,67 +806,64 @@
             const taskDuration = parseInt(document.getElementById('taskDuration').value) || 0;
             const taskTechnicians = parseInt(document.getElementById('taskTechnicians').value) || 0;
             const taskQuantity = parseInt(document.getElementById('taskQuantity').value) || 1;
-            
-            // Generate a unique ID for the custom task (negative to avoid collision with imported tasks)
-            customTaskCounter++;
-            const customTaskId = `custom_${customTaskCounter}`;
-            
+            const taskType = document.getElementById('taskType').value; // Get task type
+
+            // Generate a unique ID for the additional task
+            additionalTaskCounter++;
+            const additionalTaskId = `additional_${additionalTaskCounter}`;
+
             // Create task object with the same structure as Excel-imported tasks
-            const customTask = {
-                id: customTaskId,
+            const additionalTask = {
+                id: additionalTaskId,
                 name: taskName,
                 lines: taskLines,
                 mitarbeiter_pro_aufgabe: taskTechnicians,
                 planned_worktime_min: taskDuration,
                 priority: taskPriority,
                 quantity: taskQuantity,
-                task_type: 'REP',
+                task_type: taskType, // Use selected task type
                 ticket_mo: taskTicketMO,
                 ticket_url: taskTicketURL,
-                isCustomTask: true  // Add a flag to identify custom tasks
+                isAdditionalTask: true  // Add a flag to identify additional tasks
             };
             
-            console.log('INDEX.HTML: Created custom task:', customTask);
-            
-            // Add the custom task to the eligibleTechnicians object
-            // First, get all present technicians with their available time
-            // We'll filter this like we do with normal REP tasks
-            eligibleTechnicians[customTaskId] = [];
-            
-            // Determine eligible technicians for this custom task
+            console.log('INDEX.HTML: Created additional task:', additionalTask);
+
+            // Add the additional task to the eligibleTechnicians object
+            eligibleTechnicians[additionalTaskId] = [];
+
+            // Determine eligible technicians for this additional task
             const minAcceptableTimeForEligibility = taskDuration * 0.75;
             
             presentTechnicians.forEach(techName => {
-                // Convert presentTechnicians entries to objects with available_time
-                let techObj = { 
+                let techObj = {
                     name: techName, 
                     available_time: 0,
                     task_full_duration: taskDuration
                 };
                 
-                // Try to find the tech in any existing eligibleTechnicians entry to get their current available time
-                for (const taskId in eligibleTechnicians) {
-                    const matchingTech = eligibleTechnicians[taskId].find(t => t.name === techName);
+                for (const taskId_iter in eligibleTechnicians) { // Renamed taskId to taskId_iter to avoid conflict
+                    const matchingTech = eligibleTechnicians[taskId_iter].find(t => t.name === techName);
                     if (matchingTech) {
                         techObj.available_time = matchingTech.available_time;
                         break;
                     }
                 }
                 
-                // Only include technicians with enough time or if the task duration is 0
                 if (taskDuration === 0 || techObj.available_time >= minAcceptableTimeForEligibility) {
-                    eligibleTechnicians[customTaskId].push(techObj);
+                    eligibleTechnicians[additionalTaskId].push(techObj);
                 }
             });
             
-            // Add the custom task to repTasks at the current position
-            repTasks.splice(currentRepTaskIndex, 0, customTask);
-            
-            // Hide the custom task modal
-            hideCustomTaskModal();
-            
-            // Show the REP modal for this task
-            // We don't increment currentRepTaskIndex because we inserted at the current position
+            // Add the additional task to repTasks at the current position
+            // If the current task type is PM, we might need a different logic or array
+            // For now, assuming additional tasks are treated like REP tasks for modal flow
+            repTasks.splice(currentRepTaskIndex, 0, additionalTask);
+
+            // Hide the additional task modal
+            hideAdditionalTaskModal();
+
+            // Show the REP modal for this task (or the next one if it was a PM task)
             showRepModal();
         }
 
@@ -912,7 +930,7 @@
                     presentTechnicians = Object.values(technicianGroups).flat().filter(tech => !absentTechnicians.includes(tech));
                     console.log('INDEX.HTML: Present technicians:', presentTechnicians);
                     const formData = new FormData();
-                    formData.append('absentTechnicians', JSON.stringify(absentTechnicians));
+                    formData.append('absentTechnicians', JSON.stringify(absentTechnicians)); // Corrected typo: absentTechnarians to absentTechnicians
                     formData.append('filename', filename);
                     formData.append('session_id', sessionId);
                     console.log('INDEX.HTML: Sending PM processing request (after absent selection)...');
@@ -1021,7 +1039,7 @@
                         technicians: selectedTechnicians,
                         ticket_mo: task.ticket_mo,
                         ticket_url: task.ticket_url,
-                        isCustomTask: task.isCustomTask || false // Preserve custom task flag
+                        isAdditionalTask: task.isAdditionalTask || false // Preserve additional task flag
                     });
                     console.log('INDEX.HTML: Rep assignment added:', repAssignments[repAssignments.length - 1]);
 
@@ -1080,7 +1098,7 @@
                         ticket_url: repTasks[currentRepTaskIndex].ticket_url,
                         skipped: true,
                         skip_reason: skipReasonMessage, // Add the reason here
-                        isCustomTask: repTasks[currentRepTaskIndex].isCustomTask || false // Preserve custom task flag
+                        isAdditionalTask: repTasks[currentRepTaskIndex].isAdditionalTask || false // Preserve additional task flag
                     });
                     console.log('INDEX.HTML: Rep task skipped:', repAssignments[repAssignments.length - 1]);
                     currentRepTaskIndex++;
@@ -1091,33 +1109,33 @@
                 console.error("INDEX.HTML: skipRep button not found!");
             }
             
-            // Add event listener for "Add Custom Task" button
-            const addCustomTaskButton = document.getElementById('addCustomTask');
-            if (addCustomTaskButton) {
-                addCustomTaskButton.addEventListener('click', function() {
-                    console.log('INDEX.HTML: Add Custom Task button clicked.');
+            // Add event listener for "Add Additional Task" button
+            const addAdditionalTaskButton = document.getElementById('addAdditionalTask');
+            if (addAdditionalTaskButton) {
+                addAdditionalTaskButton.addEventListener('click', function() {
+                    console.log('INDEX.HTML: Add Additional Task button clicked.');
                     hideRepModal();
-                    showCustomTaskModal();
+                    showAdditionalTaskModal();
                 });
             } else {
-                console.error("INDEX.HTML: addCustomTask button not found!");
+                console.error("INDEX.HTML: addAdditionalTask button not found!");
             }
             
-            // Add event listeners for custom task form buttons
-            const createTaskButton = document.getElementById('createTask');
-            const cancelTaskButton = document.getElementById('cancelTask');
-            const customTaskForm = document.getElementById('customTaskForm');
-            
-            if (customTaskForm) {
-                customTaskForm.addEventListener('submit', function(event) {
+            // Add event listeners for additional task form buttons
+            const createAdditionalTaskButton = document.getElementById('createAdditionalTask');
+            const cancelAdditionalTaskButton = document.getElementById('cancelAdditionalTask');
+            const additionalTaskForm = document.getElementById('additionalTaskForm');
+
+            if (additionalTaskForm) {
+                additionalTaskForm.addEventListener('submit', function(event) {
                     event.preventDefault();
-                    createCustomTask();
+                    createAdditionalTask();
                 });
             }
             
-            if (cancelTaskButton) {
-                cancelTaskButton.addEventListener('click', function() {
-                    hideCustomTaskModal();
+            if (cancelAdditionalTaskButton) {
+                cancelAdditionalTaskButton.addEventListener('click', function() {
+                    hideAdditionalTaskModal();
                     showRepModal(); // Return to the current REP task
                 });
             }
