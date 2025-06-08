@@ -128,7 +128,7 @@ def index_route():
 @app.route('/upload', methods=['POST'])
 def upload_file_route():
     session_id = request.form.get('session_id')
-    excel_data_rows = None
+    # excel_data_rows = None # Old variable
 
     if not session_id:
         return jsonify({"message": "Session ID is missing."}), 400
@@ -137,13 +137,14 @@ def upload_file_route():
     if 'excelFile' in request.files and request.files['excelFile'].filename != '':
         excel_file_stream = request.files['excelFile']
         try:
-            excel_data_rows = extract_data(excel_file_stream)
-            if excel_data_rows is None:
-                return jsonify({"message": "Error processing Excel file. Check format/content."}), 500
-            session_excel_data_cache[session_id] = excel_data_rows
+            # Unpack data and errors from extract_data
+            excel_data_list, extraction_errors = extract_data(excel_file_stream)
 
-            # For the first response, we only send PM tasks and technician config
-            sanitized_data = sanitize_data(excel_data_rows)
+            # Store only the list of data rows in the session cache
+            session_excel_data_cache[session_id] = excel_data_list
+
+            # Pass only the list of data rows to sanitize_data
+            sanitized_data = sanitize_data(excel_data_list)
             pm_tasks_for_ui = []
             for idx, task_data in enumerate(sanitized_data):
                 if task_data.get('task_type', '').upper() == 'PM':
@@ -159,23 +160,34 @@ def upload_file_route():
                         "ticket_mo": task_data.get("ticket_mo", ""),
                         "ticket_url": task_data.get("ticket_url", "")
                     })
+
+            response_message = "File processed."
+            if extraction_errors:
+                response_message += f" {len(extraction_errors)} issues found during data extraction (see details below)."
+            elif not excel_data_list:
+                response_message += " No data could be extracted. Please check the file format and content."
+            else:
+                response_message += " PM tasks extracted successfully."
+
             return jsonify({
-                "message": "File processed successfully. PM tasks extracted.",
+                "message": response_message,
                 "pm_tasks": pm_tasks_for_ui, # Only PM tasks initially
                 "technicians": TECHNICIANS,
                 "technician_groups": TECHNICIAN_GROUPS,
-                "session_id": session_id
+                "session_id": session_id,
+                "extraction_errors": extraction_errors # Include extraction errors in the response
             })
         except Exception as e:
-            print(f"Error during initial file upload: {e}")
+            app.logger.error(f"Error during initial file upload: {e}", exc_info=True) # Log full traceback
             return jsonify({"message": f"Error processing file: {str(e)}"}), 500
 
     # Stage 2: Absent technicians submitted, calculate REP task eligibility
     elif 'absentTechnicians' in request.form:
         if session_id not in session_excel_data_cache:
             return jsonify({"message": "Session expired or data not found. Please re-upload."}), 400
-        excel_data_rows = session_excel_data_cache[session_id]
-        app.logger.info(f"Stage 2 processing for session_id: {session_id} with {len(excel_data_rows) if excel_data_rows else 'no' } cached rows.")
+
+        excel_data_list_cached = session_excel_data_cache[session_id] # This will be the list of dicts
+        app.logger.info(f"Stage 2 processing for session_id: {session_id} with {len(excel_data_list_cached) if excel_data_list_cached else 'no' } cached rows.")
 
         try:
             absent_technicians = json.loads(request.form.get('absentTechnicians', '[]'))
@@ -185,7 +197,8 @@ def upload_file_route():
             current_day = get_current_day()
             total_work_minutes = calculate_work_time(current_day)
 
-            sanitized_data = sanitize_data(excel_data_rows)
+            # Pass the correctly retrieved list to sanitize_data
+            sanitized_data = sanitize_data(excel_data_list_cached)
             all_tasks_for_processing = []
             for idx, row in enumerate(sanitized_data, start=1):
                 all_tasks_for_processing.append({
@@ -304,4 +317,4 @@ def output_file_route(filename):
     return send_from_directory(OUTPUT_FOLDER_ABS, filename)
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    app.run(host='127.0.0.1', port=5000, debug=True, use_reloader=False)

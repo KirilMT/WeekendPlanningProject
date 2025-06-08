@@ -1,26 +1,25 @@
 import pandas as pd
 from datetime import datetime, timedelta
-import os
 import re
 
 # Step 0: Determine the current week (KW)
 def get_current_week():
     current_date = datetime.now()
-    # current_date = datetime(2025, 4, 19)  # Hardcoded for testing
+    current_date = datetime(2025, 5, 10)  # Hardcoded for testing
     week_number = current_date.isocalendar().week
     return f"Summary KW{week_number:02d}", current_date
 
 # Helper function to get the current week number (e.g., "17")
 def get_current_week_number():
     current_date = datetime.now()
-    #current_date = datetime(2025, 4, 19)  # Hardcoded for testing
+    current_date = datetime(2025, 5, 10)  # Hardcoded for testing
     week_number = current_date.isocalendar().week
     return f"{week_number:02d}"
 
 # Step 1: Determine the current day
 def get_current_day():
     current_date = datetime.now()
-    # current_date = datetime(2025, 4, 19, 0, 45)  # Hardcoded for testing Saturday 00:45
+    current_date = datetime(2025, 5, 10, 10, 00)  # Hardcoded for testing Saturday 00:45
     # If current time is before 6 AM, it's part of the previous day's night shift
     if current_date.hour < 6:
         effective_date = current_date - timedelta(days=1)
@@ -31,7 +30,7 @@ def get_current_day():
 # Step 2: Determine the current shift
 def get_current_shift():
     current_time = datetime.now().hour
-    # current_time = 10  # Hardcoded for testing (3 PM)
+    current_time = 10  # Hardcoded for testing (3 PM)
     if 6 <= current_time < 18:  # 6 AM to 6 PM
         return "early"
     else:  # 6 PM to 6 AM
@@ -50,59 +49,44 @@ def fill_merged_cells(row):
 
 # Step 3: Find the correct column and apply filter
 def find_and_filter_data(df, current_day, current_shift):
-    headers = fill_merged_cells(df.iloc[0])  # Fill merged cells in row 1
-    # print("Headers in row 1 (cleaned):", headers.tolist())  # Debug
+    # Determine Day/Shift headers for quantity column (assumed to be in row 0 and 1)
+    day_headers_row = fill_merged_cells(df.iloc[0])  # Fill merged cells in row 1 (0-indexed)
+    shift_headers_row = fill_merged_cells(df.iloc[1])  # Row 2 (index 1) contains the shift
 
-    if isinstance(df.columns, pd.MultiIndex):
-        # print("Detected MultiIndex columns. Flattening...")
-        col_names = ["_".join(str(level).strip() for level in col if str(level) != "nan") for col in df.columns]
-    else:
-        col_names = df.columns.astype(str).tolist()
+    target_day = current_day
+    current_week = get_current_week_number()
+    target_header = f"{target_day} CW-{current_week}"
+    matching_columns_for_day = []
 
-    target_day = current_day  # e.g., "Monday"
-    current_week = get_current_week_number()  # e.g., "17"
-    target_header = f"{target_day} CW-{current_week}"  # e.g., "Monday CW-17"
-    matching_columns = []
+    for idx, col_header_val in enumerate(day_headers_row):
+        if str(col_header_val).strip() == target_header:
+            matching_columns_for_day.append(idx)
 
-    # print("Column names:", col_names)  # Debug
-    for idx, col in enumerate(col_names):
-        header_value = str(headers.iloc[idx]).strip()
-        # print(f"Checking column {idx}: header='{header_value}', col_name='{col}'")  # Debug
-        if header_value == target_header:
-            matching_columns.append(idx)
+    if not matching_columns_for_day:
+        raise ValueError(f"No columns found for day header '{target_header}'. Check Excel row 1 (index 0).")
 
-    if not matching_columns:
-        raise ValueError(f"No columns found for {target_header}. Check row 1 headers.")
-
-    shift_row = fill_merged_cells(df.iloc[1])  # Row 2 (index 1) contains the shift
     target_col = None
-    for col_idx in matching_columns:
-        shift_value = str(shift_row.iloc[col_idx]).lower().strip()
-        # print(f"Column {col_idx} shift: {shift_value}")  # Debug
+    for col_idx in matching_columns_for_day:
+        shift_value = str(shift_headers_row.iloc[col_idx]).lower().strip()
         if shift_value == current_shift:
             target_col = col_idx
             break
 
     if target_col is None:
-        raise ValueError(f"Column for {target_day} with shift {current_shift} not found in week {current_week}")
+        raise ValueError(f"Column for {target_day} with shift '{current_shift}' not found under day header '{target_header}'. Check Excel row 2 (index 1).")
 
+    # Convert target column to numeric for filtering quantity
     df.iloc[:, target_col] = pd.to_numeric(df.iloc[:, target_col], errors='coerce')
 
-    # print(f"Values in target_col (index {target_col}) before filtering (first 15 rows):")
-    # print(df.iloc[:15, target_col].tolist())
+    # Filter rows based on quantity in target_col
+    # Initial filter for rows with valid quantity
+    filtered_df = df[df.iloc[:, target_col].notna() & (df.iloc[:, target_col] >= 1)].copy() # Use .copy() to avoid SettingWithCopyWarning
 
-    filtered_df = df[df.iloc[:, target_col].notna() & (df.iloc[:, target_col] >= 1)]
-
-    # print(f"Filtered DataFrame indices before slicing: {filtered_df.index.tolist()}")
-    # print(f"Values in target_col after filtering:")
-    # print(filtered_df.iloc[:, target_col].tolist())
-
-    filtered_df = filtered_df[filtered_df.index >= 8]
-
-    # print(f"Filtered DataFrame indices after slicing: {filtered_df.index.tolist()}")
+    # Further filter to include only rows from Excel row 10 (index 9) onwards
+    filtered_df = filtered_df[filtered_df.index >= 9]
 
     if filtered_df.empty:
-        raise ValueError("No rows remain after filtering and slicing. Check if any rows have values >= 1 in the target column after row 9.")
+        raise ValueError(f"No data rows found with quantity >= 1 in column for '{target_header}' (shift '{current_shift}') at or after Excel row 10 (index 9).")
 
     return filtered_df, target_col
 
@@ -110,6 +94,7 @@ def find_and_filter_data(df, current_day, current_shift):
 # Step 4: Extract data
 def extract_data(excel_file_object):  # MODIFIED: Changed argument name
     try:
+        error_messages = []  # Initialize list for error messages
         sheet_name = get_current_week()[0]  # e.g., "Summary KW17"
         current_day = get_current_day()  # e.g., "Monday"
         current_shift = get_current_shift()  # e.g., "early"
@@ -122,15 +107,12 @@ def extract_data(excel_file_object):  # MODIFIED: Changed argument name
         # MODIFIED: Read from the excel_file_object (stream)
         df = pd.read_excel(excel_file_object, sheet_name=sheet_name, engine=engine_to_use, header=None)
 
-        # print("First 10 rows of DataFrame:")
-        # print(df.head(10))
-        # print("DataFrame columns:", df.columns.tolist())
-        # print("Raw row 2 (headers):", df.iloc[1].fillna("").to_list())
-
+        # Find the target column for quantity and the filtered DataFrame
         filtered_df, target_col = find_and_filter_data(df, current_day, current_shift)
 
-        headers = fill_merged_cells(df.iloc[1])  # Row 2 (index 1)
-        # print("Headers in row 2 (cleaned):", headers.to_list())
+        # Get the actual headers for data columns from Excel row 2 (index 1)
+        headers = fill_merged_cells(df.iloc[1])
+        # print("Headers for data columns (from Excel row 2 / index 1):", headers.to_list())
 
         required_columns = {
             "scheduler_col": "Scheduler Group /  Task",
@@ -144,36 +126,40 @@ def extract_data(excel_file_object):  # MODIFIED: Changed argument name
         }
 
         column_indices = {}
-        for col_name, header in required_columns.items():
+        for col_name, header_text in required_columns.items():
             if col_name == "task_type_col":
+                # Use headers (from df.iloc[1]) to find the '&' column
                 matching_columns = headers[headers.str.contains(r"&", na=False, case=False)]
                 if matching_columns.empty:
-                    print("Warning: No column header with '&' found. Assuming all tasks are PM.")
+                    print("Warning: No column header with '&' found in Excel row 2 (index 1). Assuming all tasks are PM.")
                     filtered_df['task_type'] = 'PM'
                     column_indices[col_name] = 'task_type'
                 else:
                     column_indices[col_name] = matching_columns.index[0]
             else:
-                normalized_header = re.sub(r'\s+', ' ', header.lower().replace('\n', ' ').strip())
-                matching_columns = headers[
-                    headers.str.lower().str.replace(r'\s+', ' ', regex=True).str.contains(
-                        normalized_header, na=False, case=False
-                    )
-                ]
+                # Normalize header_text from required_columns for searching in Excel headers
+                normalized_search_header = re.sub(r'\\s+', ' ', header_text.lower().replace('\\n', ' ').strip())
+                normalized_search_header = re.sub(r'\\s*/\\s*', '/', normalized_search_header) # Handle " / " vs "/"
+
+                # Normalize Excel headers for comparison
+                excel_headers_normalized = headers.str.lower().str.replace('\\n', ' ', regex=False)
+                excel_headers_normalized = excel_headers_normalized.str.replace(r'\\s*/\\s*', '/', regex=True)
+                excel_headers_normalized = excel_headers_normalized.str.replace(r'\\s+', ' ', regex=True).str.strip()
+
+                matching_columns = headers[excel_headers_normalized.str.contains(normalized_search_header, na=False, case=False)]
+
                 if matching_columns.empty and col_name not in ["planning_notes_col", "priority_col", "ticket_mo_col"]:
-                    # print(f"Error: Column '{header}' not found in row 2. Available headers:")
-                    # print(headers.to_list())
-                    raise ValueError(f"Column '{header}' not found in row 2 of the Excel file.")
+                    raise ValueError(f"Column '{header_text}' not found in Excel row 2 (index 1).")
                 elif matching_columns.empty and col_name == "planning_notes_col":
-                    print(f"Warning: Column '{header}' not found in row 2. Setting planning_notes to empty.")
+                    print(f"Warning: Column '{header_text}' not found in Excel row 2 (index 1). Setting planning_notes to empty.")
                     filtered_df['planning_notes'] = ''
                     column_indices[col_name] = 'planning_notes'
                 elif matching_columns.empty and col_name == "priority_col":
-                    print(f"Warning: Column '{header}' not found in row 2. Setting priority to 'R'.")
+                    print(f"Warning: Column '{header_text}' not found in Excel row 2 (index 1). Setting priority to 'R'.")
                     filtered_df['priority'] = 'R'
                     column_indices[col_name] = 'priority'
                 elif matching_columns.empty and col_name == "ticket_mo_col":
-                    print(f"Warning: Column '{header}' not found in row 2. Setting ticket_mo to empty.")
+                    print(f"Warning: Column '{header_text}' not found in Excel row 2 (index 1). Setting ticket_mo to empty.")
                     filtered_df['ticket_mo'] = ''
                     column_indices[col_name] = 'ticket_mo'
                 else:
@@ -199,46 +185,130 @@ def extract_data(excel_file_object):  # MODIFIED: Changed argument name
                                                                                                         "priority_col"] != 'priority' else \
         filtered_df['priority'].astype(str).tolist()
         quantity_data = filtered_df.iloc[:, target_col].astype(str).tolist()
-        task_type_data = filtered_df.iloc[:, column_indices["task_type_col"]].astype(str).tolist() if column_indices[
-                                                                                                          "task_type_col"] != 'task_type' else \
-        filtered_df['task_type'].astype(str).tolist()
+        # Get raw task type data for validation before any transformation
+        raw_task_type_values = []
+        if column_indices["task_type_col"] != 'task_type': # if it's an actual column index
+            raw_task_type_values = filtered_df.iloc[:, column_indices["task_type_col"]].astype(str).tolist()
+        else: # if it was defaulted to 'task_type' string key (meaning column not found)
+            raw_task_type_values = ['PM'] * len(filtered_df) # Default to 'PM' for each row if column was missing
+
         ticket_mo_data = filtered_df.iloc[:, column_indices["ticket_mo_col"]].astype(str).tolist() if column_indices[
                                                                                                           "ticket_mo_col"] != 'ticket_mo' else \
         filtered_df['ticket_mo'].astype(str).tolist()
 
         extracted_data = []
         for i in range(len(scheduler_data)):
+            # Corrected row_excel_number: original 0-based index + 1
+            row_excel_number = filtered_df.index[i] + 1
+            current_errors_for_row = []
+
+            val_scheduler_group_task = scheduler_data[i].strip()
+            val_mitarbeiter = mitarbeiter_data[i].strip()
+            val_priority = priority_data[i].strip()
+            val_worktime = worktime_data[i].strip()
+            raw_task_type_value = raw_task_type_values[i].strip()
+
+            # --- VALIDATIONS ---
+            # 1. Scheduler Group / Task
+            if not val_scheduler_group_task or val_scheduler_group_task.lower() == 'nan':
+                current_errors_for_row.append("Scheduler Group / Task cannot be blank.")
+
+            # 2. Mitarbeiter pro Aufgabe
+            if not val_mitarbeiter or val_mitarbeiter.lower() == 'nan':
+                current_errors_for_row.append("Mitarbeiter pro Aufgabe cannot be blank.")
+            else:
+                try:
+                    if float(val_mitarbeiter) <= 0:
+                        current_errors_for_row.append(f"Mitarbeiter pro Aufgabe ('{val_mitarbeiter}') must be a positive number.")
+                except ValueError:
+                    current_errors_for_row.append(f"Mitarbeiter pro Aufgabe ('{val_mitarbeiter}') must be a numeric value.")
+
+            # 3. Prio
+            if not val_priority or val_priority.lower() == 'nan':
+                current_errors_for_row.append("Prio cannot be blank.")
+            elif not re.match(r"^[A-Z]$", val_priority):
+                current_errors_for_row.append(f"Prio ('{val_priority}') must be a single uppercase letter (A-Z).")
+
+            # 4. Planned Worktime in Min
+            if not val_worktime or val_worktime.lower() == 'nan':
+                current_errors_for_row.append("Planned Worktime in Min cannot be blank.")
+            else:
+                try:
+                    if float(val_worktime) <= 0:
+                        current_errors_for_row.append(f"Planned Worktime in Min ('{val_worktime}') must be a positive number.")
+                except ValueError:
+                    current_errors_for_row.append(f"Planned Worktime in Min ('{val_worktime}') must be a numeric value.")
+
+            # 5. Task Type
+            processed_task_type = ""
+            # Check if task_type_col was found or defaulted
+            if column_indices["task_type_col"] == 'task_type': # This means the '&' column was NOT found, and we defaulted
+                # If it defaulted, it means we assumed 'PM'. This is acceptable by definition.
+                processed_task_type = "PM"
+            else: # The '&' column was found, validate its content
+                if not raw_task_type_value or raw_task_type_value.lower() == 'nan':
+                    current_errors_for_row.append(f"Task Type (from '&' column) cannot be blank. Must be PM or Rep.")
+                else:
+                    match = re.match(r'^(PM|Rep)', raw_task_type_value, re.IGNORECASE)
+                    if match:
+                        processed_task_type = match.group(0).upper()
+                    else:
+                        current_errors_for_row.append(f"Task Type (from '&' column) must be PM or Rep. Found: '{raw_task_type_value}'.")
+
+            if current_errors_for_row:
+                for err in current_errors_for_row:
+                    # Try to get a more descriptive task name for the error, if available
+                    task_desc_for_error = val_scheduler_group_task if val_scheduler_group_task and val_scheduler_group_task.lower() != 'nan' else "N/A"
+                    error_messages.append(f"Excel Row {row_excel_number} (Task: '{task_desc_for_error}'): {err}")
+                continue # Skip this row, do not add to extracted_data
+
+            # If all validations passed, proceed to create the data entry
             ticket_mo = ticket_mo_data[i].strip()
             ticket_url = ""
-            if task_type_data[i].upper() == 'REP' and ticket_mo and ticket_mo != 'nan':
-                # Determine if it's a ticket or MO based on length
+            if processed_task_type.upper() == 'REP' and ticket_mo and ticket_mo.lower() != 'nan':
                 if len(ticket_mo) <= 6:
                     ticket_url = f"https://flux-gfb.tesla.com/app/issues/view/{ticket_mo}"
                 else:
                     ticket_url = f"https://flux-gfb.tesla.com/app/schedules/planner-maintenance-grid?ids={ticket_mo}"
 
             extracted_data.append({
-                "scheduler_group_task": scheduler_data[i],
+                "scheduler_group_task": val_scheduler_group_task,
                 "planning_notes": planning_notes_data[i],
                 "lines": lines_data[i],
-                "mitarbeiter_pro_aufgabe": mitarbeiter_data[i],
-                "planned_worktime_min": worktime_data[i],
-                "priority": priority_data[i],
+                "mitarbeiter_pro_aufgabe": val_mitarbeiter,
+                "planned_worktime_min": val_worktime,
+                "priority": val_priority,
                 "quantity": quantity_data[i],
-                "task_type": task_type_data[i],
+                "task_type": processed_task_type,
                 "ticket_mo": ticket_mo,
                 "ticket_url": ticket_url
             })
 
-        if not extracted_data:
-            print(
-                f"No tasks found after filtering. Check if the {sheet_name} sheet contains tasks with values >= 1 in the '{current_day} CW-{current_week}' column for shift '{current_shift}' starting from row 9.")
+        if not extracted_data and not error_messages:
+            error_messages.append(
+                f"No tasks found after filtering. Check if the {sheet_name} sheet contains tasks with values >= 1 in the '{current_day} CW-{current_week}' column for shift '{current_shift}' starting from row 9."
+            )
+        elif not extracted_data and error_messages:
+             # If there were errors, it's more informative to just show those.
+             # The message about no tasks might be redundant if errors explain why.
+             pass # error_messages already contains the details
 
-        return extracted_data
+        return extracted_data, error_messages
 
+    except ValueError as ve: # Catch specific ValueErrors from find_and_filter or others
+        # These are often configuration/file structure issues
+        # Ensure error_messages is initialized if it wasn't (e.g., error in find_and_filter_data before error_messages = [])
+        if 'error_messages' not in locals() and 'error_messages' not in globals():
+            error_messages = []
+        error_messages.append(f"Configuration or File Error: {str(ve)}")
+        return [], error_messages # Ensure tuple is returned
     except Exception as e:
-        print(f"Error in extract_data: {str(e)}")
-        # Optionally, add traceback for more detailed debugging if needed
+        # Ensure error_messages is initialized
+        if 'error_messages' not in locals() and 'error_messages' not in globals():
+            error_messages = []
+        error_messages.append(f"Critical error during data extraction: {str(e)}")
         # import traceback
-        # print(traceback.format_exc())
-        raise  # MODIFIED: Re-raise the exception
+        # error_messages.append(traceback.format_exc())
+        return [], error_messages # Ensure tuple is returned
+        # print(f"Error in extract_data: {str(e)}") # Keep for server logs if needed
+        # raise # Re-raising might hide specific error messages collected
