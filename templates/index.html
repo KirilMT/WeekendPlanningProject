@@ -92,21 +92,52 @@
             background-color: #fdd835; /* Darker yellow, formerly #45a049 */
             transform: scale(1.05);
         }
+        /* General message container styles */
         #message {
-            margin-top: 15px;
-            padding: 10px;
-            border-radius: 5px;
+            margin-top: 20px;
+            padding: 12px 15px;
+            border-radius: 6px;
             display: none;
-            font-size: 14px;
+            font-size: 0.95em;
+            line-height: 1.6;
+            text-align: left;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.08);
+            border-left-width: 5px;
+            border-left-style: solid;
         }
+
+        /* Success message specific styles */
         #message.success {
-            border: 2px solid #36d1dc;
-            color: #36d1dc;
+            background-color: #e0f2f1; /* Lighter teal/mint */
+            color: #00695c;      /* Dark teal text */
+            border-left-color: #00897b; /* Teal accent */
         }
+        #message.success::before {
+            content: '✔'; /* Checkmark icon */
+            font-weight: bold;
+            margin-right: 10px;
+            color: #00897b; /* Icon color matches border */
+        }
+
+        /* Error message specific styles */
         #message.error {
-            border: 2px solid #ff6f61;
-            color: #ff6f61;
+            background-color: #ffe3e3; /* Lighter red */
+            color: #b71c1c;       /* Darker red text */
+            border-left-color: #c62828; /* Red accent */
         }
+        #message.error::before {
+            content: '❗'; /* Warning icon */
+            font-weight: bold;
+            margin-right: 10px;
+            color: #c62828; /* Icon color matches border */
+        }
+
+        /* Hide default icon for the specific week mismatch error as it has its own */
+        #message.error.week-mismatch-error::before {
+            content: ""; /* Effectively hides it by making it empty */
+            margin-right: 0; /* Remove margin if content is empty */
+        }
+
         #manageMappingsBtn {
             position: fixed; /* Position relative to the viewport */
             top: 20px;       /* Distance from the top */
@@ -558,6 +589,8 @@
                 messageDiv.style.display = 'block';
                 messageDiv.className = type;
                 messageDiv.textContent = text;
+                // Scroll to message to ensure it's visible
+                messageDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
             } else {
                 console.error("INDEX.HTML: Message div not found!");
             }
@@ -886,19 +919,83 @@
                     formData.append('session_id', sessionId);
                     console.log('INDEX.HTML: FormData for initial upload:', Array.from(formData.entries()));
                     console.log('INDEX.HTML: Sending initial upload request...');
+
+                    // Show loading message
+                    showMessage('Uploading and validating file...', 'success');
+
+                    // Disable submit button while processing
+                    const submitButton = uploadForm.querySelector('button[type="submit"]');
+                    submitButton.disabled = true;
+
                     fetch('/upload', {
                         method: 'POST',
                         body: formData
                     })
                     .then(response => {
                         console.log('INDEX.HTML: Initial upload response status:', response.status);
-                        return response.json();
+                        // Store the response status for checking if it's an error
+                        const isResponseError = !response.ok;
+                        return response.json().then(data => {
+                            // Return both the data and the error status
+                            return { data, isResponseError };
+                        });
                     })
-                    .then(data => {
+                    .then(({ data, isResponseError }) => {
+                        // Re-enable submit button
+                        submitButton.disabled = false;
+
                         console.log('INDEX.HTML: Initial upload response data:', data);
-                        if (data.message.includes('Error')) {
+
+                        // Check if there was an error in the response
+                        if (isResponseError || data.message.includes('Error') || data.message.includes('not contain data for the current week')) {
                             console.log('INDEX.HTML: Initial upload error:', data.message);
-                            showMessage(data.message, 'error');
+
+                            // Display a more compact error message
+                            const messageDiv = document.getElementById('message');
+                            if (messageDiv) {
+                                messageDiv.style.display = 'block';
+                                // className will be set based on error type below
+
+                                // For week number mismatch errors
+                                if (data.message.includes('Week mismatch error')) {
+                                    messageDiv.className = 'error week-mismatch-error'; // Apply specific class
+                                    // Extract the current week number and available weeks
+                                    const weekMatch = data.message.match(/current week \((\d+)\)/);
+                                    const currentWeekNum = weekMatch ? weekMatch[1] : '?';
+
+                                    const availableMatch = data.message.match(/week\(s\): ([^"]+)/);
+                                    const availableWeeks = availableMatch ? availableMatch[1].trim() : 'None';
+
+                                    // Find the largest available week
+                                    let largestWeek = '';
+                                    if (availableWeeks !== 'None') {
+                                        const weekNumbers = availableWeeks.split(', ').map(w => parseInt(w));
+                                        if (weekNumbers.length > 0) {
+                                            largestWeek = Math.max(...weekNumbers).toString();
+                                        }
+                                    }
+
+                                    // Create an improved week error message with better formatting
+                                    // The outer #message.error div provides background and main border.
+                                    messageDiv.innerHTML = `
+                                        <div style="display: flex; align-items: center; gap: 12px;">
+                                            <div style="font-size: 22px; line-height: 1; color: #c62828;">⚠️</div>
+                                            <div>
+                                                <div style="font-weight: bold; margin-bottom: 3px;">Incorrect Excel File</div>
+                                                <div style="font-size: 0.9em;">You uploaded an Excel file for week <span style="font-weight: bold;">${largestWeek}</span> but the current week is <span style="font-weight: bold;">${currentWeekNum}</span>.</div>
+                                                <div style="margin-top: 5px; font-style: italic; opacity: 0.85; font-size: 0.85em;">Please upload an Excel file that contains data for week ${currentWeekNum}.</div>
+                                            </div>
+                                        </div>
+                                    `;
+                                } else {
+                                    // Other errors - use general error styling
+                                    messageDiv.className = 'error';
+                                    messageDiv.textContent = data.message; // The ::before pseudo-element will add the icon
+                                }
+
+                                // Scroll to message to ensure it's visible
+                                messageDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
                         } else {
                             console.log('INDEX.HTML: Initial upload successful, preparing for absent modal.');
                             showMessage('File uploaded successfully. Please select absent technicians.', 'success');
@@ -912,6 +1009,9 @@
                         }
                     })
                     .catch(error => {
+                        // Re-enable submit button
+                        if (submitButton) submitButton.disabled = false;
+
                         console.error('INDEX.HTML: Initial upload fetch error:', error);
                         showMessage('An error occurred during initial upload: ' + error.message, 'error');
                     });

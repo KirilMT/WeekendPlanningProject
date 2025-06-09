@@ -1,8 +1,10 @@
 from flask import Flask, request, jsonify, send_from_directory, render_template
 import os
 import json
+import pandas as pd  # Add pandas import for Excel validation
+from io import BytesIO  # Add BytesIO import for handling Excel bytes
 from jinja2 import Environment, FileSystemLoader
-from extract_data import extract_data, get_current_day #, get_current_week, get_current_week_number, get_current_shift
+from extract_data import extract_data, get_current_day, get_current_week_number #, get_current_week, get_current_week_number, get_current_shift
 import traceback
 import random
 import sqlite3 # Used for specific error handling in routes
@@ -137,6 +139,43 @@ def upload_file_route():
     if 'excelFile' in request.files and request.files['excelFile'].filename != '':
         excel_file_stream = request.files['excelFile']
         try:
+            # Get the current week number for validation
+            current_week_number = get_current_week_number()
+
+            # Check if the Excel file contains a worksheet for the current week
+            # First, create a copy of the file stream for preliminary analysis
+            excel_file_copy = excel_file_stream.read()
+            excel_file_stream.seek(0)  # Reset the file pointer
+
+            # Determine engine based on filename
+            original_filename = getattr(excel_file_stream, 'filename', '').lower()
+            engine_to_use = 'pyxlsb' if original_filename.endswith('.xlsb') else 'openpyxl'
+
+            # Read the Excel file sheets to check if the current week sheet exists
+            try:
+                with pd.ExcelFile(BytesIO(excel_file_copy), engine=engine_to_use) as xls:
+                    expected_sheet_name = f"Summary KW{current_week_number}"
+                    if expected_sheet_name not in xls.sheet_names:
+                        # Week mismatch detected
+                        available_weeks = [sheet for sheet in xls.sheet_names if sheet.startswith('Summary KW')]
+                        available_week_numbers = [w.replace('Summary KW', '') for w in available_weeks]
+
+                        error_msg = f"Week mismatch error: The uploaded Excel file doesn't contain data for the current week ({current_week_number}). "
+                        if available_week_numbers:
+                            # Sort the week numbers for better display
+                            available_week_numbers.sort()
+                            weeks_str = ', '.join(available_week_numbers)
+                            error_msg += f"The Excel file contains data for week(s): {weeks_str}"
+                        else:
+                            error_msg += "No valid week sheets found in the Excel file."
+                        return jsonify({"message": error_msg}), 400
+            except Exception as sheet_check_error:
+                app.logger.error(f"Error checking Excel sheets: {sheet_check_error}")
+                # Continue with normal processing if sheet checking fails
+
+            # Reset the file stream again before extracting data
+            excel_file_stream.seek(0)
+
             # Unpack data and errors from extract_data
             excel_data_list, extraction_errors = extract_data(excel_file_stream)
 
