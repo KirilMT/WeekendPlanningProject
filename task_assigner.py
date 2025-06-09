@@ -1,6 +1,6 @@
 # wkndPlanning/task_assigner.py
 import random
-from itertools import combinations
+from itertools import combinations, groupby # Ensure groupby is imported here
 from data_processing import normalize_string
 from config_manager import TASK_NAME_MAPPING, TECHNICIAN_TASKS, TECHNICIAN_LINES # Assuming these are populated by load_app_config
 
@@ -41,6 +41,22 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
     # Sort: 1. Priority (A,B,C), 2. For PMs of same prio, maybe by duration or original order (optional refinement)
     # For now, simple priority sort. If IDs are numeric and sequential, could add 'id' as secondary sort key.
     all_tasks_combined.sort(key=lambda x: x['priority_val'])
+
+    _log(logger, "debug", "Original task order after sorting by priority_val: %s", [(t['id'], t.get('priority', 'C'), t['priority_val']) for t in all_tasks_combined])
+
+    # Shuffle tasks within each priority group to vary processing order
+    _log(logger, "info", "Shuffling tasks within each priority level.")
+    shuffled_task_list = []
+    # itertools.groupby requires the data to be sorted by the key you're grouping by.
+    # all_tasks_combined is already sorted by 'priority_val'.
+    for priority_val_group, tasks_in_priority_group_iter in groupby(all_tasks_combined, key=lambda x: x['priority_val']):
+        current_priority_group_tasks = list(tasks_in_priority_group_iter)
+        random.shuffle(current_priority_group_tasks) # In-place shuffle
+        shuffled_task_list.extend(current_priority_group_tasks)
+        _log(logger, "debug", f"Tasks for priority value {priority_val_group} (count: {len(current_priority_group_tasks)}) shuffled. Example task ID after shuffle: {current_priority_group_tasks[0]['id'] if current_priority_group_tasks else 'N/A'}")
+
+    all_tasks_combined = shuffled_task_list
+    _log(logger, "debug", "Final task order for assignment after shuffling within priorities: %s", [(t['id'], t.get('priority', 'C'), t['priority_val']) for t in all_tasks_combined])
 
     technician_schedules = {tech: [] for tech in present_technicians}
     all_task_assignments_details = []
@@ -390,7 +406,6 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
             # Handle tasks that require 0 technicians (e.g., informational, 0 duration)
             # This block should only be hit if task_type is not PM (since PM has its own path) or if PM somehow bypasses its logic.
             # Or if a PM task was successfully assigned (assignment_successful_and_full = True) but was a 0-duration/0-tech task.
-            # The PM logic now handles its own 0-duration tasks within the group search if num_technicians_needed is 0.
             if num_technicians_needed == 0 and base_duration == 0 and not target_assignment_group_for_instance and task_type != 'PM':
                  _log(logger, "info", f"  Task {instance_task_display_name} (Type: {task_type}) is 0 duration, 0 techs, no specific assignment. Marking as 'conceptually done'.")
                  all_task_assignments_details.append({
