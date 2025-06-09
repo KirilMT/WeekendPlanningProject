@@ -366,146 +366,194 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                             eligible_user_selected_techs_rep.append(tech_ui_sel)
                 _log(logger, "debug", f"    REP Instance {instance_task_display_name} - Eligible User-Selected Techs (after filtering for presence & lines): {eligible_user_selected_techs_rep}")
 
+                # Handle 0-tech, 0-duration REP tasks separately
+                if num_technicians_needed == 0 and base_duration == 0:
+                    _log(logger, "info", f"  REP Task {instance_task_display_name} (0 duration, 0 techs) assigned conceptually.")
+                    all_task_assignments_details.append({
+                        'technician': None, 'task_name': instance_task_display_name,
+                        'start': 0, 'duration': 0, 'is_incomplete': False,
+                        'original_duration': 0, 'instance_id': instance_id_str,
+                        'technician_task_priority': 'N/A_REP',
+                        'resource_mismatch_info': "0-duration/0-tech task"
+                    })
+                    assigned_this_instance_flag = True
+                    if instance_id_str in unassigned_tasks_reasons_dict:
+                        del unassigned_tasks_reasons_dict[instance_id_str]
+                    continue # Skip to next instance
+
+                # Proceed with group formation and scheduling for other REP tasks
                 if not eligible_user_selected_techs_rep and num_technicians_needed > 0: # If task needs techs but none of UI selected are eligible
                     last_known_failure_reason_for_instance = "Skipped (REP): None of the user-selected technicians are eligible (present & lines)."
                     unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
                     _log(logger, "warning", f"    {instance_task_display_name} unassigned: {last_known_failure_reason_for_instance}")
                     continue
 
-                target_assignment_group_for_instance = eligible_user_selected_techs_rep # Use the filtered list from UI
-                _log(logger, "debug", f"    REP Instance {instance_task_display_name} - Target Assignment Group: {target_assignment_group_for_instance}")
-                actual_num_assigned = len(target_assignment_group_for_instance)
-                effective_task_duration_for_group = base_duration # For REP, duration doesn't change based on #techs in this simplified model
+                # --- NEW REP Grouping and Scheduling Logic ---
+                viable_groups_with_scores_rep = []
+                # Iterate from 1 to the number of available eligible technicians
+                # Only form groups if there are eligible technicians
+                if eligible_user_selected_techs_rep:
+                    for r_size in range(1, len(eligible_user_selected_techs_rep) + 1):
+                        for group_tuple in combinations(eligible_user_selected_techs_rep, r_size):
+                            group = list(group_tuple)
+                            workload = sum(sum(end - start for start, end, _ in technician_schedules[tn]) for tn in group)
+                            viable_groups_with_scores_rep.append({
+                                'group': group,
+                                'len': len(group),
+                                'workload': workload
+                            })
 
-                if num_technicians_needed > 0:
-                    if actual_num_assigned != num_technicians_needed:
-                         resource_mismatch_note = f"Task requires {num_technicians_needed}. Assigned to {actual_num_assigned} (User selected {raw_user_selection_count_rep}, {len(eligible_user_selected_techs_rep)} eligible)."
-                    elif raw_user_selection_count_rep != num_technicians_needed and len(eligible_user_selected_techs_rep) >= num_technicians_needed:
-                         resource_mismatch_note = f"Task requires {num_technicians_needed}. User selected {raw_user_selection_count_rep} ({len(eligible_user_selected_techs_rep)} eligible). Assigned to {actual_num_assigned}."
-                elif num_technicians_needed == 0 and actual_num_assigned > 0: # Planned for 0, but user assigned some
-                    resource_mismatch_note = f"Task planned for 0 technicians. User assigned {actual_num_assigned}."
-
-                if not target_assignment_group_for_instance and num_technicians_needed > 0: # If after filtering UI selection, no one is left for a task that needs techs
-                    last_known_failure_reason_for_instance = f"Skipped (REP): No eligible technicians remained from UI selection for '{task_name_excel}'."
+                if not viable_groups_with_scores_rep and num_technicians_needed > 0:
+                    last_known_failure_reason_for_instance = "Skipped (REP): No viable technician groups could be formed from eligible UI-selected technicians."
                     unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
                     _log(logger, "warning", f"    {instance_task_display_name} unassigned: {last_known_failure_reason_for_instance}")
                     continue
 
-            # --- Scheduling Logic (Common for PM and REP after group is determined) ---
-            if not target_assignment_group_for_instance and num_technicians_needed > 0 and base_duration > 0:
-                # This case implies PM logic failed to find a group (handled by assignment_successful_and_full check now for PM),
-                # or REP pre-checks failed.
-                # For PM, if assignment_successful_and_full is False, assigned_this_instance_flag is False,
-                # and it will be caught by the check at the end of the instance loop.
-                if task_type == 'REP': # Only log for REP here as PM has its own unassigned logging
-                    if instance_id_str not in unassigned_tasks_reasons_dict:
-                        unassigned_tasks_reasons_dict[instance_id_str] = f"No assignment group formed for {instance_task_display_name}."
-                    _log(logger, "debug", f"    No target group for REP task {instance_task_display_name}, reason: {unassigned_tasks_reasons_dict.get(instance_id_str)}")
-                    continue # To next instance
+                # Sort groups: 1. Closeness to num_technicians_needed, 2. Workload, 3. Random
+                viable_groups_with_scores_rep.sort(key=lambda x: (
+                    abs(x['len'] - num_technicians_needed),
+                    x['workload'],
+                    random.random()
+                ))
+                _log(logger, "debug", f"    REP Instance {instance_task_display_name} - Sorted Viable Groups: {viable_groups_with_scores_rep}")
 
-            # Handle tasks that require 0 technicians (e.g., informational, 0 duration)
-            # This block should only be hit if task_type is not PM (since PM has its own path) or if PM somehow bypasses its logic.
-            # Or if a PM task was successfully assigned (assignment_successful_and_full = True) but was a 0-duration/0-tech task.
-            if num_technicians_needed == 0 and base_duration == 0 and not target_assignment_group_for_instance and task_type != 'PM':
-                 _log(logger, "info", f"  Task {instance_task_display_name} (Type: {task_type}) is 0 duration, 0 techs, no specific assignment. Marking as 'conceptually done'.")
-                 all_task_assignments_details.append({
-                    'technician': None, 'task_name': instance_task_display_name,
-                    'start': 0, 'duration': 0, 'is_incomplete': False,
-                    'original_duration': 0, 'instance_id': instance_id_str,
-                    'technician_task_priority': 'N/A', 'resource_mismatch_info': "0-duration/0-tech task"
-                 })
-                 assigned_this_instance_flag = True
-                 if instance_id_str in unassigned_tasks_reasons_dict:
-                    del unassigned_tasks_reasons_dict[instance_id_str]
-                 continue
+                assignment_successful_this_instance_rep = False
+                final_chosen_group_for_rep_instance = None
+                final_start_time_for_rep_instance = 0
+                final_assigned_duration_for_rep_instance = 0
 
-            # The following block is for REP tasks or if PM tasks somehow fall through (which they shouldn't with new logic)
-            # If it's a PM task, assigned_this_instance_flag would be True if successfully scheduled by the new logic.
-            # If it's False, PM task was unassigned and already logged.
-            if task_type == 'REP' and not assigned_this_instance_flag : # Only proceed if REP and not yet assigned (or skipped)
-                current_start_time = 0
-                if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel" or task_type == 'REP':
-                    _log(logger, "debug", f"    Attempting to schedule {instance_task_display_name} (Duration: {effective_task_duration_for_group} min) for group {target_assignment_group_for_instance}. Technician schedules before attempt: {technician_schedules}")
+                # This will be set for the chosen group later
+                resource_mismatch_note = None # Reset for each instance attempt
 
-                # Ensure target_assignment_group_for_instance is not None for REP tasks needing assignment
-                if not target_assignment_group_for_instance and num_technicians_needed > 0:
-                    if instance_id_str not in unassigned_tasks_reasons_dict: # Should have been caught earlier for REP
-                        last_known_failure_reason_for_instance = f"Skipped (REP): Target group empty for '{task_name_excel}' needing technicians."
-                        unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
-                    _log(logger, "warning", f"    {instance_task_display_name} unassigned: {unassigned_tasks_reasons_dict.get(instance_id_str)}")
-                    # assigned_this_instance_flag remains False
-                else: # Proceed with REP scheduling attempt
-                    while current_start_time <= total_work_minutes:
-                        if effective_task_duration_for_group == 0 and current_start_time > total_work_minutes:
-                            last_known_failure_reason_for_instance = f"Cannot schedule 0-duration task instance '{instance_task_display_name}' after shift end."
+                for group_candidate_data_rep in viable_groups_with_scores_rep:
+                    current_candidate_group_rep = group_candidate_data_rep['group']
+                    current_actual_num_assigned_rep = len(current_candidate_group_rep)
+
+                    # Calculate effective duration for REP task, similar to PM tasks
+                    if base_duration == 0:
+                        current_effective_duration_rep = 0
+                    elif num_technicians_needed > 0 and current_actual_num_assigned_rep > 0:
+                        # Scale duration based on the ratio of needed to assigned technicians
+                        current_effective_duration_rep = (base_duration * num_technicians_needed) / current_actual_num_assigned_rep
+                    else:
+                        # Default to base_duration if scaling conditions aren't met (e.g., task needs 0 techs)
+                        current_effective_duration_rep = base_duration
+
+                    current_resource_mismatch_note_rep = None
+                    if num_technicians_needed > 0:
+                        if current_actual_num_assigned_rep != num_technicians_needed:
+                            current_resource_mismatch_note_rep = f"Task requires {num_technicians_needed}. Assigned to {current_actual_num_assigned_rep} from a UI selection pool of {raw_user_selection_count_rep} (of which {len(eligible_user_selected_techs_rep)} were eligible)."
+                        # Add a note if UI selection was different but chosen group matches num_technicians_needed, and original UI selection was different
+                        elif raw_user_selection_count_rep != num_technicians_needed and current_actual_num_assigned_rep == num_technicians_needed :
+                             current_resource_mismatch_note_rep = f"Task requires {num_technicians_needed}. User selected {raw_user_selection_count_rep} ({len(eligible_user_selected_techs_rep)} eligible). Assigned to optimal {current_actual_num_assigned_rep}."
+                    elif num_technicians_needed == 0 and current_actual_num_assigned_rep > 0:
+                        current_resource_mismatch_note_rep = f"Task planned for 0 technicians. Assigned to {current_actual_num_assigned_rep} based on UI selection and group logic."
+
+                    _log(logger, "debug", f"    REP Instance {instance_task_display_name} - Attempting to schedule with group: {current_candidate_group_rep}, effective_duration: {current_effective_duration_rep}")
+
+                    search_start_time_rep = 0
+                    # slot_found_for_this_rep_group = False # Not strictly needed due to assignment_successful_this_instance_rep
+
+                    while search_start_time_rep <= total_work_minutes:
+                        if current_effective_duration_rep == 0 and search_start_time_rep > total_work_minutes:
+                            last_known_failure_reason_for_instance = f"Cannot schedule 0-duration REP task '{instance_task_display_name}' for group {current_candidate_group_rep} after shift end."
+                            break
+                        if current_effective_duration_rep > 0 and search_start_time_rep >= total_work_minutes:
+                            last_known_failure_reason_for_instance = f"No time remaining in shift to start REP task '{instance_task_display_name}' for group {current_candidate_group_rep}."
                             break
 
-                        if effective_task_duration_for_group > 0 and current_start_time >= total_work_minutes:
-                            last_known_failure_reason_for_instance = f"No time remaining in shift to start task instance '{instance_task_display_name}'."
-                            break
+                        duration_to_check_for_slot_rep = 1 if current_effective_duration_rep == 0 else current_effective_duration_rep
 
-                        duration_to_check_for_slot = 1 if effective_task_duration_for_group == 0 else effective_task_duration_for_group
-                        all_techs_in_group_available = True
-                        if not target_assignment_group_for_instance and num_technicians_needed > 0 :
-                            all_techs_in_group_available = False
-                            last_known_failure_reason_for_instance = "Internal error: Target group empty for REP task needing technicians."
+                        all_techs_in_rep_group_available = True
+                        if not current_candidate_group_rep and num_technicians_needed > 0:
+                            all_techs_in_rep_group_available = False
+                            last_known_failure_reason_for_instance = "Internal error: REP group empty for task needing technicians."
 
-                        for tech_in_group_name in target_assignment_group_for_instance: # target_assignment_group_for_instance is set for REP tasks
-                            if not all(sch_end <= current_start_time or sch_start >= current_start_time + duration_to_check_for_slot
-                                    for sch_start, sch_end, _ in technician_schedules[tech_in_group_name]):
-                                all_techs_in_group_available = False
-                                last_known_failure_reason_for_instance = f"Technician(s) in group '{', '.join(target_assignment_group_for_instance)}' not available at {current_start_time}min for {duration_to_check_for_slot:.0f}min for REP task. Tech {tech_in_group_name} schedule: {technician_schedules[tech_in_group_name]}"
-                                if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel" or task_type == 'REP':
-                                    _log(logger, "debug", f"      Slot Check Failed (REP): {last_known_failure_reason_for_instance}")
+                        for tech_in_group_name_rep in current_candidate_group_rep:
+                            if not all(sch_end <= search_start_time_rep or sch_start >= search_start_time_rep + duration_to_check_for_slot_rep
+                                       for sch_start, sch_end, _ in technician_schedules[tech_in_group_name_rep]):
+                                all_techs_in_rep_group_available = False
+                                last_known_failure_reason_for_instance = f"Tech(s) in group '{', '.join(current_candidate_group_rep)}' not available at {search_start_time_rep}min for {duration_to_check_for_slot_rep:.0f}min for REP task. Tech {tech_in_group_name_rep} busy."
                                 break
 
-                        if all_techs_in_group_available:
-                            assigned_duration_for_gantt_chart = effective_task_duration_for_group
-                            is_incomplete_task_flag = False
+                        if all_techs_in_rep_group_available:
+                            final_chosen_group_for_rep_instance = current_candidate_group_rep
+                            final_start_time_for_rep_instance = search_start_time_rep
 
-                            if effective_task_duration_for_group > 0 and (current_start_time + effective_task_duration_for_group > total_work_minutes):
-                                remaining_time_in_shift_for_task = total_work_minutes - current_start_time
-                                min_acceptable_duration_for_partial = effective_task_duration_for_group * 0.75
+                            assigned_duration_for_gantt_chart_rep = current_effective_duration_rep
+                            is_incomplete_task_flag_rep = False
 
-                                if remaining_time_in_shift_for_task >= min_acceptable_duration_for_partial and remaining_time_in_shift_for_task > 0:
-                                    assigned_duration_for_gantt_chart = remaining_time_in_shift_for_task
-                                    is_incomplete_task_flag = True
+                            if current_effective_duration_rep > 0 and (final_start_time_for_rep_instance + current_effective_duration_rep > total_work_minutes):
+                                remaining_time_in_shift_for_task_rep = total_work_minutes - final_start_time_for_rep_instance
+                                remaining_time_in_shift_for_task_rep = max(0, remaining_time_in_shift_for_task_rep)
+                                min_acceptable_duration_for_partial_rep = current_effective_duration_rep * 0.75
+
+                                if remaining_time_in_shift_for_task_rep >= min_acceptable_duration_for_partial_rep and remaining_time_in_shift_for_task_rep > 0 :
+                                    assigned_duration_for_gantt_chart_rep = remaining_time_in_shift_for_task_rep
+                                    is_incomplete_task_flag_rep = True
                                     if instance_id_str not in incomplete_tasks_instance_ids:
                                         incomplete_tasks_instance_ids.append(instance_id_str)
-                                    _log(logger, "info", f"    Task {instance_task_display_name} (REP) will be partially assigned ({assigned_duration_for_gantt_chart} of {effective_task_duration_for_group} min).")
+                                    _log(logger, "info", f"    Task {instance_task_display_name} (REP) will be partially assigned ({assigned_duration_for_gantt_chart_rep} of {current_effective_duration_rep} min) to group {final_chosen_group_for_rep_instance}.")
                                 else:
-                                    last_known_failure_reason_for_instance = f"Insufficient time for 75% completion (REP). Ideal: {effective_task_duration_for_group:.0f}min, Remaining: {remaining_time_in_shift_for_task:.0f}min, Min 75% needed: {min_acceptable_duration_for_partial:.0f}min."
-                                    current_start_time += 15
-                                    continue
+                                    _log(logger, "debug", f"    REP Instance {instance_task_display_name} - Group {current_candidate_group_rep} at {search_start_time_rep}: Insufficient time for 75% completion. Ideal: {current_effective_duration_rep}, Remaining: {remaining_time_in_shift_for_task_rep}, Min 75% needed: {min_acceptable_duration_for_partial_rep}. Trying next slot.")
+                                    all_techs_in_rep_group_available = False
 
-                            for tech_assigned_name in target_assignment_group_for_instance:
-                                technician_schedules[tech_assigned_name].append(
-                                    (current_start_time, current_start_time + assigned_duration_for_gantt_chart, instance_task_display_name)
-                                )
-                                technician_schedules[tech_assigned_name].sort()
-                                if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel" or task_type == 'REP':
-                                    _log(logger, "debug", f"      Assigned {instance_task_display_name} (REP) to {tech_assigned_name} from {current_start_time} to {current_start_time + assigned_duration_for_gantt_chart}. Updated schedule for {tech_assigned_name}: {technician_schedules[tech_assigned_name]}")
+                            if all_techs_in_rep_group_available:
+                                final_assigned_duration_for_rep_instance = assigned_duration_for_gantt_chart_rep
+                                resource_mismatch_note = current_resource_mismatch_note_rep
 
-                                assignment_detail_entry = {
-                                    'technician': tech_assigned_name,
-                                    'task_name': instance_task_display_name,
-                                    'start': current_start_time,
-                                    'duration': assigned_duration_for_gantt_chart,
-                                    'is_incomplete': is_incomplete_task_flag,
-                                    'original_duration': effective_task_duration_for_group,
-                                    'instance_id': instance_id_str,
-                                    'technician_task_priority': original_stated_priority_for_display if task_type == 'PM' else 'N/A_REP', # original_stated_priority_for_display is set for REP
-                                    'resource_mismatch_info': resource_mismatch_note # resource_mismatch_note is set for REP
-                                }
-                                all_task_assignments_details.append(assignment_detail_entry)
+                                assignment_successful_this_instance_rep = True
+                                _log(logger, "debug", f"    REP Instance {instance_task_display_name} - Found valid slot for group {final_chosen_group_for_rep_instance} at {final_start_time_for_rep_instance} for {final_assigned_duration_for_rep_instance} min (is_incomplete: {is_incomplete_task_flag_rep}).")
+                                break
 
-                            _log(logger, "info", f"    Successfully scheduled {instance_task_display_name} (REP) for group {target_assignment_group_for_instance} at {current_start_time} for {assigned_duration_for_gantt_chart} min.")
-                            assigned_this_instance_flag = True
-                            if instance_id_str in unassigned_tasks_reasons_dict:
-                                del unassigned_tasks_reasons_dict[instance_id_str]
-                            break
+                        search_start_time_rep += 15
 
-                        current_start_time += 15
+                    if assignment_successful_this_instance_rep:
+                        _log(logger, "debug", f"    REP Instance {instance_task_display_name} - Assignment confirmed with group {final_chosen_group_for_rep_instance}. Breaking from group search.")
+                        break
+                    else:
+                        _log(logger, "debug", f"    REP Instance {instance_task_display_name} - Group {current_candidate_group_rep} could not be scheduled. Last reason: {last_known_failure_reason_for_instance}. Trying next group.")
+
+                if assignment_successful_this_instance_rep:
+                    _log(logger, "info", f"    Successfully scheduled (REP) {instance_task_display_name} for group {final_chosen_group_for_rep_instance} at {final_start_time_for_rep_instance} for {final_assigned_duration_for_rep_instance} min.")
+
+                    for tech_assigned_name_rep in final_chosen_group_for_rep_instance:
+                        technician_schedules[tech_assigned_name_rep].append(
+                            (final_start_time_for_rep_instance, final_start_time_for_rep_instance + final_assigned_duration_for_rep_instance, instance_task_display_name)
+                        )
+                        technician_schedules[tech_assigned_name_rep].sort()
+                        _log(logger, "debug", f"      Assigned {instance_task_display_name} (REP) to {tech_assigned_name_rep} from {final_start_time_for_rep_instance} to {final_start_time_for_rep_instance + final_assigned_duration_for_rep_instance}. Updated schedule for {tech_assigned_name_rep}: {technician_schedules[tech_assigned_name_rep]}")
+
+                        assignment_detail_entry = {
+                            'technician': tech_assigned_name_rep,
+                            'task_name': instance_task_display_name,
+                            'start': final_start_time_for_rep_instance,
+                            'duration': final_assigned_duration_for_rep_instance,
+                            'is_incomplete': instance_id_str in incomplete_tasks_instance_ids,
+                            'original_duration': base_duration,
+                            'instance_id': instance_id_str,
+                            'technician_task_priority': 'N/A_REP',
+                            'resource_mismatch_info': resource_mismatch_note
+                        }
+                        all_task_assignments_details.append(assignment_detail_entry)
+
+                    assigned_this_instance_flag = True
+                    if instance_id_str in unassigned_tasks_reasons_dict:
+                        del unassigned_tasks_reasons_dict[instance_id_str]
+                else:
+                    # If loop finished and no assignment was made for this REP instance
+                    if not last_known_failure_reason_for_instance: # Default reason if none was set during attempts
+                        last_known_failure_reason_for_instance = f"No technician group could be scheduled for the REP task {instance_task_display_name} after trying all viable options from UI selection."
+                    unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                    _log(logger, "warning", f"    {instance_task_display_name} (REP) unassigned: {last_known_failure_reason_for_instance}")
+                    # assigned_this_instance_flag remains False
+
+            # --- Scheduling Logic (Common for PM and REP after group is determined) ---
+            # THIS SECTION IS NOW LARGELY HANDLED WITHIN PM AND THE NEW REP LOGIC
+            # The old 'if task_type == 'REP' and not assigned_this_instance_flag:' block is removed
+            # as REP scheduling is now self-contained above.
+            # The 0-tech, 0-duration task handling is also done within PM and REP specific blocks.
+
             # This final check catches any instance that wasn't assigned and didn't have a reason set yet.
             # For PM, if assignment_successful_and_full was False, assigned_this_instance_flag is False, and reason is set.
             # For REP, if its own scheduling loop failed, assigned_this_instance_flag is False, and reason is set.
