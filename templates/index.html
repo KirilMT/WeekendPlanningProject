@@ -736,14 +736,18 @@
                     label.appendChild(checkbox);
 
                     const textSpan = document.createElement('span');
-                    const baseText = `${tech.name} (${tech.available_time} min available)`;
+                    // MODIFIED: Simplified baseText to only show technician's name
+                    const baseText = `${tech.name}`;
                     const taskFullDurationForDisplay = tech.task_full_duration;
 
+                    // The 'available_time' here is the gross total work minutes for the shift.
+                    // This condition now checks if the task itself is longer than the entire shift duration.
                     if (taskFullDurationForDisplay > 0 && tech.available_time < taskFullDurationForDisplay) {
                         const partialSpan = document.createElement('span');
                         partialSpan.style.color = 'orange';
                         partialSpan.style.fontWeight = 'bold';
-                        partialSpan.textContent = ' (Partial assignment likely)';
+                        // MODIFIED: Updated partial assignment message slightly for clarity
+                        partialSpan.textContent = ' (Task duration exceeds shift total)';
                         textSpan.appendChild(document.createTextNode(baseText));
                         textSpan.appendChild(partialSpan);
                     } else {
@@ -867,27 +871,22 @@
 
             // Determine eligible technicians for this additional task
             const minAcceptableTimeForEligibility = taskDuration * 0.75;
-            
+            const totalWorkMinutes = getTotalWorkMinutesFromSomewhere(); // You need to get this value
+
             presentTechnicians.forEach(techName => {
+                // For additional tasks, assume full availability initially for the modal
+                // The backend will handle actual scheduling based on all tasks.
                 let techObj = {
-                    name: techName, 
-                    available_time: 0,
+                    name: techName,
+                    available_time: totalWorkMinutes, // Use total work minutes
                     task_full_duration: taskDuration
                 };
-                
-                for (const taskId_iter in eligibleTechnicians) { // Renamed taskId to taskId_iter to avoid conflict
-                    const matchingTech = eligibleTechnicians[taskId_iter].find(t => t.name === techName);
-                    if (matchingTech) {
-                        techObj.available_time = matchingTech.available_time;
-                        break;
-                    }
-                }
-                
+
                 if (taskDuration === 0 || techObj.available_time >= minAcceptableTimeForEligibility) {
                     eligibleTechnicians[additionalTaskId].push(techObj);
                 }
             });
-            
+
             // Add the additional task to repTasks at the current position
             // If the current task type is PM, we might need a different logic or array
             // For now, assuming additional tasks are treated like REP tasks for modal flow
@@ -898,6 +897,17 @@
 
             // Show the REP modal for this task (or the next one if it was a PM task)
             showRepModal();
+        }
+
+        function getTotalWorkMinutesFromSomewhere() {
+            // This function needs to retrieve the total work minutes.
+            // It might be available globally, or you might need to fetch it or pass it around.
+            // For now, returning a placeholder. Replace with actual implementation.
+            // Example: return parseInt(document.body.dataset.totalWorkMinutes) || 720;
+            // Or, if you have it from an earlier fetch response, use that.
+            // This is a placeholder, you'll need to ensure this value is correctly sourced.
+            console.warn("getTotalWorkMinutesFromSomewhere is a placeholder. Ensure it returns the correct total work minutes.");
+            return 720; // Defaulting to 12 hours, adjust as necessary or fetch dynamically
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -1056,6 +1066,9 @@
                             console.log('INDEX.HTML: eligibleTechnicians for REP tasks after PM processing:', JSON.stringify(eligibleTechnicians));
                             hideAbsentModal();
                             if (repTasks.length > 0) {
+                                // Store totalWorkMinutes globally or make it accessible
+                                // For example, if it's part of the 'data' response:
+                                // window.totalWorkMinutes = data.totalWorkMinutes;
                                 showRepModal();
                             } else {
                                 showMessage('No REP tasks to assign. Generating dashboard...', 'success');
@@ -1145,6 +1158,9 @@
 
                     // Update eligibleTechnicians for SUBSEQUENT tasks
                     const assignedTaskDuration = parseInt(task.planned_worktime_min) || 0;
+                    // No longer update eligibleTechnicians here, as it's based on gross time for the modal.
+                    // The backend (assign_tasks) will handle the actual time calculations.
+                    /*
                     selectedTechnicians.forEach(assignedTechName => {
                         Object.keys(eligibleTechnicians).forEach(otherTaskId => {
                             eligibleTechnicians[otherTaskId] = eligibleTechnicians[otherTaskId].map(tech => {
@@ -1167,6 +1183,7 @@
                         });
                     });
                     console.log("INDEX.HTML: eligibleTechnicians updated after assignment:", JSON.stringify(eligibleTechnicians));
+                    */
 
                     currentRepTaskIndex++;
                     hideRepModal();

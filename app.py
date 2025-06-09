@@ -14,7 +14,7 @@ import logging # Import logging
 from db_utils import get_db_connection, init_db
 from config_manager import load_app_config, TECHNICIAN_LINES, TECHNICIANS, TECHNICIAN_GROUPS #, TASK_NAME_MAPPING, TECHNICIAN_TASKS
 from data_processing import sanitize_data, calculate_work_time #, calculate_available_time, validate_assignments_flat_input
-from task_assigner import calculate_pm_assignments_and_availability # MODIFIED: Import new helper, removed assign_tasks
+from task_assigner import assign_tasks # MODIFIED: Import new helper, removed assign_tasks
 from dashboard import generate_html_files #, prepare_dashboard_data
 
 
@@ -248,10 +248,8 @@ def upload_file_route():
                     "ticket_mo": row.get("ticket_mo", ""), "ticket_url": row.get("ticket_url", "")
                 })
 
-            pm_tasks_from_excel = [t for t in all_tasks_for_processing if t['task_type'].upper() == 'PM']
-            _ , available_time_after_pm = calculate_pm_assignments_and_availability(
-                pm_tasks_from_excel, present_technicians, total_work_minutes, logger=app.logger
-            )
+            # PM tasks are no longer pre-assigned here.
+            # available_time_after_pm is no longer calculated here.
 
             rep_tasks_for_ui = []
             eligible_technicians_for_rep_modal = {}
@@ -273,7 +271,8 @@ def upload_file_route():
                         pass # Ignore malformed lines for this task
 
                 for tech_name in present_technicians:
-                    tech_available_time = available_time_after_pm.get(tech_name, 0)
+                    # Use total_work_minutes as the initial available time for REP modal eligibility
+                    tech_available_time = total_work_minutes
                     tech_config_lines = TECHNICIAN_LINES.get(tech_name, [])
 
                     # Check line eligibility
@@ -285,19 +284,19 @@ def upload_file_route():
                         if task_duration_rep == 0 or tech_available_time >= min_acceptable_time:
                             eligible_technicians_for_rep_modal[task_id_rep].append({
                                 'name': tech_name,
-                                'available_time': tech_available_time,
+                                'available_time': tech_available_time, # This is now gross available time
                                 'task_full_duration': task_duration_rep # For UI display of partial assignment potential
                             })
 
             return jsonify({
-                "message": "PM tasks processed, REP task data prepared.",
+                "message": "Absent technicians processed, REP task data prepared.", # Message updated
                 "repTasks": rep_tasks_for_ui, # Send REP tasks for the modal
                 "eligibleTechnicians": eligible_technicians_for_rep_modal, # Send eligibility info
                 "session_id": session_id # Keep session active
             })
 
         except Exception as e:
-            print(f"Error during PM processing/REP prep: {e}")
+            print(f"Error during absent tech processing/REP prep: {e}") # Message updated
             print(traceback.format_exc())
             return jsonify({"message": f"Error processing absent technicians: {str(e)}"}), 500
 

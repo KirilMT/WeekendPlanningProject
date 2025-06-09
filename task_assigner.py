@@ -18,602 +18,517 @@ def _log(logger, level, message, *args):
     else:
         print(f"[{level.upper()}] {message % args if args else message}")
 
-def calculate_pm_assignments_and_availability(pm_tasks_list, present_technicians, total_work_minutes, logger=None):
-    """
-    Calculates PM task assignments and the available time for technicians after PM tasks.
-    This is a focused version of the PM assignment logic from the main assign_tasks function.
-    """
-    _log(logger, "info", f"Calculating PM assignments for {len(pm_tasks_list)} PM tasks with {len(present_technicians)} technicians. Total work minutes: {total_work_minutes}")
-
-    technician_schedules_pm_only = {tech: [] for tech in present_technicians}
-    pm_assignments_details = []
-    # unassigned_pm_tasks_reasons = {} # If you need to track unassigned PMs specifically
-
-    # Simplified PM Task Assignment Logic (adapted from assign_tasks)
-    # This needs to mirror the PM assignment logic of the main assign_tasks function
-    # to ensure consistent available time calculation.
-
-    all_pm_tasks_from_input_normalized_names_set = {
-        normalize_string(TASK_NAME_MAPPING.get(t['name'], t['name'])) for t in pm_tasks_list
-    }
-
-    for task in pm_tasks_list:
-        task_name_from_excel = task.get('name', 'Unknown')
-        task_id = task['id'] # Assuming PM tasks passed in also have an 'id'
-        base_duration = int(task.get('planned_worktime_min', 0))
-        num_technicians_needed = int(task.get('mitarbeiter_pro_aufgabe', 1))
-        quantity = int(task.get('quantity', 1))
-
-        if num_technicians_needed <= 0 or quantity <= 0:
-            # No debug log needed here for production
-            continue
-
-        json_task_name_lookup = TASK_NAME_MAPPING.get(task_name_from_excel, task_name_from_excel)
-        normalized_current_excel_task_name = normalize_string(json_task_name_lookup)
-        task_lines_str = str(task.get('lines', ''))
-        task_lines = []
-        if task_lines_str and task_lines_str.lower() != 'nan' and task_lines_str.strip() != '':
-            try:
-                task_lines = [int(line.strip()) for line in task_lines_str.split(',') if line.strip().isdigit()]
-            except ValueError:
-                _log(logger, "warning", f"  Warning (PM Helper): Invalid line format '{task_lines_str}' for task {task_name_from_excel}")
-                pass
-
-        eligible_technicians_details = []
-        for tech_candidate in present_technicians:
-            tech_task_definitions = TECHNICIAN_TASKS.get(tech_candidate, [])
-            tech_lines = TECHNICIAN_LINES.get(tech_candidate, [])
-            candidate_prio = None
-            can_do = False
-            for tech_task_obj in tech_task_definitions:
-                normalized_tech_task_str = normalize_string(tech_task_obj['task'])
-                if (normalized_current_excel_task_name in normalized_tech_task_str or
-                        normalized_tech_task_str in normalized_current_excel_task_name):
-                    if not task_lines or any(line in tech_lines for line in task_lines):
-                        can_do = True
-                        candidate_prio = tech_task_obj['prio']
-                        break
-            if can_do and candidate_prio is not None:
-                effective_prio = candidate_prio
-                eligible_technicians_details.append({
-                    'name': tech_candidate,
-                    'prio_for_task': effective_prio,
-                    'original_stated_prio': candidate_prio
-                })
-
-        if not eligible_technicians_details:
-            continue
-
-        eligible_technicians_details.sort(key=lambda x: x['prio_for_task'])
-        tech_prio_map_helper = {
-            detail['name']: {'effective': detail['prio_for_task'], 'stated': detail['original_stated_prio']}
-            for detail in eligible_technicians_details
-        }
-        sorted_eligible_tech_names_helper = [detail['name'] for detail in eligible_technicians_details]
-
-        viable_groups_with_scores_helper = []
-        found_optimal_group = False
-        for group_tuple in combinations(sorted_eligible_tech_names_helper, num_technicians_needed):
-            group = list(group_tuple)
-            avg_effective_prio = sum(tech_prio_map_helper.get(t, {}).get('effective', float('inf')) for t in group) / len(group) if group else float('inf')
-            current_workload = sum(sum(end - start for start, end, _ in technician_schedules_pm_only[tech_name]) for tech_name in group)
-            viable_groups_with_scores_helper.append({
-                'group': group, 'len': len(group), 'avg_prio': avg_effective_prio, 'workload': current_workload
-            })
-            found_optimal_group = True
-
-        if not found_optimal_group:
-             for r_group_size in range(1, len(sorted_eligible_tech_names_helper) + 1):
-                if r_group_size == num_technicians_needed: continue
-                for group_tuple in combinations(sorted_eligible_tech_names_helper, r_group_size):
-                    group = list(group_tuple)
-                    avg_effective_prio = sum(tech_prio_map_helper.get(t, {}).get('effective', float('inf')) for t in group) / len(group) if group else float('inf')
-                    current_workload = sum(sum(end - start for start, end, _ in technician_schedules_pm_only[tech_name]) for tech_name in group)
-                    viable_groups_with_scores_helper.append({
-                        'group': group, 'len': len(group), 'avg_prio': avg_effective_prio, 'workload': current_workload
-                    })
-
-        viable_groups_with_scores_helper.sort(key=lambda x: (
-            abs(x['len'] - num_technicians_needed), x['avg_prio'], x['workload'], random.random()
-        ))
-        viable_groups_sorted_helper = [item['group'] for item in viable_groups_with_scores_helper]
-
-        for instance_num in range(1, quantity + 1):
-            instance_id = f"{task_id}_{instance_num}_pm_helper"
-            instance_task_name = f"{task_name_from_excel} (Instance {instance_num}/{quantity})"
-            assigned_this_instance = False
-
-            for group in viable_groups_sorted_helper:
-                if not group: continue
-                actual_num_assigned = len(group)
-                current_task_duration_for_group = base_duration
-                if base_duration > 0 and num_technicians_needed > 0 and actual_num_assigned > 0:
-                    current_task_duration_for_group = (base_duration * num_technicians_needed) / actual_num_assigned
-                elif base_duration == 0:
-                    current_task_duration_for_group = 0
-                else:
-                    continue
-
-                start_time = 0
-                while start_time <= total_work_minutes:
-                    duration_to_check = 1 if current_task_duration_for_group == 0 else current_task_duration_for_group
-                    if start_time + duration_to_check > total_work_minutes and current_task_duration_for_group > 0 :
-                        break
-                    if start_time > total_work_minutes and current_task_duration_for_group == 0:
-                        break
-
-                    all_available = all(
-                        all(sch_end <= start_time or sch_start >= start_time + duration_to_check
-                            for sch_start, sch_end, _ in technician_schedules_pm_only[tech_in_group])
-                        for tech_in_group in group
-                    )
-
-                    if all_available:
-                        assigned_duration = current_task_duration_for_group
-                        is_incomplete = False
-                        if start_time + current_task_duration_for_group > total_work_minutes:
-                            assigned_duration = total_work_minutes - start_time
-                            is_incomplete = True
-
-                        if assigned_duration <= 0 and current_task_duration_for_group > 0:
-                            start_time +=15
-                            continue
-
-                        for tech_assigned in group:
-                            technician_schedules_pm_only[tech_assigned].append(
-                                (start_time, start_time + assigned_duration, instance_task_name)
-                            )
-                            technician_schedules_pm_only[tech_assigned].sort()
-                            pm_assignments_details.append({
-                                'technician': tech_assigned, 'task_name': instance_task_name,
-                                'start': start_time, 'duration': assigned_duration,
-                                'instance_id': instance_id, 'is_incomplete': is_incomplete,
-                                'original_duration': current_task_duration_for_group
-                            })
-                        assigned_this_instance = True
-                        break
-                    start_time += 15
-                if assigned_this_instance:
-                    break
-            # if not assigned_this_instance:
-                # unassigned_pm_tasks_reasons[instance_id] = "Could not find slot/group in PM helper" # No debug log
-
-    available_time_calc = {tech: total_work_minutes for tech in present_technicians}
-    for tech_name, schedule_items in technician_schedules_pm_only.items():
-        current_tech_workload = sum(end - start for start, end, _ in schedule_items)
-        available_time_calc[tech_name] -= current_tech_workload
-        if available_time_calc[tech_name] < 0:
-            available_time_calc[tech_name] = 0 # No debug log
-
-    _log(logger, "info", f"PM Helper: Assignments created: {len(pm_assignments_details)}, Available time calculated for {len(available_time_calc)} techs.")
-    return pm_assignments_details, available_time_calc
-
-
 def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments=None, logger=None):
     _log(logger, "info",
-        f"Assigning {len(tasks)} tasks with {len(present_technicians)} technicians. Total work minutes: {total_work_minutes} (via task_assigner)"
+        f"Unified Assigning: {len(tasks)} tasks with {len(present_technicians)} technicians. Total work minutes: {total_work_minutes}"
     )
-    filtered_tasks = [task for task in tasks if task.get('task_type', '').upper() in ['PM', 'REP']]
 
-    priority_order = {'A': 1, 'B': 2, 'C': 3}
-    pm_tasks = sorted(
-        [task for task in filtered_tasks if task['task_type'].upper() == 'PM'],
-        key=lambda x: priority_order.get(str(x.get('priority', 'C')).upper(), 4)
-    )
-    rep_tasks = [task for task in filtered_tasks if task['task_type'].upper() == 'REP']
-    rep_assignments_dict = {item['task_id']: item for item in rep_assignments} if rep_assignments else {}
+    # Combine all tasks and sort by priority
+    priority_order = {'A': 1, 'B': 2, 'C': 3, 'DEFAULT': 4} # Added DEFAULT for tasks without clear prio
+
+    all_tasks_combined = []
+    for task in tasks:
+        task_type = task.get('task_type', '').upper()
+        if task_type in ['PM', 'REP']:
+            # Ensure all tasks have a consistent structure for sorting and processing
+            processed_task = {
+                **task, # Spread existing task data
+                'task_type_upper': task_type,
+                'priority_val': priority_order.get(str(task.get('priority', 'C')).upper(), priority_order['DEFAULT'])
+            }
+            all_tasks_combined.append(processed_task)
+
+    # Sort: 1. Priority (A,B,C), 2. For PMs of same prio, maybe by duration or original order (optional refinement)
+    # For now, simple priority sort. If IDs are numeric and sequential, could add 'id' as secondary sort key.
+    all_tasks_combined.sort(key=lambda x: x['priority_val'])
 
     technician_schedules = {tech: [] for tech in present_technicians}
-    all_task_assignments = []
-    unassigned_tasks_reasons = {}
-    incomplete_tasks_ids = []
+    all_task_assignments_details = []
+    unassigned_tasks_reasons_dict = {}
+    incomplete_tasks_instance_ids = []
 
-    all_pm_tasks_from_excel_normalized_names_set = {
-        normalize_string(TASK_NAME_MAPPING.get(t['name'], t['name'])) for t in pm_tasks
+    # This set is used for PM task eligibility calculation (dynamic priority adjustment)
+    all_pm_task_names_from_excel_normalized_set = {
+        normalize_string(TASK_NAME_MAPPING.get(t['name'], t['name']))
+        for t in all_tasks_combined if t['task_type_upper'] == 'PM'
     }
 
-    # --- PM Task Assignment ---
-    for task in pm_tasks:
-        task_name_from_excel = task.get('name', 'Unknown')
-        task_id = task['id']
-        base_duration = int(task.get('planned_worktime_min', 0))
-        num_technicians_needed = int(task.get('mitarbeiter_pro_aufgabe', 1))
-        quantity = int(task.get('quantity', 1))
+    _log(logger, "debug", f"Combined and sorted tasks for assignment: {len(all_tasks_combined)}")
 
-        if num_technicians_needed <= 0:
-            reason = f"Skipped (PM): Invalid 'Mitarbeiter pro Aufgabe' ({num_technicians_needed})."
-            for i in range(quantity): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
-            continue
+    for task_to_assign in all_tasks_combined:
+        task_id = task_to_assign['id']
+        task_name_excel = task_to_assign.get('name', 'Unknown')
+        task_type = task_to_assign['task_type_upper']
+        base_duration = int(task_to_assign.get('planned_worktime_min', 0))
+        num_technicians_needed = int(task_to_assign.get('mitarbeiter_pro_aufgabe', 1))
+        quantity = int(task_to_assign.get('quantity', 1))
+
+        _log(logger, "debug", f"Processing task ID {task_id} ({task_name_excel}), Type: {task_type}, Prio: {task_to_assign.get('priority', 'C')}")
+
         if quantity <= 0:
-            reason = f"Skipped (PM): Invalid 'Quantity' ({quantity})."
-            unassigned_tasks_reasons[f"{task_id}_1"] = reason
-            _log(logger, "warning", f"PM Task {task_name_from_excel} (ID: {task_id}) skipped due to invalid quantity: {quantity}")
+            reason = f"Skipped ({task_type}): Invalid 'Quantity' ({quantity})."
+            # For multi-quantity tasks, if quantity is 0, all instances are effectively unassigned.
+            # If an ID scheme like task_id_1, task_id_2 exists, this loop should reflect that.
+            # Assuming task_id is unique per task definition, and quantity implies multiple instances of that definition.
+            for i in range(1, max(1, quantity)): # Ensure at least one entry if quantity was 0 but expected >0
+                 unassigned_tasks_reasons_dict[f"{task_id}_{i}"] = reason
+            _log(logger, "warning", f"Task {task_name_excel} (ID: {task_id}) skipped due to invalid quantity: {quantity}")
             continue
 
-        json_task_name_lookup = TASK_NAME_MAPPING.get(task_name_from_excel, task_name_from_excel)
-        normalized_current_excel_task_name = normalize_string(json_task_name_lookup)
-        task_lines_str = str(task.get('lines', ''))
-        task_lines = []
+        if num_technicians_needed <= 0 and base_duration > 0 : # 0-duration tasks can have 0 techs
+            reason = f"Skipped ({task_type}): Invalid 'Mitarbeiter pro Aufgabe' ({num_technicians_needed}) for non-zero duration task."
+            for i in range(1, quantity + 1): unassigned_tasks_reasons_dict[f"{task_id}_{i}"] = reason
+            _log(logger, "warning", f"Task {task_name_excel} (ID: {task_id}) skipped, techs needed {num_technicians_needed} for duration {base_duration}")
+            continue
+
+        task_lines_str = str(task_to_assign.get('lines', ''))
+        task_lines_list = []
         if task_lines_str and task_lines_str.lower() != 'nan' and task_lines_str.strip() != '':
             try:
-                task_lines = [int(line.strip()) for line in task_lines_str.split(',') if line.strip().isdigit()]
+                task_lines_list = [int(line.strip()) for line in task_lines_str.split(',') if line.strip().isdigit()]
             except ValueError:
-                _log(logger, "warning", f"  Warning (PM): Invalid line format '{task_lines_str}' for task {task_name_from_excel}")
+                _log(logger, "warning", f"  Warning ({task_type}): Invalid line format '{task_lines_str}' for task {task_name_excel}")
 
-        eligible_technicians_details = []
-        for tech_candidate in present_technicians:
-            tech_task_definitions_for_candidate = TECHNICIAN_TASKS.get(tech_candidate, [])
-            tech_lines_for_candidate = TECHNICIAN_LINES.get(tech_candidate, [])
-            candidate_stated_prio_for_current_task = None
-            can_do_current_task_flag = False
-            for tech_task_obj in tech_task_definitions_for_candidate:
-                normalized_tech_task_string = normalize_string(tech_task_obj['task'])
-                if (normalized_current_excel_task_name in normalized_tech_task_string or
-                        normalized_tech_task_string in normalized_current_excel_task_name):
-                    if not task_lines or any(line in tech_lines_for_candidate for line in task_lines):
-                        can_do_current_task_flag = True
-                        candidate_stated_prio_for_current_task = tech_task_obj['prio']
-                        break
-            if can_do_current_task_flag and candidate_stated_prio_for_current_task is not None:
-                active_task_prios_for_tech = []
-                for tech_json_task_def in tech_task_definitions_for_candidate:
-                    norm_tech_json_task_name = normalize_string(tech_json_task_def['task'])
-                    is_this_json_task_active = any(
-                        norm_tech_json_task_name in excel_task_norm_name_iter or
-                        excel_task_norm_name_iter in norm_tech_json_task_name
-                        for excel_task_norm_name_iter in all_pm_tasks_from_excel_normalized_names_set
-                    )
-                    if is_this_json_task_active:
-                        active_task_prios_for_tech.append(tech_json_task_def['prio'])
-                effective_prio = candidate_stated_prio_for_current_task
-                if active_task_prios_for_tech:
-                    sorted_unique_active_prios = sorted(list(set(active_task_prios_for_tech)))
-                    if candidate_stated_prio_for_current_task in sorted_unique_active_prios:
-                        effective_prio = sorted_unique_active_prios.index(
-                            candidate_stated_prio_for_current_task) + 1
-                eligible_technicians_details.append({
-                    'name': tech_candidate,
-                    'prio_for_task': effective_prio,
-                    'original_stated_prio': candidate_stated_prio_for_current_task
-                })
-
-        if not eligible_technicians_details:
-            reason = "No technicians are eligible for this PM task (check skills/lines configuration)."
-            for i in range(quantity): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
-            continue
-
-        eligible_technicians_details.sort(key=lambda x: x['prio_for_task'])
-        tech_prio_map = {
-            detail['name']: {'effective': detail['prio_for_task'], 'stated': detail['original_stated_prio']}
-            for detail in eligible_technicians_details
-        }
-        sorted_eligible_tech_names = [detail['name'] for detail in eligible_technicians_details]
-
-        viable_groups_with_scores = []
-        for r_group_size in range(1, len(sorted_eligible_tech_names) + 1):
-            for group_tuple in combinations(sorted_eligible_tech_names, r_group_size):
-                group = list(group_tuple)
-                avg_effective_prio = sum(
-                    tech_prio_map.get(tech, {}).get('effective', float('inf')) for tech in group) / len(
-                    group) if group else float('inf')
-                current_workload = sum(
-                    sum(end - start for start, end, _ in technician_schedules[tech_name]) for tech_name in group)
-                viable_groups_with_scores.append({
-                    'group': group,
-                    'len': len(group),
-                    'avg_prio': avg_effective_prio,
-                    'workload': current_workload
-                })
-
-        viable_groups_with_scores.sort(key=lambda x: (
-            abs(x['len'] - num_technicians_needed),
-            x['avg_prio'],
-            x['workload'],
-            random.random()
-        ))
-        viable_groups_sorted = [item['group'] for item in viable_groups_with_scores]
-
+        # --- Instance Loop (Quantity) ---
         for instance_num in range(1, quantity + 1):
-            instance_id = f"{task_id}_{instance_num}"
-            instance_task_name = f"{task_name_from_excel} (Instance {instance_num}/{quantity})"
-            assigned_this_instance = False
-            last_known_failure_reason = "Could not find a suitable time slot for any eligible group (PM)."
+            instance_id_str = f"{task_id}_{instance_num}"
+            instance_task_display_name = f"{task_name_excel} (Instance {instance_num}/{quantity})"
+            assigned_this_instance_flag = False
+            last_known_failure_reason_for_instance = f"Could not find a suitable time slot or group for {instance_task_display_name}."
 
-            for group in viable_groups_sorted:
-                actual_num_assigned_technicians = len(group)
-                current_task_duration_for_group = base_duration
-                if base_duration > 0 and num_technicians_needed > 0 and actual_num_assigned_technicians > 0:
-                    current_task_duration_for_group = (base_duration * num_technicians_needed) / actual_num_assigned_technicians
-                elif base_duration == 0:
-                    current_task_duration_for_group = 0
-                else:
-                    current_task_duration_for_group = float('inf')
+            target_assignment_group_for_instance = []
+            resource_mismatch_note = None
+            effective_task_duration_for_group = base_duration
+            original_stated_priority_for_display = 'N/A' # Default for REP or if PM logic fails to set
 
-                resource_mismatch_info = None
-                if actual_num_assigned_technicians != num_technicians_needed:
-                    resource_mismatch_info = f"Requires {num_technicians_needed}, assigned to {actual_num_assigned_technicians} (PM)"
+            if task_type == 'PM':
+                # --- PM Task Logic ---
+                _log(logger, "debug", f"  Assigning PM instance: {instance_task_display_name}")
+                json_task_name_lookup_pm = TASK_NAME_MAPPING.get(task_name_excel, task_name_excel)
+                normalized_current_excel_task_name_pm = normalize_string(json_task_name_lookup_pm)
 
-                start_time = 0
-                while start_time <= total_work_minutes:
-                    if current_task_duration_for_group > 0 and start_time >= total_work_minutes:
-                        last_known_failure_reason = "No time remaining in shift to start PM task."
-                        break
-                    if current_task_duration_for_group == 0 and start_time > total_work_minutes:
-                        last_known_failure_reason = "No time remaining in shift to start 0-duration PM task."
-                        break
+                eligible_technicians_details_pm = []
+                for tech_cand_pm in present_technicians:
+                    tech_task_defs_pm = TECHNICIAN_TASKS.get(tech_cand_pm, [])
+                    tech_lines_pm = TECHNICIAN_LINES.get(tech_cand_pm, [])
+                    cand_stated_prio_pm = None
+                    can_do_pm_task = False
+                    # More detailed logging for individual technician eligibility for PM task
+                    if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
+                        _log(logger, "debug", f"    PM Eligibility Check for {tech_cand_pm} on task '{normalized_current_excel_task_name_pm}':")
+                        _log(logger, "debug", f"      Tech Lines: {tech_lines_pm}, Task Lines: {task_lines_list}")
+                        _log(logger, "debug", f"      Tech Tasks Defs: {tech_task_defs_pm}")
 
-                    duration_to_check_availability = 1 if current_task_duration_for_group == 0 else current_task_duration_for_group
-                    all_available_in_group = all(
-                        all(sch_end <= start_time or sch_start >= start_time + duration_to_check_availability
-                            for sch_start, sch_end, _ in technician_schedules[tech_in_group])
-                        for tech_in_group in group
-                    )
+                    for tech_task_obj_pm in tech_task_defs_pm:
+                        norm_tech_task_str_pm = normalize_string(tech_task_obj_pm['task'])
+                        task_name_match = normalized_current_excel_task_name_pm in norm_tech_task_str_pm or norm_tech_task_str_pm in normalized_current_excel_task_name_pm
+                        line_match = not task_lines_list or any(line in tech_lines_pm for line in task_lines_list)
+                        if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
+                            _log(logger, "debug", f"        Comparing with tech task '{norm_tech_task_str_pm}': Name match: {task_name_match}, Line match: {line_match}")
+                        if task_name_match and line_match:
+                            can_do_pm_task = True
+                            cand_stated_prio_pm = tech_task_obj_pm['prio']
+                            if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
+                                _log(logger, "debug", f"          Match found! Tech can do task. Stated Prio: {cand_stated_prio_pm}")
+                            break
+                    if can_do_pm_task and cand_stated_prio_pm is not None:
+                        active_task_prios_for_tech_pm = [
+                            tech_json_task_def['prio']
+                            for tech_json_task_def in tech_task_defs_pm
+                            if any(normalize_string(tech_json_task_def['task']) in en_iter or en_iter in normalize_string(tech_json_task_def['task'])
+                                   for en_iter in all_pm_task_names_from_excel_normalized_set)
+                        ]
+                        eff_prio_pm = cand_stated_prio_pm
+                        if active_task_prios_for_tech_pm:
+                            sorted_unique_active_prios_pm = sorted(list(set(active_task_prios_for_tech_pm)))
+                            if cand_stated_prio_pm in sorted_unique_active_prios_pm:
+                                eff_prio_pm = sorted_unique_active_prios_pm.index(cand_stated_prio_pm) + 1
+                        eligible_technicians_details_pm.append({
+                            'name': tech_cand_pm, 'prio_for_task': eff_prio_pm, 'original_stated_prio': cand_stated_prio_pm
+                        })
+                if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
+                    _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Eligible Technicians (pre-sort): {eligible_technicians_details_pm}")
 
-                    if all_available_in_group:
-                        assigned_duration_for_gantt = current_task_duration_for_group
-                        is_incomplete_flag = False
-                        if current_task_duration_for_group > 0 and (start_time + current_task_duration_for_group > total_work_minutes):
-                            remaining_time_in_shift = total_work_minutes - start_time
-                            min_acceptable_duration = current_task_duration_for_group * 0.75
-                            if remaining_time_in_shift >= min_acceptable_duration and remaining_time_in_shift > 0:
-                                assigned_duration_for_gantt = remaining_time_in_shift
-                                is_incomplete_flag = True
-                                if instance_id not in incomplete_tasks_ids:
-                                    incomplete_tasks_ids.append(instance_id)
-                            else:
-                                last_known_failure_reason = f"Insufficient time for 75% completion (PM). Ideal for group: {current_task_duration_for_group:.0f}min, Remaining: {remaining_time_in_shift:.0f}min, Min 75% needed: {min_acceptable_duration:.0f}min."
-                                start_time += 15
-                                continue
-                        elif current_task_duration_for_group == 0 and start_time > total_work_minutes:
-                            last_known_failure_reason = "Cannot schedule 0-duration PM task after shift end."
-                            start_time += 15
-                            continue
+                if not eligible_technicians_details_pm:
+                    last_known_failure_reason_for_instance = "No technicians eligible for this PM task (check skills/lines)."
+                    unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                    _log(logger, "warning", f"    {instance_task_display_name} unassigned: {last_known_failure_reason_for_instance}")
+                    continue # Next instance or task
 
-                        for tech_assigned in group:
-                            technician_schedules[tech_assigned].append(
-                                (start_time, start_time + assigned_duration_for_gantt, instance_task_name))
-                            technician_schedules[tech_assigned].sort()
-                            original_stated_prio_for_display = tech_prio_map.get(tech_assigned, {}).get('stated', 'N/A')
-                            assignment_detail = {
-                                'technician': tech_assigned,
-                                'task_name': instance_task_name,
-                                'start': start_time,
-                                'duration': assigned_duration_for_gantt,
-                                'is_incomplete': is_incomplete_flag,
-                                'original_duration': current_task_duration_for_group,
-                                'instance_id': instance_id,
-                                'technician_task_priority': original_stated_prio_for_display,
-                                'resource_mismatch_info': resource_mismatch_info
-                            }
-                            all_task_assignments.append(assignment_detail)
-                        assigned_this_instance = True
-                        break
-                    else:
-                        last_known_failure_reason = f"Technician(s) in group '{', '.join(group)}' not available at {start_time}min for {duration_to_check_availability:.0f}min (PM)."
-                    start_time += 15
-                if assigned_this_instance:
-                    break
-            if not assigned_this_instance:
-                # No debug log for production
-                unassigned_tasks_reasons[instance_id] = last_known_failure_reason
+                eligible_technicians_details_pm.sort(key=lambda x: x['prio_for_task'])
+                if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
+                    _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Sorted Eligible Technicians & Prio Map: {eligible_technicians_details_pm}")
+                tech_prio_map_pm = {d['name']: {'effective': d['prio_for_task'], 'stated': d['original_stated_prio']} for d in eligible_technicians_details_pm}
+                sorted_eligible_tech_names_pm = [d['name'] for d in eligible_technicians_details_pm]
 
-    available_time_after_pm = {tech: total_work_minutes for tech in present_technicians}
-    for tech_name_sched, schedule_items_list in technician_schedules.items():
-        current_tech_workload = sum(end - start for start, end, _ in schedule_items_list)
-        available_time_after_pm[tech_name_sched] -= current_tech_workload
+                viable_groups_with_scores_pm = []
+                for r_size in range(1, len(sorted_eligible_tech_names_pm) + 1):
+                    for group_tuple in combinations(sorted_eligible_tech_names_pm, r_size):
+                        group = list(group_tuple)
+                        avg_eff_prio = sum(tech_prio_map_pm.get(t, {}).get('effective', float('inf')) for t in group) / len(group) if group else float('inf')
+                        workload = sum(sum(end - start for start, end, _ in technician_schedules[tn]) for tn in group)
+                        viable_groups_with_scores_pm.append({'group': group, 'len': len(group), 'avg_prio': avg_eff_prio, 'workload': workload})
+                if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
+                    _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Viable Groups (pre-sort): {viable_groups_with_scores_pm}")
 
-    # --- REP Task Assignment ---
-    for task in rep_tasks:
-        task_name = task.get('name', 'Unknown')
-        task_id = task['id']
-        quantity_rep = int(task.get('quantity', 1))
-        base_duration_rep = int(task.get('planned_worktime_min', 0))
-        num_technicians_needed_rep = int(task.get('mitarbeiter_pro_aufgabe', 1))
+                viable_groups_with_scores_pm.sort(key=lambda x: (abs(x['len'] - num_technicians_needed), x['avg_prio'], x['workload'], random.random()))
+                if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
+                    _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Sorted Viable Groups: {viable_groups_with_scores_pm}")
 
-        if task_id in rep_assignments_dict:
-            assignment_info = rep_assignments_dict[task_id]
-            if assignment_info.get('skipped'):
-                reason_for_unassignment = assignment_info.get('skip_reason', "Skipped by user (reason not specified).")
-                for i in range(quantity_rep):
-                    unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason_for_unassignment
-                _log(logger, "info", f"  REP Task {task_name} (ID: {task_id}) was skipped by user. Reason: {reason_for_unassignment}")
-                continue
-            else:
-                selected_techs_from_ui = assignment_info.get('technicians', [])
-        else:
-            reason = "Skipped (REP): Task data not received from UI for assignment/skip."
-            for i in range(quantity_rep):
-                unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
-            _log(logger, "warning", f"  REP Task {task_name} (ID: {task_id}) was not found in rep_assignments_dict. Marked as unassigned.")
-            continue
+                if not viable_groups_with_scores_pm:
+                    last_known_failure_reason_for_instance = "No viable technician groups found for PM task after considering eligibility and combinations."
+                    unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                    _log(logger, "warning", f"    {instance_task_display_name} unassigned: {last_known_failure_reason_for_instance}")
+                    continue # Next instance or task
 
-        if num_technicians_needed_rep <= 0:
-            if base_duration_rep == 0:
-                num_technicians_needed_rep = 0
-            else:
-                reason = f"Skipped (REP): Invalid 'Mitarbeiter pro Aufgabe' ({num_technicians_needed_rep}) for non-zero duration task."
-                for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
-                continue
-        if quantity_rep <= 0:
-            reason = f"Skipped (REP): Invalid 'Quantity' ({quantity_rep})."
-            continue
+                assignment_successful_and_full = False
+                # Variables to store details of the chosen assignment if one is found
+                final_chosen_group_for_instance = None
+                final_start_time_for_instance = 0
+                final_assigned_duration_for_instance = 0
+                # final_effective_duration_for_instance = 0 # This will be current_effective_duration_for_this_group
+                final_actual_num_assigned_for_instance = 0
+                final_original_stated_priority_for_instance = 'N/A'
+                final_current_effective_duration_for_chosen_group = 0
 
-        task_lines_str_rep = str(task.get('lines', ''))
-        task_lines_rep = []
-        if task_lines_str_rep and task_lines_str_rep.lower() != 'nan' and task_lines_str_rep.strip() != '':
-            try:
-                task_lines_rep = [int(line.strip()) for line in task_lines_str_rep.split(',') if line.strip().isdigit()]
-            except (ValueError, TypeError):
-                _log(logger, "warning", f"  Warning (REP): Invalid lines format '{task_lines_str_rep}' for task {task_name}")
 
-        eligible_technicians_for_this_rep_task = []
-        raw_user_selection_count = len(selected_techs_from_ui)
+                for group_candidate_data in viable_groups_with_scores_pm:
+                    current_candidate_group = group_candidate_data['group']
+                    current_actual_num_assigned = len(current_candidate_group)
+                    current_original_stated_priority = tech_prio_map_pm.get(current_candidate_group[0], {}).get('stated', 'N/A') if current_candidate_group else 'N/A'
 
-        for tech_name_from_ui in selected_techs_from_ui:
-            if tech_name_from_ui in present_technicians:
-                if not task_lines_rep or any(line in TECHNICIAN_LINES.get(tech_name_from_ui, []) for line in task_lines_rep):
-                    min_acceptable_time_for_eligibility = base_duration_rep * 0.75
-                    if ((base_duration_rep > 0 and available_time_after_pm.get(tech_name_from_ui, 0) >= min_acceptable_time_for_eligibility) or
-                        (base_duration_rep == 0)):
-                        eligible_technicians_for_this_rep_task.append(tech_name_from_ui)
+                    current_effective_duration_for_this_group = 0
+                    valid_duration_calc_for_this_group = False
+                    if base_duration > 0 and num_technicians_needed > 0 and current_actual_num_assigned > 0:
+                        current_effective_duration_for_this_group = (base_duration * num_technicians_needed) / current_actual_num_assigned
+                        valid_duration_calc_for_this_group = True
+                    elif base_duration == 0:
+                        current_effective_duration_for_this_group = 0
+                        valid_duration_calc_for_this_group = True
 
-        if not eligible_technicians_for_this_rep_task and num_technicians_needed_rep > 0 :
-            reason = "Skipped (REP): None of the user-selected technicians are eligible (present, lines, >=75% gross time after PMs)."
-            for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
-            continue
-        elif not eligible_technicians_for_this_rep_task and num_technicians_needed_rep == 0 and base_duration_rep == 0:
-            pass
+                    if not valid_duration_calc_for_this_group:
+                        _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Invalid duration calculation for group {current_candidate_group}. Skipping group.")
+                        continue # Try next group
 
-        target_assignment_group_rep = []
-        if num_technicians_needed_rep == 0 and base_duration_rep == 0:
-            target_assignment_group_rep = []
-            # No debug log for production
-        elif eligible_technicians_for_this_rep_task:
-            techs_100_percent_capable = [
-                tech_name for tech_name in eligible_technicians_for_this_rep_task
-                if available_time_after_pm.get(tech_name, 0) >= base_duration_rep or base_duration_rep == 0
-            ]
-            aim_for_group_size = num_technicians_needed_rep
-            if len(eligible_technicians_for_this_rep_task) < num_technicians_needed_rep :
-                aim_for_group_size = len(eligible_technicians_for_this_rep_task)
+                    if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
+                        _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Attempting to schedule FULLY with group: {current_candidate_group}, effective_duration: {current_effective_duration_for_this_group}")
 
-            if len(techs_100_percent_capable) >= aim_for_group_size:
-                sorted_techs_100_percent = sorted(
-                    techs_100_percent_capable,
-                    key=lambda tech_name: available_time_after_pm.get(tech_name, 0),
-                    reverse=True
-                )
-                target_assignment_group_rep = sorted_techs_100_percent[:aim_for_group_size]
-                # No debug log for production
-            else:
-                # No debug log for production
-                sorted_eligible_user_selected_75_plus = sorted(
-                    eligible_technicians_for_this_rep_task,
-                    key=lambda tech_name: available_time_after_pm.get(tech_name, 0),
-                    reverse=True
-                )
-                target_assignment_group_rep = sorted_eligible_user_selected_75_plus[:aim_for_group_size]
-                # No debug log for production
-
-        if not target_assignment_group_rep and num_technicians_needed_rep > 0 :
-            reason = f"Skipped (REP): Could not form a target assignment group for '{task_name}' from user selection (even after fallback)."
-            for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
-            continue
-        elif not target_assignment_group_rep and num_technicians_needed_rep == 0 and base_duration_rep > 0:
-            reason = f"Skipped (REP): Task '{task_name}' has duration but needs 0 technicians. Marked unassigned."
-            for i in range(quantity_rep): unassigned_tasks_reasons[f"{task_id}_{i + 1}"] = reason
-            continue
-
-        actual_num_assigned_rep = len(target_assignment_group_rep)
-        current_task_duration_rep = base_duration_rep
-        resource_mismatch_info_rep = None
-        if num_technicians_needed_rep > 0:
-            if actual_num_assigned_rep != num_technicians_needed_rep:
-                resource_mismatch_info_rep = f"Task requires {num_technicians_needed_rep}. Assigned to {actual_num_assigned_rep} (User selected {raw_user_selection_count}, {len(eligible_technicians_for_this_rep_task)} eligible with >=75% time)."
-            elif raw_user_selection_count != num_technicians_needed_rep and len(eligible_technicians_for_this_rep_task) >= num_technicians_needed_rep :
-                 resource_mismatch_info_rep = f"Task requires {num_technicians_needed_rep}. User selected {raw_user_selection_count} ({len(eligible_technicians_for_this_rep_task)} eligible with >=75% time). Assigned to {actual_num_assigned_rep}."
-        elif num_technicians_needed_rep == 0 and actual_num_assigned_rep > 0:
-            resource_mismatch_info_rep = f"Task planned for 0 technicians. Assigned to {actual_num_assigned_rep}."
-
-        if not target_assignment_group_rep and base_duration_rep == 0 and num_technicians_needed_rep == 0:
-            pass
-
-        for instance_num_rep in range(1, quantity_rep + 1):
-            instance_id_rep = f"{task_id}_{instance_num_rep}"
-            instance_task_name_rep = f"{task_name} (Instance {instance_num_rep}/{quantity_rep})"
-            assigned_this_rep_instance = False
-            last_known_failure_reason_rep = f"Could not find a suitable time slot for the target group for '{task_name}' (REP)."
-            group_to_schedule = target_assignment_group_rep
-
-            if not group_to_schedule and num_technicians_needed_rep > 0:
-                unassigned_tasks_reasons[instance_id_rep] = last_known_failure_reason_rep
-                _log(logger, "warning", f"  Could not schedule REP {instance_task_name_rep} as no group was formed (and task required technicians). Reason: {last_known_failure_reason_rep}")
-                continue
-
-            start_time_rep = 0
-            try:
-                while start_time_rep <= total_work_minutes:
-                    duration_to_check_availability_rep = 1 if current_task_duration_rep == 0 else current_task_duration_rep
-                    # No debug log for production
-
-                    all_available_in_rep_group = True
-                    for tech_in_group_rep in target_assignment_group_rep:
-                        tech_is_available = all(sch_end <= start_time_rep or sch_start >= start_time_rep + duration_to_check_availability_rep
-                                   for sch_start, sch_end, _ in technician_schedules[tech_in_group_rep])
-                        if not tech_is_available:
-                            all_available_in_rep_group = False
+                    # --- Start of slot search logic for current_candidate_group ---
+                    search_start_time = 0
+                    slot_found_for_this_group = False
+                    while search_start_time <= total_work_minutes:
+                        # For 0-duration tasks, if start time is beyond shift (and it needs a slot), break.
+                        # A 0-duration task at total_work_minutes is fine if it doesn't extend.
+                        if current_effective_duration_for_this_group == 0 and search_start_time > total_work_minutes:
                             break
 
-                    # No debug log for production
+                        # For positive duration tasks, if start time itself is at or beyond shift end, break
+                        if current_effective_duration_for_this_group > 0 and search_start_time >= total_work_minutes:
+                            break
 
-                    if all_available_in_rep_group:
-                        assigned_duration_rep_gantt = current_task_duration_rep
-                        is_incomplete_rep_flag = False
-                        if current_task_duration_rep > 0 and (start_time_rep + current_task_duration_rep > total_work_minutes):
-                            remaining_time_in_shift_rep = total_work_minutes - start_time_rep
-                            min_acceptable_duration_rep = current_task_duration_rep * 0.75
-                            if remaining_time_in_shift_rep >= min_acceptable_duration_rep and remaining_time_in_shift_rep > 0:
-                                assigned_duration_rep_gantt = remaining_time_in_shift_rep
-                                is_incomplete_rep_flag = True
-                                if instance_id_rep not in incomplete_tasks_ids:
-                                    incomplete_tasks_ids.append(instance_id_rep)
-                                # No debug log for production
-                            else:
-                                last_known_failure_reason_rep = f"Insufficient time for 75% REP completion. Ideal: {current_task_duration_rep:.0f}min, Remaining: {remaining_time_in_shift_rep:.0f}min, Min 75% needed: {min_acceptable_duration_rep:.0f}min."
-                                start_time_rep += 15
-                                continue
-                        elif current_task_duration_rep == 0 and start_time_rep > total_work_minutes:
-                            last_known_failure_reason_rep = "Cannot schedule 0-duration REP task after shift end."
-                            start_time_rep += 15
+                        # Check if the task *fully* fits within the shift
+                        if current_effective_duration_for_this_group > 0 and (search_start_time + current_effective_duration_for_this_group > total_work_minutes):
+                            search_start_time += 15 # Try next slot
                             continue
 
-                        for tech_assigned_rep in target_assignment_group_rep:
-                            technician_schedules[tech_assigned_rep].append(
-                                (start_time_rep, start_time_rep + assigned_duration_rep_gantt, instance_task_name_rep)
-                            )
-                            technician_schedules[tech_assigned_rep].sort()
-                            assignment_detail_rep = {
-                                'technician': tech_assigned_rep,
-                                'task_name': instance_task_name_rep,
-                                'start': start_time_rep,
-                                'duration': assigned_duration_rep_gantt,
-                                'is_incomplete': is_incomplete_rep_flag,
-                                'original_duration': current_task_duration_rep,
-                                'instance_id': instance_id_rep,
-                                'technician_task_priority': 'N/A_REP',
-                                'resource_mismatch_info': resource_mismatch_info_rep
-                            }
-                            all_task_assignments.append(assignment_detail_rep)
+                        duration_to_check_for_slot = 1 if current_effective_duration_for_this_group == 0 else current_effective_duration_for_this_group
 
-                        # No debug log for production
-                        assigned_this_rep_instance = True
-                        break
+                        all_techs_in_group_available_at_slot = True
+                        if not current_candidate_group and num_technicians_needed > 0 : # Should not happen if viable_groups exist
+                             all_techs_in_group_available_at_slot = False
+
+                        for tech_in_group_name in current_candidate_group:
+                            # Check against the main technician_schedules (reflecting prior committed tasks)
+                            if not all(sch_end <= search_start_time or sch_start >= search_start_time + duration_to_check_for_slot
+                                       for sch_start, sch_end, _ in technician_schedules[tech_in_group_name]):
+                                all_techs_in_group_available_at_slot = False
+                                break
+
+                        if all_techs_in_group_available_at_slot:
+                            # Full slot found for this group at this time
+                            final_chosen_group_for_instance = current_candidate_group
+                            final_start_time_for_instance = search_start_time
+                            final_assigned_duration_for_instance = current_effective_duration_for_this_group # Assign full duration
+                            final_actual_num_assigned_for_instance = current_actual_num_assigned
+                            final_original_stated_priority_for_instance = current_original_stated_priority
+                            final_current_effective_duration_for_chosen_group = current_effective_duration_for_this_group
+
+                            assignment_successful_and_full = True
+                            slot_found_for_this_group = True
+                            if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
+                                _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Found valid FULL slot for group {current_candidate_group} at {search_start_time} for {current_effective_duration_for_this_group} min.")
+                            break # Break from search_start_time loop
+
+                        search_start_time += 15 # Try next 15-min slot
+                    # --- End of slot search logic for current_candidate_group ---
+
+                    if assignment_successful_and_full: # If a full assignment was made with this group
+                        if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
+                            _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Full assignment confirmed with group {final_chosen_group_for_instance}. Breaking from group search.")
+                        break # Break from the for group_candidate_data loop (we've found our group)
                     else:
-                        if all_available_in_rep_group is False :
-                            last_known_failure_reason_rep = f"Technician(s) in group '{', '.join(target_assignment_group_rep)}' not available at {start_time_rep}min for {duration_to_check_availability_rep:.0f}min (REP)."
+                        if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
+                             _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Group {current_candidate_group} could not be scheduled fully. Trying next group.")
+                # --- End of loop over viable_groups_with_scores_pm ---
 
-                    start_time_rep += 15
-            except Exception as e_rep_sched:
-                _log(logger, "error", f"  Exception during REP task {instance_task_name_rep} scheduling loop: {str(e_rep_sched)}")
-                import traceback
-                _log(logger, "error", f"  Traceback: {traceback.format_exc()}")
-                last_known_failure_reason_rep = f"Exception during scheduling: {str(e_rep_sched)}"
-                assigned_this_rep_instance = False
+                if assignment_successful_and_full:
+                    if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
+                         _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Proceeding with fully assigned group: {final_chosen_group_for_instance} at {final_start_time_for_instance}")
 
-            if not assigned_this_rep_instance:
-                # No debug log for production
-                unassigned_tasks_reasons[instance_id_rep] = last_known_failure_reason_rep
+                    if not final_chosen_group_for_instance: # Handles 0-tech PM task assigned to an empty group
+                        assignment_detail_entry = {
+                            'technician': None,
+                            'task_name': instance_task_display_name,
+                            'start': final_start_time_for_instance,
+                            'duration': final_assigned_duration_for_instance, # Should be 0 for 0-tech, 0-base_duration tasks
+                            'is_incomplete': False,
+                            'original_duration': final_current_effective_duration_for_chosen_group, # Should be 0
+                            'instance_id': instance_id_str,
+                            'technician_task_priority': final_original_stated_priority_for_instance,
+                            'resource_mismatch_info': "0-duration/0-tech PM task"
+                        }
+                        all_task_assignments_details.append(assignment_detail_entry)
+                    else:
+                        for tech_assigned_name in final_chosen_group_for_instance:
+                            technician_schedules[tech_assigned_name].append(
+                                (final_start_time_for_instance, final_start_time_for_instance + final_assigned_duration_for_instance, instance_task_display_name)
+                            )
+                            technician_schedules[tech_assigned_name].sort()
+                            if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
+                                _log(logger, "debug", f"      Assigned {instance_task_display_name} to {tech_assigned_name} from {final_start_time_for_instance} to {final_start_time_for_instance + final_assigned_duration_for_instance}. Updated schedule for {tech_assigned_name}: {technician_schedules[tech_assigned_name]}")
 
+                            assignment_detail_entry = {
+                                'technician': tech_assigned_name,
+                                'task_name': instance_task_display_name,
+                                'start': final_start_time_for_instance,
+                                'duration': final_assigned_duration_for_instance,
+                                'is_incomplete': False, # As we prioritized and found a full assignment
+                                'original_duration': final_current_effective_duration_for_chosen_group,
+                                'instance_id': instance_id_str,
+                                'technician_task_priority': final_original_stated_priority_for_instance,
+                                'resource_mismatch_info': None
+                            }
+                            all_task_assignments_details.append(assignment_detail_entry)
 
-    final_available_time_summary = {tech: total_work_minutes for tech in present_technicians}
-    for tech_name, schedule_entries in technician_schedules.items():
-        total_scheduled_time_for_tech = sum(end - start for start, end, _ in schedule_entries)
-        final_available_time_summary[tech_name] -= total_scheduled_time_for_tech
-        if final_available_time_summary[tech_name] < 0:
-            final_available_time_summary[tech_name] = 0
-            # No debug log for production
+                    _log(logger, "info", f"    Successfully scheduled (fully) {instance_task_display_name} for group {final_chosen_group_for_instance} at {final_start_time_for_instance} for {final_assigned_duration_for_instance} min.")
+                    assigned_this_instance_flag = True # Mark instance as assigned
+                    if instance_id_str in unassigned_tasks_reasons_dict:
+                        del unassigned_tasks_reasons_dict[instance_id_str]
+                else:
+                    # No group could be fully assigned.
+                    last_known_failure_reason_for_instance = "No technician group could be fully assigned to the PM task after trying all viable options."
+                    unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                    _log(logger, "warning", f"    {instance_task_display_name} unassigned: {last_known_failure_reason_for_instance}")
+                    # assigned_this_instance_flag remains False, will be handled by outer logic
+            elif task_type == 'REP':
+                # --- REP Task Logic ---
+                _log(logger, "debug", f"  Assigning REP instance: {instance_task_display_name}")
+                rep_assignments_map = {item['task_id']: item for item in rep_assignments} if rep_assignments else {}
+                assignment_info_rep = rep_assignments_map.get(task_id)
 
+                if not assignment_info_rep:
+                    last_known_failure_reason_for_instance = "Skipped (REP): Task data not received from UI for assignment/skip."
+                    unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                    _log(logger, "warning", f"    {instance_task_display_name} unassigned: {last_known_failure_reason_for_instance}")
+                    continue
 
-    _log(logger, "info", f"Task assignment process completed. Assigned {len(all_task_assignments)} task segments.")
-    # No debug log for production: _log(logger, "debug", f"Detailed unassigned tasks reasons: {unassigned_tasks_reasons}")
-    return all_task_assignments, unassigned_tasks_reasons, incomplete_tasks_ids, final_available_time_summary
+                if assignment_info_rep.get('skipped'):
+                    last_known_failure_reason_for_instance = assignment_info_rep.get('skip_reason', "Skipped by user (reason not specified).")
+                    unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                    _log(logger, "info", f"    REP Task {task_name_excel} (ID: {task_id}, Inst: {instance_num}) was skipped by user. Reason: {last_known_failure_reason_for_instance}")
+                    continue
+
+                selected_techs_from_ui_rep = assignment_info_rep.get('technicians', [])
+                raw_user_selection_count_rep = len(selected_techs_from_ui_rep)
+                _log(logger, "debug", f"    REP Instance {instance_task_display_name} - Selected Techs from UI: {selected_techs_from_ui_rep}")
+
+                # Filter selected_techs_from_ui_rep: must be present and meet line criteria
+                eligible_user_selected_techs_rep = []
+                for tech_ui_sel in selected_techs_from_ui_rep:
+                    if tech_ui_sel in present_technicians:
+                        if not task_lines_list or any(line in TECHNICIAN_LINES.get(tech_ui_sel, []) for line in task_lines_list):
+                            eligible_user_selected_techs_rep.append(tech_ui_sel)
+                _log(logger, "debug", f"    REP Instance {instance_task_display_name} - Eligible User-Selected Techs (after filtering for presence & lines): {eligible_user_selected_techs_rep}")
+
+                if not eligible_user_selected_techs_rep and num_technicians_needed > 0: # If task needs techs but none of UI selected are eligible
+                    last_known_failure_reason_for_instance = "Skipped (REP): None of the user-selected technicians are eligible (present & lines)."
+                    unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                    _log(logger, "warning", f"    {instance_task_display_name} unassigned: {last_known_failure_reason_for_instance}")
+                    continue
+
+                target_assignment_group_for_instance = eligible_user_selected_techs_rep # Use the filtered list from UI
+                _log(logger, "debug", f"    REP Instance {instance_task_display_name} - Target Assignment Group: {target_assignment_group_for_instance}")
+                actual_num_assigned = len(target_assignment_group_for_instance)
+                effective_task_duration_for_group = base_duration # For REP, duration doesn't change based on #techs in this simplified model
+
+                if num_technicians_needed > 0:
+                    if actual_num_assigned != num_technicians_needed:
+                         resource_mismatch_note = f"Task requires {num_technicians_needed}. Assigned to {actual_num_assigned} (User selected {raw_user_selection_count_rep}, {len(eligible_user_selected_techs_rep)} eligible)."
+                    elif raw_user_selection_count_rep != num_technicians_needed and len(eligible_user_selected_techs_rep) >= num_technicians_needed:
+                         resource_mismatch_note = f"Task requires {num_technicians_needed}. User selected {raw_user_selection_count_rep} ({len(eligible_user_selected_techs_rep)} eligible). Assigned to {actual_num_assigned}."
+                elif num_technicians_needed == 0 and actual_num_assigned > 0: # Planned for 0, but user assigned some
+                    resource_mismatch_note = f"Task planned for 0 technicians. User assigned {actual_num_assigned}."
+
+                if not target_assignment_group_for_instance and num_technicians_needed > 0: # If after filtering UI selection, no one is left for a task that needs techs
+                    last_known_failure_reason_for_instance = f"Skipped (REP): No eligible technicians remained from UI selection for '{task_name_excel}'."
+                    unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                    _log(logger, "warning", f"    {instance_task_display_name} unassigned: {last_known_failure_reason_for_instance}")
+                    continue
+
+            # --- Scheduling Logic (Common for PM and REP after group is determined) ---
+            if not target_assignment_group_for_instance and num_technicians_needed > 0 and base_duration > 0:
+                # This case implies PM logic failed to find a group (handled by assignment_successful_and_full check now for PM),
+                # or REP pre-checks failed.
+                # For PM, if assignment_successful_and_full is False, assigned_this_instance_flag is False,
+                # and it will be caught by the check at the end of the instance loop.
+                if task_type == 'REP': # Only log for REP here as PM has its own unassigned logging
+                    if instance_id_str not in unassigned_tasks_reasons_dict:
+                        unassigned_tasks_reasons_dict[instance_id_str] = f"No assignment group formed for {instance_task_display_name}."
+                    _log(logger, "debug", f"    No target group for REP task {instance_task_display_name}, reason: {unassigned_tasks_reasons_dict.get(instance_id_str)}")
+                    continue # To next instance
+
+            # Handle tasks that require 0 technicians (e.g., informational, 0 duration)
+            # This block should only be hit if task_type is not PM (since PM has its own path) or if PM somehow bypasses its logic.
+            # Or if a PM task was successfully assigned (assignment_successful_and_full = True) but was a 0-duration/0-tech task.
+            # The PM logic now handles its own 0-duration tasks within the group search if num_technicians_needed is 0.
+            if num_technicians_needed == 0 and base_duration == 0 and not target_assignment_group_for_instance and task_type != 'PM':
+                 _log(logger, "info", f"  Task {instance_task_display_name} (Type: {task_type}) is 0 duration, 0 techs, no specific assignment. Marking as 'conceptually done'.")
+                 all_task_assignments_details.append({
+                    'technician': None, 'task_name': instance_task_display_name,
+                    'start': 0, 'duration': 0, 'is_incomplete': False,
+                    'original_duration': 0, 'instance_id': instance_id_str,
+                    'technician_task_priority': 'N/A', 'resource_mismatch_info': "0-duration/0-tech task"
+                 })
+                 assigned_this_instance_flag = True
+                 if instance_id_str in unassigned_tasks_reasons_dict:
+                    del unassigned_tasks_reasons_dict[instance_id_str]
+                 continue
+
+            # The following block is for REP tasks or if PM tasks somehow fall through (which they shouldn't with new logic)
+            # If it's a PM task, assigned_this_instance_flag would be True if successfully scheduled by the new logic.
+            # If it's False, PM task was unassigned and already logged.
+            if task_type == 'REP' and not assigned_this_instance_flag : # Only proceed if REP and not yet assigned (or skipped)
+                current_start_time = 0
+                if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel" or task_type == 'REP':
+                    _log(logger, "debug", f"    Attempting to schedule {instance_task_display_name} (Duration: {effective_task_duration_for_group} min) for group {target_assignment_group_for_instance}. Technician schedules before attempt: {technician_schedules}")
+
+                # Ensure target_assignment_group_for_instance is not None for REP tasks needing assignment
+                if not target_assignment_group_for_instance and num_technicians_needed > 0:
+                    if instance_id_str not in unassigned_tasks_reasons_dict: # Should have been caught earlier for REP
+                        last_known_failure_reason_for_instance = f"Skipped (REP): Target group empty for '{task_name_excel}' needing technicians."
+                        unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                    _log(logger, "warning", f"    {instance_task_display_name} unassigned: {unassigned_tasks_reasons_dict.get(instance_id_str)}")
+                    # assigned_this_instance_flag remains False
+                else: # Proceed with REP scheduling attempt
+                    while current_start_time <= total_work_minutes:
+                        if effective_task_duration_for_group == 0 and current_start_time > total_work_minutes:
+                            last_known_failure_reason_for_instance = f"Cannot schedule 0-duration task instance '{instance_task_display_name}' after shift end."
+                            break
+
+                        if effective_task_duration_for_group > 0 and current_start_time >= total_work_minutes:
+                            last_known_failure_reason_for_instance = f"No time remaining in shift to start task instance '{instance_task_display_name}'."
+                            break
+
+                        duration_to_check_for_slot = 1 if effective_task_duration_for_group == 0 else effective_task_duration_for_group
+                        all_techs_in_group_available = True
+                        if not target_assignment_group_for_instance and num_technicians_needed > 0 :
+                            all_techs_in_group_available = False
+                            last_known_failure_reason_for_instance = "Internal error: Target group empty for REP task needing technicians."
+
+                        for tech_in_group_name in target_assignment_group_for_instance: # target_assignment_group_for_instance is set for REP tasks
+                            if not all(sch_end <= current_start_time or sch_start >= current_start_time + duration_to_check_for_slot
+                                    for sch_start, sch_end, _ in technician_schedules[tech_in_group_name]):
+                                all_techs_in_group_available = False
+                                last_known_failure_reason_for_instance = f"Technician(s) in group '{', '.join(target_assignment_group_for_instance)}' not available at {current_start_time}min for {duration_to_check_for_slot:.0f}min for REP task. Tech {tech_in_group_name} schedule: {technician_schedules[tech_in_group_name]}"
+                                if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel" or task_type == 'REP':
+                                    _log(logger, "debug", f"      Slot Check Failed (REP): {last_known_failure_reason_for_instance}")
+                                break
+
+                        if all_techs_in_group_available:
+                            assigned_duration_for_gantt_chart = effective_task_duration_for_group
+                            is_incomplete_task_flag = False
+
+                            if effective_task_duration_for_group > 0 and (current_start_time + effective_task_duration_for_group > total_work_minutes):
+                                remaining_time_in_shift_for_task = total_work_minutes - current_start_time
+                                min_acceptable_duration_for_partial = effective_task_duration_for_group * 0.75
+
+                                if remaining_time_in_shift_for_task >= min_acceptable_duration_for_partial and remaining_time_in_shift_for_task > 0:
+                                    assigned_duration_for_gantt_chart = remaining_time_in_shift_for_task
+                                    is_incomplete_task_flag = True
+                                    if instance_id_str not in incomplete_tasks_instance_ids:
+                                        incomplete_tasks_instance_ids.append(instance_id_str)
+                                    _log(logger, "info", f"    Task {instance_task_display_name} (REP) will be partially assigned ({assigned_duration_for_gantt_chart} of {effective_task_duration_for_group} min).")
+                                else:
+                                    last_known_failure_reason_for_instance = f"Insufficient time for 75% completion (REP). Ideal: {effective_task_duration_for_group:.0f}min, Remaining: {remaining_time_in_shift_for_task:.0f}min, Min 75% needed: {min_acceptable_duration_for_partial:.0f}min."
+                                    current_start_time += 15
+                                    continue
+
+                            for tech_assigned_name in target_assignment_group_for_instance:
+                                technician_schedules[tech_assigned_name].append(
+                                    (current_start_time, current_start_time + assigned_duration_for_gantt_chart, instance_task_display_name)
+                                )
+                                technician_schedules[tech_assigned_name].sort()
+                                if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel" or task_type == 'REP':
+                                    _log(logger, "debug", f"      Assigned {instance_task_display_name} (REP) to {tech_assigned_name} from {current_start_time} to {current_start_time + assigned_duration_for_gantt_chart}. Updated schedule for {tech_assigned_name}: {technician_schedules[tech_assigned_name]}")
+
+                                assignment_detail_entry = {
+                                    'technician': tech_assigned_name,
+                                    'task_name': instance_task_display_name,
+                                    'start': current_start_time,
+                                    'duration': assigned_duration_for_gantt_chart,
+                                    'is_incomplete': is_incomplete_task_flag,
+                                    'original_duration': effective_task_duration_for_group,
+                                    'instance_id': instance_id_str,
+                                    'technician_task_priority': original_stated_priority_for_display if task_type == 'PM' else 'N/A_REP', # original_stated_priority_for_display is set for REP
+                                    'resource_mismatch_info': resource_mismatch_note # resource_mismatch_note is set for REP
+                                }
+                                all_task_assignments_details.append(assignment_detail_entry)
+
+                            _log(logger, "info", f"    Successfully scheduled {instance_task_display_name} (REP) for group {target_assignment_group_for_instance} at {current_start_time} for {assigned_duration_for_gantt_chart} min.")
+                            assigned_this_instance_flag = True
+                            if instance_id_str in unassigned_tasks_reasons_dict:
+                                del unassigned_tasks_reasons_dict[instance_id_str]
+                            break
+
+                        current_start_time += 15
+            # This final check catches any instance that wasn't assigned and didn't have a reason set yet.
+            # For PM, if assignment_successful_and_full was False, assigned_this_instance_flag is False, and reason is set.
+            # For REP, if its own scheduling loop failed, assigned_this_instance_flag is False, and reason is set.
+            if not assigned_this_instance_flag and instance_id_str not in unassigned_tasks_reasons_dict:
+                # last_known_failure_reason_for_instance should have been set by the specific logic (PM or REP)
+                unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                _log(logger, "warning", f"    Failed to assign {instance_task_display_name} (Type: {task_type}). Reason: {last_known_failure_reason_for_instance}")
+
+    # --- Final available time calculation ---
+    final_available_time_summary_map = {tech: total_work_minutes for tech in present_technicians}
+    for tech_name_final, schedule_entries_final in technician_schedules.items():
+        total_scheduled_time_for_tech = sum(end - start for start, end, _ in schedule_entries_final)
+        final_available_time_summary_map[tech_name_final] -= total_scheduled_time_for_tech
+        if final_available_time_summary_map[tech_name_final] < 0:
+            final_available_time_summary_map[tech_name_final] = 0
+            _log(logger, "warning", f"Technician {tech_name_final} has negative available time corrected to 0. Workload: {total_scheduled_time_for_tech}, Shift: {total_work_minutes}")
+
+    _log(logger, "info", f"Unified task assignment process completed. Assigned {len(all_task_assignments_details)} task segments.")
+    if unassigned_tasks_reasons_dict:
+        _log(logger, "warning", f"Unassigned task instances: {len(unassigned_tasks_reasons_dict)}. Reasons:")
+        for inst_id, reason in unassigned_tasks_reasons_dict.items():
+            # Check if the unassigned task is the one we are interested in
+            task_name_for_unassigned_log = ""
+            # Attempt to find the task name from all_tasks_combined using the task_id part of inst_id
+            original_task_id_for_unassigned = inst_id.split('_')[0]
+            matching_task_for_log = next((t for t in all_tasks_combined if t['id'] == original_task_id_for_unassigned), None)
+            if matching_task_for_log:
+                task_name_for_unassigned_log = matching_task_for_log.get('name', 'Unknown')
+
+            if task_name_for_unassigned_log == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
+                 _log(logger, "warning", f"  - Instance {inst_id} (Task: {task_name_for_unassigned_log}): {reason}")
+            elif not matching_task_for_log : # If task name couldn't be found, log it anyway if it's a general issue
+                 _log(logger, "warning", f"  - Instance {inst_id} (Task ID: {original_task_id_for_unassigned} - Name not found): {reason}")
+            # For other tasks, this detailed line won't be printed, reducing verbosity.
+            # The summary count of unassigned tasks is still logged above.
+
+    if incomplete_tasks_instance_ids:
+        _log(logger, "info", f"Incomplete task instances (due to shift end): {incomplete_tasks_instance_ids}")
+
+    _log(logger, "debug", f"Final Technician Schedules at end of assign_tasks: {technician_schedules}")
+    return all_task_assignments_details, unassigned_tasks_reasons_dict, incomplete_tasks_instance_ids, final_available_time_summary_map

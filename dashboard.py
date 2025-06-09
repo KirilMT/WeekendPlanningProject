@@ -90,7 +90,7 @@ def generate_html_files(data, present_technicians, rep_assignments, jinja_env, o
                 "planned_worktime_min": int(row.get("planned_worktime_min", 0)),
                 "priority": row.get("priority", "C"),
                 "quantity": int(row.get("quantity", 1)),
-                "task_type": row.get("task_type", ""),
+                "task_type": row.get("task_type", ""), # Keep original task_type
                 "ticket_mo": row.get("ticket_mo", ""),
                 "ticket_url": row.get("ticket_url", "")
             })
