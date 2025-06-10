@@ -11,7 +11,7 @@ import sqlite3 # Used for specific error handling in routes
 import logging # Import logging
 
 # Import from new modules
-from db_utils import get_db_connection, init_db
+from db_utils import get_db_connection, init_db, get_or_create_technology, get_or_create_task, get_all_technician_skills_by_name # Added new imports
 from config_manager import load_app_config, TECHNICIAN_LINES, TECHNICIANS, TECHNICIAN_GROUPS #, TASK_NAME_MAPPING, TECHNICIAN_TASKS
 from data_processing import sanitize_data, calculate_work_time #, calculate_available_time, validate_assignments_flat_input
 from dashboard import generate_html_files #, prepare_dashboard_data
@@ -64,7 +64,14 @@ def get_technician_mappings_api():
                 "technician_lines": [int(l.strip()) for l in tech_row['lines'].split(',') if l.strip().isdigit()] if tech_row['lines'] else [],
                 "task_assignments": []
             }
-            cursor.execute("SELECT task_name, priority FROM technician_task_assignments WHERE technician_id = ? ORDER BY priority ASC", (tech_row['id'],))
+            # Updated query to join with tasks table for task_name
+            cursor.execute('''
+                SELECT t.name as task_name, tta.priority 
+                FROM technician_task_assignments tta
+                JOIN tasks t ON tta.task_id = t.id
+                WHERE tta.technician_id = ? 
+                ORDER BY tta.priority ASC
+            ''', (tech_row['id'],))
             for assign_row in cursor.fetchall():
                 tech_data["task_assignments"].append({'task': assign_row['task_name'], 'prio': assign_row['priority']})
             technicians_output[tech_name] = tech_data
@@ -102,11 +109,22 @@ def save_technician_mappings_api():
             else:
                 cursor.execute("INSERT INTO technicians (name, sattelite_point, lines) VALUES (?, ?, ?)", (tech_name, sattelite_point, lines_str))
                 technician_id = cursor.lastrowid
+
             for assignment in task_assignments_payload:
                 task_name_assign = assignment.get('task')
                 priority_assign = assignment.get('prio')
                 if task_name_assign and isinstance(priority_assign, int) and priority_assign >= 1:
-                    cursor.execute("INSERT INTO technician_task_assignments (technician_id, task_name, priority) VALUES (?, ?, ?)", (technician_id, task_name_assign, priority_assign))
+                    # Look up task_id by task_name
+                    cursor.execute("SELECT id FROM tasks WHERE name = ?", (task_name_assign,))
+                    task_db_row = cursor.fetchone()
+                    if task_db_row:
+                        task_id_assign = task_db_row['id']
+                        cursor.execute("INSERT INTO technician_task_assignments (technician_id, task_id, priority) VALUES (?, ?, ?)",
+                                       (technician_id, task_id_assign, priority_assign))
+                    else:
+                        # Log or handle missing task - for now, we skip assigning this task
+                        app.logger.warning(f"Task '{task_name_assign}' not found in tasks table. Cannot save assignment for technician '{tech_name}'.")
+
         conn.commit()
         load_app_config(app.config['DATABASE'])
         return jsonify({"message": "Technician mappings saved to database and reloaded successfully!"})
@@ -343,70 +361,85 @@ def generate_dashboard_route():
            not isinstance(all_processed_tasks_from_ui, list):
             return jsonify({"message": "Invalid data structure for present_technicians, rep_assignments, or all_processed_tasks."}),400
 
-        final_tasks_map = {}
-        app.logger.debug(f"Starting to build final_tasks_map. all_processed_tasks_from_ui count: {len(all_processed_tasks_from_ui)}")
+        # Get DB connection
+        conn = get_db_connection(app.config['DATABASE'])
+        try:
+            # Fetch technician skills
+            technician_skills_map = get_all_technician_skills_by_name(conn)
+            app.logger.debug(f"Fetched technician skills map: {technician_skills_map}")
 
-        # 1. Add all tasks that went through the UI modal flow. These are the source of truth for these tasks.
-        for task_from_ui in all_processed_tasks_from_ui:
-            task_id = str(task_from_ui.get('id'))
-            if not task_id:
-                app.logger.warning(f"Task from UI missing ID: {task_from_ui.get('scheduler_group_task')}")
-                continue
+            final_tasks_map = {}
+            app.logger.debug(f"Starting to build final_tasks_map. all_processed_tasks_from_ui count: {len(all_processed_tasks_from_ui)}")
 
-            task_to_add = task_from_ui.copy()
-            if 'name' not in task_to_add or not task_to_add['name']:
-                task_to_add['name'] = task_to_add.get('scheduler_group_task', f'Unknown Task UI {task_id}')
-            # isAdditionalTask should be set correctly by the frontend.
+            default_technology_name = "Default Technology" # Define a default technology
+            default_technology_id = get_or_create_technology(conn, default_technology_name)
+            app.logger.info(f"Using default technology ID: {default_technology_id} for '{default_technology_name}'")
 
-            final_tasks_map[task_id] = task_to_add
-            app.logger.debug(f"Added/Updated task from UI to final_tasks_map: ID {task_id}, Name: {task_to_add['name']}, Type: {task_to_add.get('task_type')}, Add: {task_to_add.get('isAdditionalTask')}")
+            # 1. Add all tasks that went through the UI modal flow.
+            for task_from_ui in all_processed_tasks_from_ui:
+                task_id_ui = str(task_from_ui.get('id'))
+                if not task_id_ui:
+                    app.logger.warning(f"Task from UI missing ID: {task_from_ui.get('scheduler_group_task')}")
+                    continue
 
-        # 2. Add original PM tasks from the cache if they weren't processed via the UI.
-        pm_id_counter_for_new_ids = 0
-        app.logger.debug(f"Processing excel_data_from_cache (count: {len(excel_data_from_cache)}) for PM tasks not in UI flow.")
-        for task_from_cache in excel_data_from_cache:
-            cache_task_id = str(task_from_cache.get('id')) # Original numeric ID "1", "2", ...
-            if not cache_task_id:
-                app.logger.warning(f"Task from cache missing ID: {task_from_cache.get('scheduler_group_task') or task_from_cache.get('name')}")
-                continue
+                task_to_add = task_from_ui.copy()
+                task_name = task_to_add.get('name', task_to_add.get('scheduler_group_task', f'Unknown Task UI {task_id_ui}'))
+                if not task_to_add.get('name'): task_to_add['name'] = task_name
 
-            if cache_task_id not in final_tasks_map:
-                task_type = task_from_cache.get('task_type', '').upper()
-                if task_type == 'PM':
-                    task_to_add = task_from_cache.copy()
-                    if 'name' not in task_to_add or not task_to_add['name']:
-                        task_to_add['name'] = task_to_add.get('scheduler_group_task', f'Unknown Cache PM {cache_task_id}')
-                    task_to_add['isAdditionalTask'] = False
+                # Get or create task in DB and assign technology_id
+                # For now, all tasks from UI flow get the default technology
+                db_task_id = get_or_create_task(conn, task_name, default_technology_id)
+                task_to_add['technology_id'] = default_technology_id
+                task_to_add['db_task_id'] = db_task_id # Store the actual DB task ID
 
-                    new_pm_id = f"pm{cache_task_id}"  # Simplified format that keeps numeric ID intact
-                    pm_id_counter_for_new_ids += 1
-                    task_to_add['id'] = new_pm_id
+                final_tasks_map[task_id_ui] = task_to_add
+                app.logger.debug(f"Processed task from UI: UI ID {task_id_ui}, DB Task ID {db_task_id}, Name: {task_name}, TechID: {default_technology_id}")
 
-                    final_tasks_map[new_pm_id] = task_to_add
-                    app.logger.debug(f"Added original PM task from cache to final_tasks_map: New ID {new_pm_id} (Old Cache ID: {cache_task_id}), Name: {task_to_add['name']}")
-                # else: # Original REP tasks from cache that were NOT in all_processed_tasks_from_ui (e.g. if UI somehow skipped one)
-                      # This case should be rare if all_processed_tasks_from_ui is comprehensive for REPs.
-                      # If they occur, they'd keep their original numeric ID from cache.
-                      # final_tasks_map[cache_task_id] = task_from_cache # This might lead to issues if name is not set.
-                      # app.logger.warning(f"Found original non-PM task in cache (ID: {cache_task_id}) not in UI processed list. Adding it directly. Review if this is expected.")
+            # 2. Add original PM tasks from the cache if they weren't processed via the UI.
+            app.logger.debug(f"Processing excel_data_from_cache (count: {len(excel_data_from_cache)}) for PM tasks not in UI flow.")
+            for task_from_cache in excel_data_from_cache:
+                cache_task_id_ui = str(task_from_cache.get('id'))
+                if not cache_task_id_ui:
+                    app.logger.warning(f"Task from cache missing ID: {task_from_cache.get('scheduler_group_task') or task_from_cache.get('name')}")
+                    continue
 
+                if cache_task_id_ui not in final_tasks_map:
+                    task_type = task_from_cache.get('task_type', '').upper()
+                    if task_type == 'PM':
+                        task_to_add = task_from_cache.copy()
+                        task_name = task_to_add.get('name', task_to_add.get('scheduler_group_task', f'Unknown Cache PM {cache_task_id_ui}'))
+                        if not task_to_add.get('name'): task_to_add['name'] = task_name
+                        task_to_add['isAdditionalTask'] = False
+
+                        # Get or create task in DB and assign technology_id
+                        db_task_id = get_or_create_task(conn, task_name, default_technology_id)
+                        task_to_add['technology_id'] = default_technology_id
+                        task_to_add['db_task_id'] = db_task_id
+
+                        # Use a consistent ID format if these tasks are added to final_tasks_map
+                        # The original cache_task_id_ui (e.g., "1", "2") is fine as a key if it's unique
+                        final_tasks_map[cache_task_id_ui] = task_to_add
+                        app.logger.debug(f"Processed PM task from cache: UI ID {cache_task_id_ui}, DB Task ID {db_task_id}, Name: {task_name}, TechID: {default_technology_id}")
+
+            conn.commit() # Commit any new tasks/technologies created
+
+        finally:
+            if conn:
+                conn.close()
 
         all_tasks_for_dashboard = list(final_tasks_map.values())
         app.logger.info(f"Constructed all_tasks_for_dashboard with {len(all_tasks_for_dashboard)} tasks for dashboard generation.")
-        # For detailed debugging of the final list:
-        # for t_debug in all_tasks_for_dashboard:
-        #     app.logger.debug(f"  Final Task for dashboard: ID={t_debug.get('id')}, Name='{t_debug.get('name')}', Type={t_debug.get('task_type')}, Add={t_debug.get('isAdditionalTask')}, OrigID={t_debug.get('original_excel_id', 'N/A')}")
-
 
         available_time_result = generate_html_files(
-            all_tasks_for_dashboard, # Use the combined list
+            all_tasks_for_dashboard,
             present_technicians,
             rep_assignments_from_ui,
-            env, # Pass the Jinja environment
-            OUTPUT_FOLDER_ABS, # Pass the absolute output folder path
-            TECHNICIANS, # Pass all configured technicians
-            TECHNICIAN_GROUPS, # Pass configured technician groups
-            app.logger # Pass the Flask app logger
+            env,
+            OUTPUT_FOLDER_ABS,
+            TECHNICIANS,
+            TECHNICIAN_GROUPS,
+            app.logger,
+            technician_skills_map # Pass technician skills
         )
 
         dashboard_url = request.host_url + f'output/technician_dashboard.html?cache_bust={random.randint(1,100000)}'

@@ -79,12 +79,24 @@ def load_app_config(database_path, logger=None): # Added logger argument
                 TECHNICIAN_GROUPS[sattelite_point].append(tech_name)
             # else: # This case was already handled by the skip condition
 
-            task_assignments_query = "SELECT task_name, priority FROM technician_task_assignments WHERE technician_id = ? ORDER BY priority ASC"
+            # Modified query to join with tasks table to get task_name and use task_id
+            task_assignments_query = """
+                SELECT tta.task_id, tta.priority, t.name as task_name
+                FROM technician_task_assignments tta
+                JOIN tasks t ON tta.task_id = t.id
+                WHERE tta.technician_id = ?
+                ORDER BY tta.priority ASC
+            """
             cursor.execute(task_assignments_query, (tech_id,))
             assignments_for_tech = []
             db_assignments = cursor.fetchall()
             for assign_row in db_assignments:
-                assignments_for_tech.append({'task': assign_row['task_name'], 'prio': assign_row['priority']})
+                # Store task_id, priority, and task_name
+                assignments_for_tech.append({
+                    'task_id': assign_row['task_id'],
+                    'task_name': assign_row['task_name'], # For reference/logging if needed
+                    'prio': assign_row['priority']
+                })
             TECHNICIAN_TASKS[tech_name] = assignments_for_tech
 
         _log(f"Successfully loaded configuration for {len(TECHNICIANS)} technicians from database via config_manager.")

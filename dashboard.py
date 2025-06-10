@@ -1,9 +1,10 @@
 # wkndPlanning/dashboard.py
+import logging # Add logging import
+from extract_data import get_current_day, get_current_shift, get_current_week_number, get_current_week # Add these imports
 import os
-import traceback
-from data_processing import sanitize_data, calculate_work_time, validate_assignments_flat_input
-from task_assigner import assign_tasks
-from extract_data import get_current_day, get_current_week_number, get_current_week, get_current_shift
+from task_assigner import assign_tasks #, MAX_PERMUTATION_TASKS # MAX_PERMUTATION_TASKS is not directly used here
+from data_processing import calculate_work_time, sanitize_data, validate_assignments_flat_input #, calculate_available_time, normalize_string # Unused imports removed
+# from config_manager import TECHNICIAN_LINES, TASK_NAME_MAPPING #, TECHNICIAN_TASKS # TECHNICIAN_TASKS not directly used here # Unused import removed
 
 def prepare_dashboard_data(tasks, assignments, unassigned_tasks, incomplete_tasks, logger=None): # Added logger
     pm_tasks_input = []
@@ -122,76 +123,85 @@ def _log(logger, level, message, *args):
     else:
         print(f"[{level.upper()}] {message % args if args else message}")
 
-def generate_html_files(data, present_technicians, rep_assignments, jinja_env, output_folder_path, config_technicians, config_technician_groups, logger=None):
-    try:
-        # data is all_tasks_for_dashboard from app.py
-        # It should have tasks with correct IDs ('1', 'additional_1', 'pm_orig_1_0', etc.)
-        # and 'name' field populated.
+def generate_html_files(all_tasks, present_technicians, rep_assignments, env, output_folder, all_technicians_global, technician_groups_global, logger, technician_technology_skills=None): # Added technician_technology_skills
+    if logger is None:
+        # Basic fallback logger if none is provided
+        logger = logging.getLogger(__name__)
+        logger.addHandler(logging.StreamHandler())
+        logger.setLevel(logging.INFO)
 
-        # Sanitize data (e.g., ensure numeric types, default missing fields if any still exist)
-        # sanitize_data itself also ensures 'name' from 'scheduler_group_task' if needed,
-        # but app.py should have already done this robustly.
-        tasks_for_processing = sanitize_data(data, logger) # Pass logger to sanitize_data
-
-        _log(logger, "debug", f"Tasks for assigner in dashboard.py (after sanitize): {len(tasks_for_processing)}")
-        # For detailed debugging of tasks entering assign_tasks:
-        # for t_debug_dash in tasks_for_processing:
-        #    _log(logger, "debug", f"  Dash SanTask: ID={t_debug_dash.get('id')}, Name='{t_debug_dash.get('name')}', Type={t_debug_dash.get('task_type')}, Add={t_debug_dash.get('isAdditionalTask')}")
+    logger.info(f"Starting HTML file generation. Received {len(all_tasks)} tasks, {len(present_technicians)} present technicians.")
+    if technician_technology_skills is None:
+        technician_technology_skills = {} # Ensure it's a dict if not provided
+        logger.warning("Technician technology skills not provided to generate_html_files. Skill-based assignment may be limited.")
 
 
-        current_day = get_current_day()
-        total_work_minutes = calculate_work_time(current_day)
-        current_shift_type = get_current_shift()
-        shift_start_time_str = "06:00" if current_shift_type == "early" else "18:00"
+    current_day = get_current_day()
+    total_work_minutes = calculate_work_time(current_day)
+    current_shift_type = get_current_shift()
+    shift_start_time_str = "06:00" if current_shift_type == "early" else "18:00"
 
-        assignments_flat, unassigned_reasons_dict, incomplete_ids, final_available_time = assign_tasks(
-            tasks_for_processing,
-            present_technicians,
-            total_work_minutes,
-            rep_assignments,
-            logger=logger  # Pass the logger instance
-        )
+    # Sanitize data (e.g., ensure numeric types, default missing fields if any still exist)
+    # sanitize_data itself also ensures 'name' from 'scheduler_group_task' if needed,
+    # but app.py should have already done this robustly.
+    tasks_for_processing = sanitize_data(all_tasks, logger) # Pass logger to sanitize_data
 
-        week_date_day_shift = {
-            "week": get_current_week_number(),
-            "date": get_current_week()[1].strftime("%d/%m/%Y"),
-            "day": get_current_day(),
-            "shift": get_current_shift().capitalize()
-        }
+    _log(logger, "debug", f"Tasks for assigner in dashboard.py (after sanitize): {len(tasks_for_processing)}")
+    # For detailed debugging of tasks entering assign_tasks:
+    # for t_debug_dash in tasks_for_processing:
+    #    _log(logger, "debug", f"  Dash SanTask: ID={t_debug_dash.get('id')}, Name='{t_debug_dash.get('name')}', Type={t_debug_dash.get('task_type')}, Add={t_debug_dash.get('isAdditionalTask')}")
 
-        validated_assignments_to_render = validate_assignments_flat_input(assignments_flat)
 
-        # Pass logger to prepare_dashboard_data
-        pm_tasks_data, rep_tasks_data, original_task_id_to_display_id_map = prepare_dashboard_data(
-            tasks_for_processing, # Use the same list of tasks that assign_tasks used
-            validated_assignments_to_render,
-            unassigned_reasons_dict,
-            incomplete_ids,
-            logger # Pass logger
-        )
+    # Call the unified assign_tasks function
+    assigned_tasks_details, unassigned_tasks_reasons, incomplete_tasks_ids, available_time_summary = assign_tasks(
+        tasks_for_processing,
+        present_technicians,
+        total_work_minutes,
+        rep_assignments, # Pass the filtered and structured REP assignments
+        logger,
+        technician_technology_skills=technician_technology_skills # Pass skills
+    )
+    logger.info(f"Task assignment phase completed. {len(assigned_tasks_details)} task segments assigned.")
+    if unassigned_tasks_reasons:
+        logger.warning(f"Task assignment completed with {len(unassigned_tasks_reasons)} unassigned task segments.")
+    if incomplete_tasks_ids:
+        logger.warning(f"Task assignment completed with {len(incomplete_tasks_ids)} incomplete task segments.")
 
-        technician_template = jinja_env.get_template('technician_dashboard.html')
-        technician_html = technician_template.render(
-            pm_tasks=pm_tasks_data,
-            rep_tasks=rep_tasks_data,
-            technicians=present_technicians,
-            total_work_minutes=total_work_minutes,
-            assignments=validated_assignments_to_render,
-            shift_start_time_str=shift_start_time_str,
-            week_date_day_shift=week_date_day_shift,
-            all_technicians_config=config_technicians,
-            technician_groups_config=config_technician_groups,
-            original_task_id_to_display_id_map=original_task_id_to_display_id_map # Pass the map
-        )
+    week_date_day_shift = {
+        "week": get_current_week_number(),
+        "date": get_current_week()[1].strftime("%d/%m/%Y"),
+        "day": get_current_day(),
+        "shift": get_current_shift().capitalize()
+    }
 
-        output_path = os.path.join(output_folder_path, "technician_dashboard.html")
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(technician_html)
-        _log(logger, "info", f"Written output to {output_path} via dashboard.py")
+    validated_assignments_to_render = validate_assignments_flat_input(assigned_tasks_details)
 
-        return final_available_time
+    # Pass logger to prepare_dashboard_data
+    pm_tasks_data, rep_tasks_data, original_task_id_to_display_id_map = prepare_dashboard_data(
+        tasks_for_processing, # Use the same list of tasks that assign_tasks used
+        validated_assignments_to_render,
+        unassigned_tasks_reasons,
+        incomplete_tasks_ids,
+        logger # Pass logger
+    )
 
-    except Exception as e:
-        print(f"Error in generate_html_files (dashboard.py): {str(e)}")
-        print(traceback.format_exc())
-        raise
+    technician_template = env.get_template('technician_dashboard.html')
+    technician_html = technician_template.render(
+        pm_tasks=pm_tasks_data,
+        rep_tasks=rep_tasks_data,
+        technicians=present_technicians,
+        total_work_minutes=total_work_minutes,
+        assignments=validated_assignments_to_render,
+        shift_start_time_str=shift_start_time_str,
+        week_date_day_shift=week_date_day_shift,
+        all_technicians_config=all_technicians_global,
+        technician_groups_config=technician_groups_global,
+        original_task_id_to_display_id_map=original_task_id_to_display_id_map # Pass the map
+    )
+
+    output_path = os.path.join(output_folder, "technician_dashboard.html")
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(technician_html)
+    _log(logger, "info", f"Written output to {output_path} via dashboard.py")
+
+    return available_time_summary

@@ -73,7 +73,9 @@ def _assign_task_definition_to_schedule(
     task_to_assign, present_technicians, total_work_minutes, rep_assignments, logger,
     technician_schedules, all_task_assignments_details,
     unassigned_tasks_reasons_dict, incomplete_tasks_instance_ids,
-    all_pm_task_names_from_excel_normalized_set # Passed through
+    all_pm_task_names_from_excel_normalized_set, # Passed through
+    # New parameter for technician skills
+    technician_technology_skills=None
     # TASK_NAME_MAPPING, TECHNICIAN_TASKS, TECHNICIAN_LINES are accessed from global/module scope
 ):
     """
@@ -89,8 +91,11 @@ def _assign_task_definition_to_schedule(
     num_technicians_needed = int(task_to_assign.get('mitarbeiter_pro_aufgabe', 1))
     quantity = int(task_to_assign.get('quantity', 1))
     is_additional_task_flag = task_to_assign.get('isAdditionalTask', False)
+    # Assume technology_id is now part of task_to_assign
+    task_technology_id = task_to_assign.get('technology_id')
 
-    # _log(logger, "debug", f"  (Helper) Processing task ID {task_id} ({task_name_excel}), Type: {task_type}, Prio: {task_to_assign.get('priority', 'C')}, Qty: {quantity}, Additional: {is_additional_task_flag}")
+
+    # _log(logger, "debug", f"  (Helper) Processing task ID {task_id} ({task_name_excel}), Type: {task_type}, Prio: {task_to_assign.get('priority', 'C')}, Qty: {quantity}, Additional: {is_additional_task_flag}, TechID: {task_technology_id}")
 
     if quantity <= 0:
         reason = f"Skipped ({task_type}): Invalid 'Quantity' ({quantity})."
@@ -276,83 +281,125 @@ def _assign_task_definition_to_schedule(
                 _log(logger, "warning", f"      Failed to assign Add.PM instance {instance_task_display_name}. Reason: {last_known_failure_reason_for_instance}")
 
         elif task_type == 'PM' and not is_additional_task_flag:
-            # --- Standard PM Task Logic (existing) ---
-            _log(logger, "debug", f"    (Helper) Assigning Standard PM instance: {instance_task_display_name}")
+            # --- Standard PM Task Logic (modified for skills) ---
+            _log(logger, "debug", f"    (Helper) Assigning Standard PM instance: {instance_task_display_name}, Technology ID: {task_technology_id}")
             json_task_name_lookup_pm = TASK_NAME_MAPPING.get(task_name_excel, task_name_excel)
             normalized_current_excel_task_name_pm = normalize_string(json_task_name_lookup_pm)
 
             eligible_technicians_details_pm = []
-            for tech_cand_pm in present_technicians:
-                tech_task_defs_pm = TECHNICIAN_TASKS.get(tech_cand_pm, [])
-                tech_lines_pm = TECHNICIAN_LINES.get(tech_cand_pm, [])
-                cand_stated_prio_pm = None
-                can_do_pm_task = False
-                # More detailed logging for individual technician eligibility for PM task
-                if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                    # _log(logger, "debug", f"    PM Eligibility Check for {tech_cand_pm} on task '{normalized_current_excel_task_name_pm}':")
-                    # _log(logger, "debug", f"      Tech Lines: {tech_lines_pm}, Task Lines: {task_lines_list}")
-                    # _log(logger, "debug", f"      Tech Tasks Defs: {tech_task_defs_pm}")
-                    pass # Keep the if block for structure if other non-debug logs were here
+            if not task_technology_id:
+                _log(logger, "warning", f"      Task {task_name_excel} (ID: {task_id}) has no technology_id. Skipping skill-based assignment for this task, may fall back to old logic or fail.")
+                # Potentially fall back to old logic or mark as unassignable if technology is mandatory
+                # For now, if no tech_id, no one is eligible by skill.
+            else:
+                for tech_cand_pm in present_technicians:
+                    tech_lines_pm = TECHNICIAN_LINES.get(tech_cand_pm, [])
 
-                for tech_task_obj_pm in tech_task_defs_pm:
-                    norm_tech_task_str_pm = normalize_string(tech_task_obj_pm['task'])
-                    task_name_match = normalized_current_excel_task_name_pm in norm_tech_task_str_pm or norm_tech_task_str_pm in normalized_current_excel_task_name_pm
+                    # 1. Check skill for the task's technology
+                    tech_skills_for_task_tech = technician_technology_skills.get(tech_cand_pm, {}).get(task_technology_id)
+                    if tech_skills_for_task_tech is None:
+                        # _log(logger, "debug", f"      Technician {tech_cand_pm} does not have skill for technology {task_technology_id}.")
+                        continue # Must have skill for this technology
+
+                    # 2. Check line compatibility
                     line_match = not task_lines_list or any(line in tech_lines_pm for line in task_lines_list)
-                    if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                        # _log(logger, "debug", f"        Comparing with tech task '{norm_tech_task_str_pm}': Name match: {task_name_match}, Line match: {line_match}")
-                        pass
-                    if task_name_match and line_match:
-                        can_do_pm_task = True
-                        cand_stated_prio_pm = tech_task_obj_pm['prio']
-                        if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                            # _log(logger, "debug", f"          Match found! Tech can do task. Stated Prio: {cand_stated_prio_pm}")
-                            pass
-                        break
-                if can_do_pm_task and cand_stated_prio_pm is not None:
+                    if not line_match:
+                        # _log(logger, "debug", f"      Technician {tech_cand_pm} failed line match for task {task_name_excel}.")
+                        continue
+
+                    # 3. Get technician's priority for this specific task (tie-breaker)
+                    tech_task_defs_pm = TECHNICIAN_TASKS.get(tech_cand_pm, [])
+                    cand_stated_prio_pm = None
+                    can_do_pm_task_name = False # Check if technician is mapped to this task name
+                    for tech_task_obj_pm in tech_task_defs_pm:
+                        norm_tech_task_str_pm = normalize_string(tech_task_obj_pm['task_name']) # Changed 'task' to 'task_name'
+                        # Task name matching (as before)
+                        task_name_match_for_prio = normalized_current_excel_task_name_pm in norm_tech_task_str_pm or norm_tech_task_str_pm in normalized_current_excel_task_name_pm
+                        if task_name_match_for_prio: # Found the task in technician's list
+                            can_do_pm_task_name = True
+                            cand_stated_prio_pm = tech_task_obj_pm['prio']
+                            break
+
+                    if not can_do_pm_task_name:
+                        # _log(logger, "debug", f"      Technician {tech_cand_pm} not mapped to task name {task_name_excel} for priority.")
+                        continue # Technician must be mapped to the task to have a priority for it.
+
+                    # Calculate effective priority (eff_prio_pm) as before
                     active_task_prios_for_tech_pm = [
                         tech_json_task_def['prio']
                         for tech_json_task_def in tech_task_defs_pm
-                        if any(normalize_string(tech_json_task_def['task']) in en_iter or en_iter in normalize_string(tech_json_task_def['task'])
+                        if any(normalize_string(tech_json_task_def['task_name']) in en_iter or en_iter in normalize_string(tech_json_task_def['task_name']) # Changed 'task' to 'task_name'
                                for en_iter in all_pm_task_names_from_excel_normalized_set)
                     ]
-                    eff_prio_pm = cand_stated_prio_pm
+                    eff_prio_pm = cand_stated_prio_pm # Default if not in active list or list is empty
                     if active_task_prios_for_tech_pm:
                         sorted_unique_active_prios_pm = sorted(list(set(active_task_prios_for_tech_pm)))
                         if cand_stated_prio_pm in sorted_unique_active_prios_pm:
                             eff_prio_pm = sorted_unique_active_prios_pm.index(cand_stated_prio_pm) + 1
+
                     eligible_technicians_details_pm.append({
-                        'name': tech_cand_pm, 'prio_for_task': eff_prio_pm, 'original_stated_prio': cand_stated_prio_pm
+                        'name': tech_cand_pm,
+                        'skill_level': tech_skills_for_task_tech, # Primary sort key
+                        'task_priority': eff_prio_pm,             # Secondary sort key
+                        'original_stated_prio': cand_stated_prio_pm
                     })
 
             if not eligible_technicians_details_pm:
-                last_known_failure_reason_for_instance = "No technicians eligible for this PM task (check skills/lines)."
+                last_known_failure_reason_for_instance = "No technicians eligible for this PM task (check skills, technology, lines, or task mapping)."
                 unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                _log(logger, "warning", f"      {last_known_failure_reason_for_instance} for {instance_task_display_name}")
                 continue # Next instance or task
 
-            eligible_technicians_details_pm.sort(key=lambda x: x['prio_for_task'])
-            if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Eligible Technicians (pre-sort): {eligible_technicians_details_pm}")
-                pass
+            # Sort eligible technicians: 1. Skill (desc), 2. Task Prio (asc)
+            eligible_technicians_details_pm.sort(key=lambda x: (-x['skill_level'], x['task_priority']))
 
-            tech_prio_map_pm = {d['name']: {'effective': d['prio_for_task'], 'stated': d['original_stated_prio']} for d in eligible_technicians_details_pm}
+            # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Sorted Eligible Technicians: {eligible_technicians_details_pm}")
+
+            # Map for easy lookup of sorted details by name
+            tech_details_map_pm = {
+                d['name']: {
+                    'skill': d['skill_level'],
+                    'effective_task_prio': d['task_priority'],
+                    'stated_task_prio': d['original_stated_prio']
+                } for d in eligible_technicians_details_pm
+            }
+            # Use the sorted list of names for combinations to maintain order preference
             sorted_eligible_tech_names_pm = [d['name'] for d in eligible_technicians_details_pm]
 
+
             viable_groups_with_scores_pm = []
-            # Consider groups of size 1 up to num_technicians_needed, and then num_technicians_needed up to len(sorted_eligible_tech_names_pm)
-            # This prioritizes groups closer to the target size.
-            # For simplicity and consistency with original, iterate all possible sizes for now.
             for r_size in range(1, len(sorted_eligible_tech_names_pm) + 1):
                 for group_tuple in combinations(sorted_eligible_tech_names_pm, r_size):
                     group = list(group_tuple)
-                    avg_eff_prio = sum(tech_prio_map_pm.get(t, {}).get('effective', float('inf')) for t in group) / len(group) if group else float('inf')
-                    workload = sum(sum(end - start for start, end, _ in technician_schedules[tn]) for tn in group)
-                    viable_groups_with_scores_pm.append({'group': group, 'len': len(group), 'avg_prio': avg_eff_prio, 'workload': workload})
+                    if not group: continue
 
-            viable_groups_with_scores_pm.sort(key=lambda x: (abs(x['len'] - num_technicians_needed), x['avg_prio'], x['workload'], ''.join(sorted(x['group'])))) # Deterministic tie-breaker
+                    avg_skill_level_group = sum(tech_details_map_pm.get(t, {}).get('skill', 0) for t in group) / len(group)
+                    avg_eff_task_prio_group = sum(tech_details_map_pm.get(t, {}).get('effective_task_prio', float('inf')) for t in group) / len(group)
+                    workload = sum(sum(end - start for start, end, _ in technician_schedules[tn]) for tn in group)
+
+                    viable_groups_with_scores_pm.append({
+                        'group': group,
+                        'len': len(group),
+                        'avg_skill': avg_skill_level_group,       # For sorting groups
+                        'avg_task_prio': avg_eff_task_prio_group, # For sorting groups
+                        'workload': workload
+                    })
+
+            # Sort groups: 1. Closeness to num_technicians_needed, 2. Avg Skill (desc), 3. Avg Task Prio (asc), 4. Workload (asc)
+            viable_groups_with_scores_pm.sort(key=lambda x: (
+                abs(x['len'] - num_technicians_needed),
+                -x['avg_skill'],
+                x['avg_task_prio'],
+                x['workload'],
+                ''.join(sorted(x['group'])) # Deterministic tie-breaker
+            ))
+            # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Sorted Viable Groups: {viable_groups_with_scores_pm[:5]}")
+
 
             if not viable_groups_with_scores_pm:
-                last_known_failure_reason_for_instance = "No viable technician groups found for PM task."
+                last_known_failure_reason_for_instance = "No viable technician groups found for PM task after skill/priority filtering."
                 unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                _log(logger, "warning", f"      {last_known_failure_reason_for_instance} for {instance_task_display_name}")
                 continue # Next instance or task
 
             assignment_successful_and_full = False
@@ -360,13 +407,17 @@ def _assign_task_definition_to_schedule(
             final_start_time_for_instance = 0
             final_assigned_duration_for_instance = 0
             final_actual_num_assigned_for_instance = 0
-            final_original_stated_priority_for_instance = 'N/A'
+            final_original_stated_priority_for_instance = 'N/A_PM_0Tech' # Default for 0-tech PM tasks
             final_current_effective_duration_for_chosen_group = 0
 
             for group_candidate_data in viable_groups_with_scores_pm:
                 current_candidate_group = group_candidate_data['group']
                 current_actual_num_assigned = len(current_candidate_group)
-                current_original_stated_priority = tech_prio_map_pm.get(current_candidate_group[0], {}).get('stated', 'N/A') if current_candidate_group else 'N/A'
+                # Get stated priority of the first tech in group (or an average, if meaningful)
+                # For now, we'll use the group's avg_task_prio for logging/info if needed,
+                # but the actual technician_task_priority stored per assignment will be the individual's.
+                # The 'technician_task_priority' field in all_task_assignments_details should reflect the individual tech's prio for that task.
+                # current_original_stated_priority = tech_details_map_pm.get(current_candidate_group[0], {}).get('stated_task_prio', 'N/A') if current_candidate_group else 'N/A'
 
                 current_effective_duration_for_this_group = 0
                 valid_duration_calc_for_this_group = False
@@ -422,7 +473,7 @@ def _assign_task_definition_to_schedule(
                         final_start_time_for_instance = search_start_time
                         final_assigned_duration_for_instance = current_effective_duration_for_this_group # Assign full duration
                         final_actual_num_assigned_for_instance = current_actual_num_assigned
-                        final_original_stated_priority_for_instance = current_original_stated_priority
+                        # final_original_stated_priority_for_instance = current_original_stated_priority
                         final_current_effective_duration_for_chosen_group = current_effective_duration_for_this_group
 
                         assignment_successful_and_full = True
@@ -469,12 +520,15 @@ def _assign_task_definition_to_schedule(
                             (final_start_time_for_instance, final_start_time_for_instance + final_assigned_duration_for_instance, instance_task_display_name)
                         )
                         technician_schedules[tech_assigned_name].sort()
+                        # Get the specific stated priority for this technician for this task
+                        tech_specific_stated_prio = tech_details_map_pm.get(tech_assigned_name, {}).get('stated_task_prio', 'N/A_Skill')
                         all_task_assignments_details.append({
                             'technician': tech_assigned_name, 'task_name': instance_task_display_name,
                             'start': final_start_time_for_instance, 'duration': final_assigned_duration_for_instance,
-                            'is_incomplete': False, 'original_duration': final_current_effective_duration_for_chosen_group,
-                            'instance_id': instance_id_str, 'technician_task_priority': final_original_stated_priority_for_instance,
-                            'resource_mismatch_info': None
+                            'is_incomplete': False, 'original_duration': final_current_effective_duration_for_chosen_group, # This is effective duration for the group
+                            'instance_id': instance_id_str,
+                            'technician_task_priority': tech_specific_stated_prio, # Store individual tech's stated prio for the task
+                            'resource_mismatch_info': None # Add mismatch info if actual assigned != needed, or skill related notes
                         })
                 # _log(logger, "info", f"    (Helper) Successfully scheduled (fully) {instance_task_display_name} for group {final_chosen_group_for_instance}...")
             else:
@@ -617,10 +671,13 @@ def _assign_task_definition_to_schedule(
             # _log(logger, "warning", f"    (Helper) Failed to assign {instance_task_display_name} (Type: {task_type}). Reason: {last_known_failure_reason_for_instance}")
     # End of instance loop
 
-def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments=None, logger=None):
+def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments=None, logger=None, technician_technology_skills=None):
     _log(logger, "info",
         f"Unified Assigning (Global Opt Mode): {len(tasks)} tasks with {len(present_technicians)} technicians. Total work minutes: {total_work_minutes}"
     )
+    if technician_technology_skills is None:
+        technician_technology_skills = {} # Default to empty if not provided
+        _log(logger, "warning", "Technician technology skills not provided to assign_tasks. Skill-based assignment will be limited.")
 
     priority_order = {'A': 1, 'B': 2, 'C': 3, 'DEFAULT': 4}
     all_tasks_combined = []
@@ -694,7 +751,8 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                     task_def, present_technicians, total_work_minutes, rep_assignments, logger,
                     current_perm_schedules, current_perm_assignments,
                     current_perm_unassigned_reasons, current_perm_incomplete_ids,
-                    all_pm_task_names_from_excel_normalized_set
+                    all_pm_task_names_from_excel_normalized_set,
+                    technician_technology_skills=technician_technology_skills # Pass skills
                 )
 
             current_score = _calculate_hp_assignment_score(current_perm_assignments, hp_tasks, current_perm_unassigned_reasons, logger)
@@ -733,7 +791,8 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                 task_def, present_technicians, total_work_minutes, rep_assignments, logger,
                 final_technician_schedules, final_all_task_assignments_details,
                 final_unassigned_tasks_reasons_dict, final_incomplete_tasks_instance_ids,
-                all_pm_task_names_from_excel_normalized_set
+                all_pm_task_names_from_excel_normalized_set,
+                technician_technology_skills=technician_technology_skills # Pass skills
             )
 
     # Assign other_tasks based on the schedule resulting from HP task assignments
@@ -752,7 +811,8 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
             task_def, present_technicians, total_work_minutes, rep_assignments, logger,
             final_technician_schedules, final_all_task_assignments_details,
             final_unassigned_tasks_reasons_dict, final_incomplete_tasks_instance_ids,
-            all_pm_task_names_from_excel_normalized_set
+            all_pm_task_names_from_excel_normalized_set,
+            technician_technology_skills=technician_technology_skills # Pass skills
         )
 
     # --- Final available time calculation ---
