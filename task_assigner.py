@@ -1,12 +1,12 @@
 # wkndPlanning/task_assigner.py
-import random
-from itertools import combinations, groupby, permutations # Ensure permutations is imported
+
+from itertools import combinations, permutations # Ensure permutations is imported
 from data_processing import normalize_string
 from config_manager import TASK_NAME_MAPPING, TECHNICIAN_TASKS, TECHNICIAN_LINES # Assuming these are populated by load_app_config
 
 # Maximum number of high-priority tasks to consider for permutation-based optimization.
 # 7! = 5040, 8! = 40320. Keep this value mindful of performance.
-MAX_PERMUTATION_TASKS = 8
+MAX_PERMUTATION_TASKS = 7
 
 def _log(logger, level, message, *args):
     """Helper function to log or print."""
@@ -134,21 +134,24 @@ def _assign_task_definition_to_schedule(
                 can_do_pm_task = False
                 # More detailed logging for individual technician eligibility for PM task
                 if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                    _log(logger, "debug", f"    PM Eligibility Check for {tech_cand_pm} on task '{normalized_current_excel_task_name_pm}':")
-                    _log(logger, "debug", f"      Tech Lines: {tech_lines_pm}, Task Lines: {task_lines_list}")
-                    _log(logger, "debug", f"      Tech Tasks Defs: {tech_task_defs_pm}")
+                    # _log(logger, "debug", f"    PM Eligibility Check for {tech_cand_pm} on task '{normalized_current_excel_task_name_pm}':")
+                    # _log(logger, "debug", f"      Tech Lines: {tech_lines_pm}, Task Lines: {task_lines_list}")
+                    # _log(logger, "debug", f"      Tech Tasks Defs: {tech_task_defs_pm}")
+                    pass # Keep the if block for structure if other non-debug logs were here
 
                 for tech_task_obj_pm in tech_task_defs_pm:
                     norm_tech_task_str_pm = normalize_string(tech_task_obj_pm['task'])
                     task_name_match = normalized_current_excel_task_name_pm in norm_tech_task_str_pm or norm_tech_task_str_pm in normalized_current_excel_task_name_pm
                     line_match = not task_lines_list or any(line in tech_lines_pm for line in task_lines_list)
                     if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                        _log(logger, "debug", f"        Comparing with tech task '{norm_tech_task_str_pm}': Name match: {task_name_match}, Line match: {line_match}")
+                        # _log(logger, "debug", f"        Comparing with tech task '{norm_tech_task_str_pm}': Name match: {task_name_match}, Line match: {line_match}")
+                        pass
                     if task_name_match and line_match:
                         can_do_pm_task = True
                         cand_stated_prio_pm = tech_task_obj_pm['prio']
                         if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                            _log(logger, "debug", f"          Match found! Tech can do task. Stated Prio: {cand_stated_prio_pm}")
+                            # _log(logger, "debug", f"          Match found! Tech can do task. Stated Prio: {cand_stated_prio_pm}")
+                            pass
                         break
                 if can_do_pm_task and cand_stated_prio_pm is not None:
                     active_task_prios_for_tech_pm = [
@@ -173,7 +176,8 @@ def _assign_task_definition_to_schedule(
 
             eligible_technicians_details_pm.sort(key=lambda x: x['prio_for_task'])
             if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Eligible Technicians (pre-sort): {eligible_technicians_details_pm}")
+                # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Eligible Technicians (pre-sort): {eligible_technicians_details_pm}")
+                pass
 
             tech_prio_map_pm = {d['name']: {'effective': d['prio_for_task'], 'stated': d['original_stated_prio']} for d in eligible_technicians_details_pm}
             sorted_eligible_tech_names_pm = [d['name'] for d in eligible_technicians_details_pm]
@@ -219,11 +223,12 @@ def _assign_task_definition_to_schedule(
                     valid_duration_calc_for_this_group = True
 
                 if not valid_duration_calc_for_this_group:
-                    _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Invalid duration calculation for group {current_candidate_group}. Skipping group.")
+                    # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Invalid duration calculation for group {current_candidate_group}. Skipping group.")
                     continue # Try next group
 
                 if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                    _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Attempting to schedule FULLY with group: {current_candidate_group}, effective_duration: {current_effective_duration_for_this_group}")
+                    # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Attempting to schedule FULLY with group: {current_candidate_group}, effective_duration: {current_effective_duration_for_this_group}")
+                    pass
 
                 # --- Start of slot search logic for current_candidate_group ---
                 search_start_time = 0
@@ -268,7 +273,8 @@ def _assign_task_definition_to_schedule(
                         assignment_successful_and_full = True
                         slot_found_for_this_group = True
                         if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                            _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Found valid FULL slot for group {current_candidate_group} at {search_start_time} for {current_effective_duration_for_this_group} min.")
+                            # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Found valid FULL slot for group {current_candidate_group} at {search_start_time} for {current_effective_duration_for_this_group} min.")
+                            pass
                         break # Break from search_start_time loop
 
                     search_start_time += 15 # Try next 15-min slot
@@ -276,11 +282,13 @@ def _assign_task_definition_to_schedule(
 
                 if assignment_successful_and_full: # If a full assignment was made with this group
                     if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                        _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Full assignment confirmed with group {final_chosen_group_for_instance}. Breaking from group search.")
+                        # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Full assignment confirmed with group {final_chosen_group_for_instance}. Breaking from group search.")
+                        pass
                     break # Break from the for group_candidate_data loop (we've found our group)
                 else:
                     if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                         _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Group {current_candidate_group} could not be scheduled fully. Trying next group.")
+                         # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Group {current_candidate_group} could not be scheduled fully. Trying next group.")
+                         pass
             # --- End of loop over viable_groups_with_scores_pm ---
 
             if assignment_successful_and_full:
@@ -289,7 +297,8 @@ def _assign_task_definition_to_schedule(
                     del unassigned_tasks_reasons_dict[instance_id_str]
 
                 if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                     _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Proceeding with fully assigned group: {final_chosen_group_for_instance} at {final_start_time_for_instance}")
+                     # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Proceeding with fully assigned group: {final_chosen_group_for_instance} at {final_start_time_for_instance}")
+                     pass
 
                 if not final_chosen_group_for_instance: # Handles 0-tech PM task assigned to an empty group
                     all_task_assignments_details.append({
@@ -472,8 +481,8 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
 
     all_tasks_combined.sort(key=lambda x: (x['priority_val'], x['id'])) # Sort by prio, then ID for stable order
 
-    _log(logger, "debug", "Initial task order for processing: %s",
-         [(t['id'], t.get('priority', 'C'), t['priority_val']) for t in all_tasks_combined])
+    # _log(logger, "debug", "Initial task order for processing: %s",
+    #      [(t['id'], t.get('priority', 'C'), t['priority_val']) for t in all_tasks_combined])
 
     all_pm_task_names_from_excel_normalized_set = {
         normalize_string(TASK_NAME_MAPPING.get(t['name'], t['name']))
@@ -507,11 +516,11 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
             num_permutations = 1
             for i in range(1, len(hp_tasks) + 1): num_permutations *= i
 
-        _log(logger, "debug", f"Generating {num_permutations} permutations for {len(hp_tasks)} HP tasks.")
+        # _log(logger, "debug", f"Generating {num_permutations} permutations for {len(hp_tasks)} HP tasks.")
 
         for p_hp_task_list in permutations(hp_tasks):
             count += 1
-            if count % 1000 == 0 : _log(logger, "debug", f"  Processed {count}/{num_permutations} HP permutations...")
+            # if count % 1000 == 0 : _log(logger, "debug", f"  Processed {count}/{num_permutations} HP permutations...")
 
             current_perm_schedules = {tech: [] for tech in present_technicians}
             current_perm_assignments = []
@@ -547,10 +556,17 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
     else: # No HP tasks, or too many for permutation: process HP tasks greedily first
         if len(hp_tasks) > MAX_PERMUTATION_TASKS:
             _log(logger, "info", f"Number of high-priority tasks ({len(hp_tasks)}) > {MAX_PERMUTATION_TASKS}. Assigning HP tasks greedily.")
+            # Sort HP tasks by difficulty: num_techs (desc), duration (desc), then id (asc) for stability
+            hp_tasks.sort(key=lambda t: (
+                -int(t.get('mitarbeiter_pro_aufgabe', 1)),
+                -int(t.get('planned_worktime_min', 0)),
+                t['id']
+            ))
+            _log(logger, "info", "Greedy HP tasks re-sorted by num_techs (desc), duration (desc), id (asc).")
         elif not hp_tasks:
              _log(logger, "info", "No high-priority tasks to optimize with permutations.")
 
-        for task_def in hp_tasks: # hp_tasks are already sorted
+        for task_def in hp_tasks: # hp_tasks are now sorted by difficulty or original if not re-sorted
             _assign_task_definition_to_schedule(
                 task_def, present_technicians, total_work_minutes, rep_assignments, logger,
                 final_technician_schedules, final_all_task_assignments_details,
@@ -560,7 +576,16 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
 
     # Assign other_tasks based on the schedule resulting from HP task assignments
     _log(logger, "info", "Assigning other-priority tasks.")
-    for task_def in other_tasks: # other_tasks are already sorted
+    # Sort other_tasks by main priority (asc), then by difficulty: num_techs (desc), duration (desc), then id (asc)
+    other_tasks.sort(key=lambda t: (
+        t['priority_val'],
+        -int(t.get('mitarbeiter_pro_aufgabe', 1)),
+        -int(t.get('planned_worktime_min', 0)),
+        t['id']
+    ))
+    _log(logger, "info", "Other-priority tasks re-sorted by prio (asc), num_techs (desc), duration (desc), id (asc).")
+
+    for task_def in other_tasks: # other_tasks are now sorted by prio and then difficulty
         _assign_task_definition_to_schedule(
             task_def, present_technicians, total_work_minutes, rep_assignments, logger,
             final_technician_schedules, final_all_task_assignments_details,
