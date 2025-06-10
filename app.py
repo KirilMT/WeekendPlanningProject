@@ -14,7 +14,6 @@ import logging # Import logging
 from db_utils import get_db_connection, init_db
 from config_manager import load_app_config, TECHNICIAN_LINES, TECHNICIANS, TECHNICIAN_GROUPS #, TASK_NAME_MAPPING, TECHNICIAN_TASKS
 from data_processing import sanitize_data, calculate_work_time #, calculate_available_time, validate_assignments_flat_input
-from task_assigner import assign_tasks # MODIFIED: Import new helper, removed assign_tasks
 from dashboard import generate_html_files #, prepare_dashboard_data
 
 
@@ -179,13 +178,25 @@ def upload_file_route():
             # Unpack data and errors from extract_data
             excel_data_list, extraction_errors = extract_data(excel_file_stream)
 
-            # Store only the list of data rows in the session cache
-            session_excel_data_cache[session_id] = excel_data_list
+            # MODIFICATION START: Add IDs to tasks from Excel before caching
+            excel_data_list_with_ids = []
+            for idx, task_data_item in enumerate(excel_data_list):
+                item_with_id = task_data_item.copy()
+                item_with_id['id'] = str(idx + 1) # Assign 1-based string ID
+                # Ensure 'name' field is populated from 'scheduler_group_task' if 'name' is missing
+                if 'name' not in item_with_id or not item_with_id['name']:
+                    item_with_id['name'] = item_with_id.get('scheduler_group_task', f'Unnamed Task {idx+1}')
+                excel_data_list_with_ids.append(item_with_id)
+            # MODIFICATION END
 
-            # Pass only the list of data rows to sanitize_data
-            sanitized_data = sanitize_data(excel_data_list)
+            session_excel_data_cache[session_id] = excel_data_list_with_ids # Cache data with IDs
+
+            # Pass the original excel_data_list to sanitize_data for pm_tasks_for_ui construction,
+            # as pm_tasks_for_ui re-assigns its own 'id' based on its filtered list index.
+            # The critical part is that session_excel_data_cache[session_id] has the IDs and initial names.
+            sanitized_data_for_pm_ui = sanitize_data(excel_data_list, app.logger) # Pass logger
             pm_tasks_for_ui = []
-            for idx, task_data in enumerate(sanitized_data):
+            for idx, task_data in enumerate(sanitized_data_for_pm_ui): # task_data here is from original list
                 if task_data.get('task_type', '').upper() == 'PM':
                     pm_tasks_for_ui.append({
                         "id": str(idx + 1),
@@ -237,7 +248,7 @@ def upload_file_route():
             total_work_minutes = calculate_work_time(current_day)
 
             # Pass the correctly retrieved list to sanitize_data
-            sanitized_data = sanitize_data(excel_data_list_cached)
+            sanitized_data = sanitize_data(excel_data_list_cached, app.logger) # Pass app.logger
             all_tasks_for_processing = []
             for idx, row in enumerate(sanitized_data, start=1):
                 all_tasks_for_processing.append({
@@ -312,23 +323,83 @@ def generate_dashboard_route():
         session_id = form_data.get('session_id')
         present_technicians_json = form_data.get('present_technicians', '[]')
         rep_assignments_json = form_data.get('rep_assignments', '[]')
+        all_processed_tasks_json = form_data.get('all_processed_tasks', '[]')
 
         if not session_id or session_id not in session_excel_data_cache:
             return jsonify({"message": "Invalid session or data. Re-upload Excel."}), 400
-        excel_data_to_process = session_excel_data_cache[session_id]
+
+        excel_data_from_cache = session_excel_data_cache[session_id] # Has string IDs "1", "2", ... and 'name'
+
         try:
             present_technicians = json.loads(present_technicians_json)
             rep_assignments_from_ui = json.loads(rep_assignments_json)
+            all_processed_tasks_from_ui = json.loads(all_processed_tasks_json)
         except json.JSONDecodeError as je:
-            print(f"JSON Decode Error for present_technicians or rep_assignments: {je}")
-            return jsonify({"message": "Invalid format for technician list or REP assignments."}), 400
+            app.logger.error(f"JSON Decode Error in generate_dashboard_route: {je}")
+            return jsonify({"message": "Invalid format for technician list, REP assignments, or processed tasks."}), 400
 
         if not isinstance(present_technicians, list) or not all(isinstance(tech, str) for tech in present_technicians) or \
-           not isinstance(rep_assignments_from_ui, list):
-            return jsonify({"message": "Invalid format for present_technicians or rep_assignments."}),400
+           not isinstance(rep_assignments_from_ui, list) or \
+           not isinstance(all_processed_tasks_from_ui, list):
+            return jsonify({"message": "Invalid data structure for present_technicians, rep_assignments, or all_processed_tasks."}),400
+
+        final_tasks_map = {}
+        app.logger.debug(f"Starting to build final_tasks_map. all_processed_tasks_from_ui count: {len(all_processed_tasks_from_ui)}")
+
+        # 1. Add all tasks that went through the UI modal flow. These are the source of truth for these tasks.
+        for task_from_ui in all_processed_tasks_from_ui:
+            task_id = str(task_from_ui.get('id'))
+            if not task_id:
+                app.logger.warning(f"Task from UI missing ID: {task_from_ui.get('scheduler_group_task')}")
+                continue
+
+            task_to_add = task_from_ui.copy()
+            if 'name' not in task_to_add or not task_to_add['name']:
+                task_to_add['name'] = task_to_add.get('scheduler_group_task', f'Unknown Task UI {task_id}')
+            # isAdditionalTask should be set correctly by the frontend.
+
+            final_tasks_map[task_id] = task_to_add
+            app.logger.debug(f"Added/Updated task from UI to final_tasks_map: ID {task_id}, Name: {task_to_add['name']}, Type: {task_to_add.get('task_type')}, Add: {task_to_add.get('isAdditionalTask')}")
+
+        # 2. Add original PM tasks from the cache if they weren't processed via the UI.
+        pm_id_counter_for_new_ids = 0
+        app.logger.debug(f"Processing excel_data_from_cache (count: {len(excel_data_from_cache)}) for PM tasks not in UI flow.")
+        for task_from_cache in excel_data_from_cache:
+            cache_task_id = str(task_from_cache.get('id')) # Original numeric ID "1", "2", ...
+            if not cache_task_id:
+                app.logger.warning(f"Task from cache missing ID: {task_from_cache.get('scheduler_group_task') or task_from_cache.get('name')}")
+                continue
+
+            if cache_task_id not in final_tasks_map:
+                task_type = task_from_cache.get('task_type', '').upper()
+                if task_type == 'PM':
+                    task_to_add = task_from_cache.copy()
+                    if 'name' not in task_to_add or not task_to_add['name']:
+                        task_to_add['name'] = task_to_add.get('scheduler_group_task', f'Unknown Cache PM {cache_task_id}')
+                    task_to_add['isAdditionalTask'] = False
+
+                    new_pm_id = f"pm{cache_task_id}"  # Simplified format that keeps numeric ID intact
+                    pm_id_counter_for_new_ids += 1
+                    task_to_add['id'] = new_pm_id
+
+                    final_tasks_map[new_pm_id] = task_to_add
+                    app.logger.debug(f"Added original PM task from cache to final_tasks_map: New ID {new_pm_id} (Old Cache ID: {cache_task_id}), Name: {task_to_add['name']}")
+                # else: # Original REP tasks from cache that were NOT in all_processed_tasks_from_ui (e.g. if UI somehow skipped one)
+                      # This case should be rare if all_processed_tasks_from_ui is comprehensive for REPs.
+                      # If they occur, they'd keep their original numeric ID from cache.
+                      # final_tasks_map[cache_task_id] = task_from_cache # This might lead to issues if name is not set.
+                      # app.logger.warning(f"Found original non-PM task in cache (ID: {cache_task_id}) not in UI processed list. Adding it directly. Review if this is expected.")
+
+
+        all_tasks_for_dashboard = list(final_tasks_map.values())
+        app.logger.info(f"Constructed all_tasks_for_dashboard with {len(all_tasks_for_dashboard)} tasks for dashboard generation.")
+        # For detailed debugging of the final list:
+        # for t_debug in all_tasks_for_dashboard:
+        #     app.logger.debug(f"  Final Task for dashboard: ID={t_debug.get('id')}, Name='{t_debug.get('name')}', Type={t_debug.get('task_type')}, Add={t_debug.get('isAdditionalTask')}, OrigID={t_debug.get('original_excel_id', 'N/A')}")
+
 
         available_time_result = generate_html_files(
-            excel_data_to_process,
+            all_tasks_for_dashboard, # Use the combined list
             present_technicians,
             rep_assignments_from_ui,
             env, # Pass the Jinja environment

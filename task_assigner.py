@@ -88,8 +88,9 @@ def _assign_task_definition_to_schedule(
     base_duration = int(task_to_assign.get('planned_worktime_min', 0))
     num_technicians_needed = int(task_to_assign.get('mitarbeiter_pro_aufgabe', 1))
     quantity = int(task_to_assign.get('quantity', 1))
+    is_additional_task_flag = task_to_assign.get('isAdditionalTask', False)
 
-    # _log(logger, "debug", f"  (Helper) Processing task ID {task_id} ({task_name_excel}), Type: {task_type}, Prio: {task_to_assign.get('priority', 'C')}, Qty: {quantity}")
+    # _log(logger, "debug", f"  (Helper) Processing task ID {task_id} ({task_name_excel}), Type: {task_type}, Prio: {task_to_assign.get('priority', 'C')}, Qty: {quantity}, Additional: {is_additional_task_flag}")
 
     if quantity <= 0:
         reason = f"Skipped ({task_type}): Invalid 'Quantity' ({quantity})."
@@ -120,9 +121,163 @@ def _assign_task_definition_to_schedule(
         last_known_failure_reason_for_instance = f"Could not find a suitable time slot or group for {instance_task_display_name}."
         # resource_mismatch_note = None # Defined per task type logic
 
-        if task_type == 'PM':
-            # --- PM Task Logic (Copied and adapted from original, ensuring it uses passed-in state) ---
-            # _log(logger, "debug", f"    (Helper) Assigning PM instance: {instance_task_display_name}")
+        if task_type == 'PM' and is_additional_task_flag:
+            # --- Additional PM Task Logic ---
+            _log(logger, "debug", f"    (Helper) Assigning Additional PM instance: {instance_task_display_name} (ID: {task_id})")
+            rep_assignments_map = {item['task_id']: item for item in rep_assignments} if rep_assignments else {}
+            assignment_info = rep_assignments_map.get(task_id) # task_id is 'additional_X'
+
+            if not assignment_info:
+                last_known_failure_reason_for_instance = "Skipped (Add. PM): Task data not found in UI assignments."
+                unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                _log(logger, "warning", f"      {last_known_failure_reason_for_instance} for task ID {task_id}")
+                continue
+            if assignment_info.get('skipped'):
+                last_known_failure_reason_for_instance = assignment_info.get('skip_reason', "Skipped by user (Add. PM).")
+                unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                _log(logger, "warning", f"      Task ID {task_id} skipped by user (Add. PM): {last_known_failure_reason_for_instance}")
+                continue
+
+            selected_techs_from_ui = assignment_info.get('technicians', [])
+            raw_user_selection_count = len(selected_techs_from_ui)
+
+            # For Additional PM, eligibility is primarily based on UI selection and presence.
+            # Line check is still relevant if the additional task has lines specified.
+            eligible_user_selected_techs = [
+                tech for tech in selected_techs_from_ui
+                if tech in present_technicians and
+                   (not task_lines_list or any(line in TECHNICIAN_LINES.get(tech, []) for line in task_lines_list))
+            ]
+
+            if num_technicians_needed == 0 and base_duration == 0: # 0-duration, 0-tech task
+                all_task_assignments_details.append({
+                    'technician': None, 'task_name': instance_task_display_name, 'start': 0, 'duration': 0,
+                    'is_incomplete': False, 'original_duration': 0, 'instance_id': instance_id_str,
+                    'technician_task_priority': 'N/A_AddPM', 'resource_mismatch_info': "0-duration/0-tech Add.PM task"
+                })
+                assigned_this_instance_flag = True
+                if instance_id_str in unassigned_tasks_reasons_dict: del unassigned_tasks_reasons_dict[instance_id_str]
+                _log(logger, "info", f"    Successfully scheduled 0-duration/0-tech Add.PM task {instance_task_display_name}")
+                continue
+
+            if not eligible_user_selected_techs and num_technicians_needed > 0:
+                last_known_failure_reason_for_instance = "Skipped (Add. PM): None of the UI-selected technicians are eligible (present/lines)."
+                unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                _log(logger, "warning", f"      {last_known_failure_reason_for_instance} for task {instance_task_display_name}")
+                continue
+
+            viable_groups_with_scores = []
+            if eligible_user_selected_techs: # Only form groups from those selected in UI and present/line-eligible
+                for r_size in range(1, len(eligible_user_selected_techs) + 1):
+                    for group_tuple in combinations(eligible_user_selected_techs, r_size):
+                        group = list(group_tuple)
+                        workload = sum(sum(end - start for start, end, _ in technician_schedules[tn]) for tn in group)
+                        viable_groups_with_scores.append({'group': group, 'len': len(group), 'workload': workload})
+
+            if not viable_groups_with_scores and num_technicians_needed > 0 :
+                last_known_failure_reason_for_instance = "Skipped (Add. PM): No viable groups from UI-selected eligible techs (unexpected)."
+                unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                _log(logger, "warning", f"      {last_known_failure_reason_for_instance} for task {instance_task_display_name}")
+                continue
+
+            # Sort groups: by closeness to num_technicians_needed, then by workload, then by name for stability
+            viable_groups_with_scores.sort(key=lambda x: (abs(x['len'] - num_technicians_needed), x['workload'], ''.join(sorted(x['group']))))
+
+            assignment_successful_this_instance = False
+            final_chosen_group_for_instance = None
+            final_start_time_for_instance = 0
+            final_assigned_duration_for_instance = 0
+            final_resource_mismatch_note = None
+
+            for group_candidate_data in viable_groups_with_scores:
+                current_candidate_group = group_candidate_data['group']
+                current_actual_num_assigned = len(current_candidate_group)
+                current_effective_duration = base_duration
+                if base_duration > 0 and num_technicians_needed > 0 and current_actual_num_assigned > 0:
+                    current_effective_duration = (base_duration * num_technicians_needed) / current_actual_num_assigned
+
+                current_resource_mismatch_note_candidate = None
+                if num_technicians_needed > 0:
+                    if current_actual_num_assigned != num_technicians_needed:
+                        current_resource_mismatch_note_candidate = f"Task requires {num_technicians_needed}. Assigned to {current_actual_num_assigned} from UI pool of {raw_user_selection_count} ({len(eligible_user_selected_techs)} eligible)."
+                    elif raw_user_selection_count != num_technicians_needed :
+                         current_resource_mismatch_note_candidate = f"Task requires {num_technicians_needed}. User selected {raw_user_selection_count} ({len(eligible_user_selected_techs)} eligible). Assigned to optimal {current_actual_num_assigned}."
+                elif num_technicians_needed == 0 and current_actual_num_assigned > 0:
+                     current_resource_mismatch_note_candidate = f"Task planned for 0 techs. Assigned to {current_actual_num_assigned}."
+
+                search_start_time = 0
+                while search_start_time <= total_work_minutes:
+                    if current_effective_duration == 0 and search_start_time > total_work_minutes: break
+                    if current_effective_duration > 0 and search_start_time >= total_work_minutes: break
+
+                    duration_to_check_for_slot = 1 if current_effective_duration == 0 else current_effective_duration
+                    all_techs_in_group_available = True
+                    if not current_candidate_group and num_technicians_needed > 0 :
+                         all_techs_in_group_available = False
+
+                    for tech_in_group_name in current_candidate_group:
+                        if not all(sch_end <= search_start_time or sch_start >= search_start_time + duration_to_check_for_slot
+                                   for sch_start, sch_end, _ in technician_schedules[tech_in_group_name]):
+                            all_techs_in_group_available = False; break
+
+                    if all_techs_in_group_available:
+                        final_chosen_group_for_instance = current_candidate_group
+                        final_start_time_for_instance = search_start_time
+                        assigned_duration_gantt = current_effective_duration
+
+                        if current_effective_duration > 0 and (final_start_time_for_instance + current_effective_duration > total_work_minutes):
+                            remaining_time = max(0, total_work_minutes - final_start_time_for_instance)
+                            min_acceptable_partial = current_effective_duration * 0.75
+                            if remaining_time >= min_acceptable_partial and remaining_time > 0 :
+                                assigned_duration_gantt = remaining_time
+                                if instance_id_str not in incomplete_tasks_instance_ids: incomplete_tasks_instance_ids.append(instance_id_str)
+                            else:
+                                all_techs_in_group_available = False
+
+                        if all_techs_in_group_available:
+                            final_assigned_duration_for_instance = assigned_duration_gantt
+                            final_resource_mismatch_note = current_resource_mismatch_note_candidate
+                            assignment_successful_this_instance = True; break
+                    search_start_time += 15
+                if assignment_successful_this_instance: break
+
+            if assignment_successful_this_instance:
+                assigned_this_instance_flag = True
+                if instance_id_str in unassigned_tasks_reasons_dict: del unassigned_tasks_reasons_dict[instance_id_str]
+
+                if not final_chosen_group_for_instance and num_technicians_needed == 0:
+                     all_task_assignments_details.append({
+                        'technician': None, 'task_name': instance_task_display_name,
+                        'start': final_start_time_for_instance, 'duration': final_assigned_duration_for_instance,
+                        'is_incomplete': instance_id_str in incomplete_tasks_instance_ids,
+                        'original_duration': base_duration,
+                        'instance_id': instance_id_str, 'technician_task_priority': 'N/A_AddPM',
+                        'resource_mismatch_info': final_resource_mismatch_note or "0-tech Add.PM task"
+                    })
+                else:
+                    for tech_assigned_name in final_chosen_group_for_instance:
+                        technician_schedules[tech_assigned_name].append(
+                            (final_start_time_for_instance, final_start_time_for_instance + final_assigned_duration_for_instance, instance_task_display_name)
+                        )
+                        technician_schedules[tech_assigned_name].sort()
+                        all_task_assignments_details.append({
+                            'technician': tech_assigned_name, 'task_name': instance_task_display_name,
+                            'start': final_start_time_for_instance, 'duration': final_assigned_duration_for_instance,
+                            'is_incomplete': instance_id_str in incomplete_tasks_instance_ids,
+                            'original_duration': base_duration,
+                            'instance_id': instance_id_str, 'technician_task_priority': 'N/A_AddPM',
+                            'resource_mismatch_info': final_resource_mismatch_note
+                        })
+                _log(logger, "info", f"    (Helper) Successfully scheduled (Add. PM) {instance_task_display_name} for group {final_chosen_group_for_instance} at {final_start_time_for_instance} for {final_assigned_duration_for_instance} min.")
+            else:
+                if not last_known_failure_reason_for_instance or "Could not find a suitable time slot" in last_known_failure_reason_for_instance:
+                    last_known_failure_reason_for_instance = "No group/slot for Add. PM task from UI selection."
+                unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                _log(logger, "warning", f"      Failed to assign Add.PM instance {instance_task_display_name}. Reason: {last_known_failure_reason_for_instance}")
+
+        elif task_type == 'PM' and not is_additional_task_flag:
+            # --- Standard PM Task Logic (existing) ---
+            _log(logger, "debug", f"    (Helper) Assigning Standard PM instance: {instance_task_display_name}")
             json_task_name_lookup_pm = TASK_NAME_MAPPING.get(task_name_excel, task_name_excel)
             normalized_current_excel_task_name_pm = normalize_string(json_task_name_lookup_pm)
 
@@ -472,8 +627,15 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
     for task in tasks:
         task_type = task.get('task_type', '').upper()
         if task_type in ['PM', 'REP']:
+            # Ensure 'name' key exists for consistent access later,
+            # using 'scheduler_group_task' as the source if 'name' is initially missing.
+            current_name = task.get('name')
+            if not current_name:
+                current_name = task.get('scheduler_group_task', 'Unknown Task')
+
             processed_task = {
-                **task,
+                **task, # Spread original task first
+                'name': current_name, # Ensure 'name' is set to the determined name
                 'task_type_upper': task_type,
                 'priority_val': priority_order.get(str(task.get('priority', 'C')).upper(), priority_order['DEFAULT'])
             }

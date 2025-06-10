@@ -611,19 +611,22 @@
             <tr>
                 <td class="index-cell"
                     style="background-color: {{ task.color_hex }}; color: #fff;">
-                    {{ task.id }}
+                    {{ task.display_id }}
                 </td>
                 <td>
                     {{ task.name }}
+                    {% if task.isAdditionalTask %}
+                        <br><span style="display: inline-block; background-color: #FFEB3B; color: #000; font-size: 0.8em; padding: 2px 6px; border-radius: 4px; margin-top: 3px; font-weight: bold;">Additional</span>
+                    {% endif %}
                     {% if task.unassigned_instance_details %}
-                        <br><span style="color: red; font-size: 0.9em;"
-                                  title="{{ task.unassigned_instance_details | map(attribute='reason') | join('\n') }}">
-                            Unassigned: {{ task.unassigned_instance_details | map(attribute='num') | join(', ') }}
+                        <br><span style="display: inline-block; background-color: #F44336; color: #fff; font-size: 0.8em; padding: 2px 6px; border-radius: 4px; margin-top: 3px; font-weight: bold;"
+                                title="Instances: {{ task.unassigned_instance_details | map(attribute='num') | join(', ') }}&#10;{{ task.unassigned_instance_details | map(attribute='reason') | join('\n') }}">
+                            Unassigned qty: {{ task.unassigned_instance_details | length }}
                         </span>
                     {% endif %}
                     {% if task.incomplete_instances_list %}
-                        <br><span style="color: orange; font-size: 0.9em;"
-                                  title="Instances {{ task.incomplete_instances_list | join(', ') }} were partially assigned due to shift end.">
+                        <br><span style="display: inline-block; background-color: #FF9800; color: #000; font-size: 0.8em; padding: 2px 6px; border-radius: 4px; margin-top: 3px; font-weight: bold;"
+                                title="Instances {{ task.incomplete_instances_list | join(', ') }} were partially assigned due to shift end.">
                             Partially Assigned: {{ task.incomplete_instances_list | join(', ') }}
                         </span>
                     {% endif %}
@@ -688,19 +691,22 @@
             <tr class="task-row-rep">
                 <td class="index-cell"
                     style="background-color: {{ task.color_hex }}; color: #fff;">
-                    {{ task.id }}
+                    {{ task.display_id }}
                 </td>
                 <td>
                     {{ task.name }}
+                    {% if task.isAdditionalTask %}
+                        <br><span style="display: inline-block; background-color: #FFEB3B; color: #000; font-size: 0.8em; padding: 2px 6px; border-radius: 4px; margin-top: 3px; font-weight: bold;">Additional</span>
+                    {% endif %}
                     {% if task.unassigned_instance_details %}
-                        <br><span style="color: red; font-size: 0.9em;"
-                                  title="{{ task.unassigned_instance_details | map(attribute='reason') | join('\n') }}">
-                            Unassigned: {{ task.unassigned_instance_details | map(attribute='num') | join(', ') }}
+                        <br><span style="display: inline-block; background-color: #F44336; color: #fff; font-size: 0.8em; padding: 2px 6px; border-radius: 4px; margin-top: 3px; font-weight: bold;"
+                                title="Instances: {{ task.unassigned_instance_details | map(attribute='num') | join(', ') }}&#10;{{ task.unassigned_instance_details | map(attribute='reason') | join('\n') }}">
+                            Unassigned qty: {{ task.unassigned_instance_details | length }}
                         </span>
                     {% endif %}
                     {% if task.incomplete_instances_list %}
-                        <br><span style="color: orange; font-size: 0.9em;"
-                                  title="Instances {{ task.incomplete_instances_list | join(', ') }} were partially assigned due to shift end.">
+                        <br><span style="display: inline-block; background-color: #FF9800; color: #000; font-size: 0.8em; padding: 2px 6px; border-radius: 4px; margin-top: 3px; font-weight: bold;"
+                                title="Instances {{ task.incomplete_instances_list | join(', ') }} were partially assigned due to shift end.">
                             Partially Assigned: {{ task.incomplete_instances_list | join(', ') }}
                         </span>
                     {% endif %}
@@ -822,21 +828,31 @@
                         <div class="time-grid">
                             {% for assignment in assignments %}
                                 {% if assignment.technician == technician %}
-                                    {% set task_id_num = assignment.instance_id.split('_')[0] if assignment.instance_id and '_' in assignment.instance_id else '0' %}
-                                    {% set color_r = ((task_id_num | int | default(1)) * 97 % 200 + 55) %}
-                                    {% set color_g = ((task_id_num | int | default(1)) * 53 % 200 + 55) %}
-                                    {% set color_b = ((task_id_num | int | default(1)) * 37 % 200 + 55) %}
+                                    {% set original_task_id_for_gantt = assignment.instance_id %}
+                                    {% if assignment.instance_id and '_' in assignment.instance_id %}
+                                        {% if assignment.instance_id.startswith('additional_') %}
+                                            {% set original_task_id_for_gantt = assignment.instance_id.split('_instance_')[0] if 'instance_' in assignment.instance_id else assignment.instance_id.split('_')[0] ~ '_' ~ assignment.instance_id.split('_')[1] %}
+                                        {% else %}
+                                            {% set original_task_id_for_gantt = assignment.instance_id.split('_')[0] %}
+                                        {% endif %}
+                                    {% else %}
+                                        {% set original_task_id_for_gantt = '0' %}
+                                    {% endif %}
+                                    {% set display_id_for_gantt = original_task_id_to_display_id_map[original_task_id_for_gantt] if original_task_id_for_gantt in original_task_id_to_display_id_map else original_task_id_for_gantt %}
+                                    {% set color_r = ((display_id_for_gantt | int | default(1)) * 97 % 200 + 55) %}
+                                    {% set color_g = ((display_id_for_gantt | int | default(1)) * 53 % 200 + 55) %}
+                                    {% set color_b = ((display_id_for_gantt | int | default(1)) * 37 % 200 + 55) %}
                                     <div class="task-bar"
                                          data-assignment-start="{{ assignment.start | default(0) }}"
                                          data-assignment-duration="{{ assignment.duration | default(0) }}"
-                                         data-task-id="{{ task_id_num | default('0') }}"
+                                         data-task-id="{{ display_id_for_gantt | default('0') }}"
                                          style="
                                                  background-color: #{{ '%02x%02x%02x' % (color_r, color_g, color_b) }};
                                                  {% if assignment.is_incomplete %}border: 2px solid red;{% endif %}
                                                  display: none;
                                                  "
                                          title="{{ assignment.task_name | default('Unknown') }} (Work Time: {{ assignment.start | default(0) }}-{{ (assignment.start | default(0)) + (assignment.duration | default(0)) }} min{% if assignment.is_incomplete %} - Partially assigned, full ideal duration for group: {{ assignment.original_duration | default(0) }} min{% endif %}{% if assignment.resource_mismatch_info %} - {{ assignment.resource_mismatch_info }}{% endif %})">
-                                        <span>{{ task_id_num | default('0') }}</span>
+                                        <span>{{ display_id_for_gantt | default('0') }}</span>
                                     </div>
                                 {% endif %}
                             {% endfor %}

@@ -5,21 +5,21 @@ import re
 # Step 0: Determine the current week (KW)
 def get_current_week():
     current_date = datetime.now()
-    current_date = datetime(2025, 6, 7)  # Hardcoded for testing
+    current_date = datetime(2025, 6, 6)  # Hardcoded for testing
     week_number = current_date.isocalendar().week
     return f"Summary KW{week_number:02d}", current_date
 
 # Helper function to get the current week number (e.g., "17")
 def get_current_week_number():
     current_date = datetime.now()
-    current_date = datetime(2025, 6, 7)  # Hardcoded for testing
+    current_date = datetime(2025, 6, 6)  # Hardcoded for testing
     week_number = current_date.isocalendar().week
     return f"{week_number:02d}"
 
 # Step 1: Determine the current day
 def get_current_day():
     current_date = datetime.now()
-    current_date = datetime(2025, 6, 7, 20, 00)  # Hardcoded for testing Saturday 00:45
+    current_date = datetime(2025, 6, 6, 20, 00)  # Hardcoded for testing Saturday 00:45
     # If current time is before 6 AM, it's part of the previous day's night shift
     if current_date.hour < 6:
         effective_date = current_date - timedelta(days=1)

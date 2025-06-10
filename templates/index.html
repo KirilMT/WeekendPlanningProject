@@ -642,6 +642,9 @@
                     formData.append('present_technicians', JSON.stringify(presentTechnicians));
                     formData.append('rep_assignments', JSON.stringify(repAssignments));
                     formData.append('session_id', sessionId);
+                    // ADD THIS: Send all tasks that were part of the REP modal flow
+                    formData.append('all_processed_tasks', JSON.stringify(repTasks));
+
                     // MODIFIED: Call /generate_dashboard
                     fetch('/generate_dashboard', {
                         method: 'POST',
@@ -852,7 +855,7 @@
             // Create task object with the same structure as Excel-imported tasks
             const additionalTask = {
                 id: additionalTaskId,
-                name: taskName,
+                scheduler_group_task: taskName, // Changed from 'name'
                 lines: taskLines,
                 mitarbeiter_pro_aufgabe: taskTechnicians,
                 planned_worktime_min: taskDuration,
@@ -871,14 +874,35 @@
 
             // Determine eligible technicians for this additional task
             const minAcceptableTimeForEligibility = taskDuration * 0.75;
-            const totalWorkMinutes = getTotalWorkMinutesFromSomewhere(); // You need to get this value
+
+            // Try to get total_work_minutes from the first present technician's eligibility data for any existing task
+            let totalWorkMinutesForEligibility = 720; // Default fallback
+            if (presentTechnicians.length > 0) {
+                const firstPresentTech = presentTechnicians[0];
+                for (const taskIdKey in eligibleTechnicians) {
+                    const techList = eligibleTechnicians[taskIdKey];
+                    const foundTech = techList.find(t => t.name === firstPresentTech);
+                    if (foundTech && typeof foundTech.available_time === 'number') {
+                        totalWorkMinutesForEligibility = foundTech.available_time; // This is the gross available time
+                        break;
+                    }
+                }
+            }
+            if (totalWorkMinutesForEligibility === 720 && Object.keys(eligibleTechnicians).length > 0) {
+                // Fallback if first tech wasn't in any list, try any tech from any list
+                const anyTaskId = Object.keys(eligibleTechnicians)[0];
+                if (eligibleTechnicians[anyTaskId].length > 0 && typeof eligibleTechnicians[anyTaskId][0].available_time === 'number') {
+                    totalWorkMinutesForEligibility = eligibleTechnicians[anyTaskId][0].available_time;
+                }
+            }
+            console.log(`Using totalWorkMinutesForEligibility: ${totalWorkMinutesForEligibility} for additional task eligibility.`);
 
             presentTechnicians.forEach(techName => {
                 // For additional tasks, assume full availability initially for the modal
                 // The backend will handle actual scheduling based on all tasks.
                 let techObj = {
                     name: techName,
-                    available_time: totalWorkMinutes, // Use total work minutes
+                    available_time: totalWorkMinutesForEligibility, // Use total work minutes
                     task_full_duration: taskDuration
                 };
 
@@ -900,13 +924,9 @@
         }
 
         function getTotalWorkMinutesFromSomewhere() {
-            // This function needs to retrieve the total work minutes.
-            // It might be available globally, or you might need to fetch it or pass it around.
-            // For now, returning a placeholder. Replace with actual implementation.
-            // Example: return parseInt(document.body.dataset.totalWorkMinutes) || 720;
-            // Or, if you have it from an earlier fetch response, use that.
-            // This is a placeholder, you'll need to ensure this value is correctly sourced.
-            console.warn("getTotalWorkMinutesFromSomewhere is a placeholder. Ensure it returns the correct total work minutes.");
+            // This function is no longer directly called by createAdditionalTask.
+            // Kept for reference or if other parts might use it, but should be reviewed.
+            console.warn("getTotalWorkMinutesFromSomewhere is a placeholder. Ensure it returns the correct total work minutes if used elsewhere.");
             return 720; // Defaulting to 12 hours, adjust as necessary or fetch dynamically
         }
 
