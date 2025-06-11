@@ -472,13 +472,15 @@ document.addEventListener('DOMContentLoaded', () => {
                             // className will be set based on error type below
 
                             // For week number mismatch errors
-                            if (data.message.includes('Week mismatch error')) {
+                            // MODIFIED: Updated condition to better match the described error message
+                            if (data.message.includes('Week mismatch') && data.message.includes('Available:')) {
                                 messageDiv.className = 'error week-mismatch-error'; // Apply specific class
                                 // Extract the current week number and available weeks
                                 const weekMatch = data.message.match(/current week \((\d+)\)/);
                                 const currentWeekNum = weekMatch ? weekMatch[1] : '?';
 
-                                const availableMatch = data.message.match(/week\(s\): ([^"]+)/);
+                                // MODIFIED: Updated regex to parse "Available: ..." format
+                                const availableMatch = data.message.match(/Available:\s*([\d,\s]+?)\b/);
                                 const availableWeeks = availableMatch ? availableMatch[1].trim() : 'None';
 
                                 // Find the largest available week
@@ -777,3 +779,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 });
+
