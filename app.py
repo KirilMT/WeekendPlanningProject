@@ -227,23 +227,81 @@ def add_technology_api():
     finally:
         if conn: conn.close()
 
-@app.route('/api/technologies/<int:technology_id>', methods=['DELETE'])
-def delete_technology_api(technology_id):
+@app.route('/api/technologies/<int:technology_id>', methods=['PUT', 'DELETE'])
+def manage_technology_item_api(technology_id):
     conn = None
     try:
-        conn = get_db_connection(DATABASE_PATH)
-        cursor = conn.cursor()
-        cursor.execute("UPDATE technologies SET parent_id = NULL WHERE parent_id = ?", (technology_id,))
-        conn.commit()
+        if request.method == 'PUT':
+            data = request.get_json()
+            new_name = data.get('name', '').strip()
+            group_id = data.get('group_id')
+            parent_id = data.get('parent_id')
 
-        rows_deleted = delete_technology(conn, technology_id) # db_utils function
-        if rows_deleted > 0:
-            return jsonify({"message": f"Technology ID {technology_id} and dependencies deleted."}), 200
-        else:
-            return jsonify({"message": f"Technology ID {technology_id} not found."}), 404
+            if not new_name:
+                return jsonify({"message": "Technology name is required."}), 400
+
+            if group_id is not None: group_id = int(group_id)
+            if parent_id is not None: parent_id = int(parent_id)
+
+            conn = get_db_connection(DATABASE_PATH)
+            cursor = conn.cursor()
+
+            cursor.execute("SELECT id FROM technologies WHERE id = ?", (technology_id,))
+            if not cursor.fetchone():
+                return jsonify({"message": f"Technology ID {technology_id} not found."}), 404
+
+            cursor.execute("SELECT id FROM technologies WHERE name = ? AND id != ?", (new_name, technology_id))
+            if cursor.fetchone():
+                return jsonify({"message": f"Technology name '{new_name}' already exists."}), 409
+
+            if group_id is not None:
+                cursor.execute("SELECT id FROM technology_groups WHERE id = ?", (group_id,))
+                if not cursor.fetchone():
+                    return jsonify({"message": f"Technology group ID {group_id} not found."}), 400
+
+            if parent_id is not None:
+                if parent_id == technology_id:
+                    return jsonify({"message": "Technology cannot be its own parent."}), 400
+                cursor.execute("SELECT id FROM technologies WHERE id = ?", (parent_id,))
+                if not cursor.fetchone():
+                    return jsonify({"message": f"Parent technology ID {parent_id} not found."}), 400
+
+            cursor.execute("UPDATE technologies SET name = ?, group_id = ?, parent_id = ? WHERE id = ?",
+                           (new_name, group_id, parent_id, technology_id))
+            conn.commit()
+
+            cursor.execute("SELECT t.id, t.name, t.group_id, t.parent_id, tg.name as group_name FROM technologies t LEFT JOIN technology_groups tg ON t.group_id = tg.id WHERE t.id = ?", (technology_id,))
+            updated_technology = cursor.fetchone()
+            return jsonify(dict(updated_technology)), 200
+
+        elif request.method == 'DELETE':
+            conn = get_db_connection(DATABASE_PATH)
+            cursor = conn.cursor()
+
+            cursor.execute("SELECT id FROM technologies WHERE id = ?", (technology_id,))
+            if not cursor.fetchone():
+                return jsonify({"message": f"Technology ID {technology_id} not found."}), 404
+
+            cursor.execute("UPDATE technologies SET parent_id = NULL WHERE parent_id = ?", (technology_id,))
+            conn.commit()
+
+            rows_deleted = delete_technology(conn, technology_id)
+
+            if rows_deleted > 0:
+                return jsonify({"message": f"Technology ID {technology_id} deleted. Child references updated."}), 200
+            else:
+                app.logger.warning(f"delete_technology function returned 0 for existing tech_id {technology_id}")
+                return jsonify({"message": f"Technology ID {technology_id} found but could not be deleted by the utility function."}), 500
+
+    except ValueError as ve:
+        return jsonify({"message": f"Invalid data format: {str(ve)}"}), 400
+    except sqlite3.IntegrityError as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Database integrity error for technology {technology_id} ({request.method}): {e}")
+        return jsonify({"message": f"Database integrity error: {e}"}), 409
     except Exception as e:
         if conn: conn.rollback()
-        app.logger.error(f"Error deleting technology {technology_id}: {e}", exc_info=True)
+        app.logger.error(f"Error processing technology {technology_id} ({request.method}): {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
     finally:
         if conn: conn.close()
