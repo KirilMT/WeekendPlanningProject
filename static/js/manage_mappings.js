@@ -39,6 +39,10 @@ const technicianSpecialitiesContainerDiv = document.getElementById('technicianSp
 
 // New DOM element for Task-Technology Mappings
 const taskTechnologyMappingListContainerDiv = document.getElementById('taskTechnologyMappingListContainer');
+// DOM elements for the new "Add Task" form in Task-Technology Mappings section
+const newTaskNameForMappingInput = document.getElementById('newTaskNameForMapping');
+const newTaskTechnologySelectForMapping = document.getElementById('newTaskTechnologySelectForMapping');
+const addNewTaskForMappingBtn = document.getElementById('addNewTaskForMappingBtn');
 
 function escapeHtml(unsafe) {
     if (unsafe === null || typeof unsafe === 'undefined') return '';
@@ -52,6 +56,35 @@ function displayMessage(message, type = 'info') {
         statusMessageDiv.textContent = '';
         statusMessageDiv.className = '';
     }, 5000);
+}
+
+// Helper function to get the full technology hierarchy path
+function getTechnologyHierarchyPath(technologyId, allTechs) {
+    const targetTech = allTechs.find(t => t.id === technologyId);
+    if (!targetTech) return 'No Technology Assigned';
+
+    const pathNames = [];
+    let currentTech = targetTech;
+    let groupName = escapeHtml(targetTech.group_name || 'Uncategorized');
+
+    while (currentTech) {
+        pathNames.unshift(escapeHtml(currentTech.name));
+        if (currentTech.parent_id) {
+            const parentTech = allTechs.find(t => t.id === currentTech.parent_id);
+            if (parentTech) {
+                currentTech = parentTech;
+            } else {
+                // Parent ID exists but parent not found, stop traversal
+                currentTech = null;
+            }
+        } else {
+            // This is the top-most technology in this specific branch.
+            groupName = escapeHtml(currentTech.group_name || 'Uncategorized');
+            currentTech = null; // Stop traversal
+        }
+    }
+    pathNames.unshift(groupName);
+    return pathNames.join(' / ');
 }
 
 function recordChange(description) {
@@ -894,6 +927,128 @@ async function removeSpecialityFromSelectedTechnician(specialityId) {
 }
 
 // --- Task-Technology Mapping Functions ---
+
+// Function to populate a technology select dropdown (used for new task form and edit form)
+function populateTechnologySelectDropdown(selectElement, selectedTechnologyId = null) {
+    selectElement.innerHTML = ''; // Clear existing options
+
+    const noTechOption = document.createElement('option');
+    noTechOption.value = "";
+    noTechOption.textContent = '-- Select Technology (Required) --';
+    selectElement.appendChild(noTechOption);
+
+    if (allTechnologies.length === 0) {
+        noTechOption.textContent = '-- No Technologies Defined --';
+        selectElement.disabled = true;
+        return;
+    }
+    selectElement.disabled = false;
+
+    const technologiesByGroup = {};
+    allTechnologies.forEach(t => {
+        const groupName = t.group_name || 'Uncategorized';
+        if (!technologiesByGroup[groupName]) {
+            technologiesByGroup[groupName] = [];
+        }
+        technologiesByGroup[groupName].push(t);
+    });
+
+    const sortedGroupNames = Object.keys(technologiesByGroup).sort();
+
+    const childrenByParentId = {};
+    allTechnologies.forEach(t => {
+        if (t.parent_id) {
+            if (!childrenByParentId[t.parent_id]) childrenByParentId[t.parent_id] = [];
+            childrenByParentId[t.parent_id].push(t);
+        }
+    });
+    for (const parentId in childrenByParentId) {
+        childrenByParentId[parentId].sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    const hasChildren = (technologyId) => allTechnologies.some(t => t.parent_id === technologyId);
+
+    function appendOptionsRecursive(parentElement, technologyId, level, currentSelectedId) {
+        const children = childrenByParentId[technologyId] || [];
+        children.forEach(childTech => {
+            const option = document.createElement('option');
+            option.value = childTech.id;
+            option.textContent = `${'  '.repeat(level)}↳ ${escapeHtml(childTech.name)}`; // Corrected template literal
+            if (currentSelectedId === childTech.id) {
+                option.selected = true;
+            }
+            if (hasChildren(childTech.id)) {
+                option.disabled = true;
+                option.textContent += " (Parent - cannot assign)";
+            }
+            parentElement.appendChild(option);
+            appendOptionsRecursive(parentElement, childTech.id, level + 1, currentSelectedId);
+        });
+    }
+
+    sortedGroupNames.forEach(groupName => {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = escapeHtml(groupName);
+
+        const topLevelTechsInGroup = technologiesByGroup[groupName]
+            .filter(t => t.parent_id === null)
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        topLevelTechsInGroup.forEach(tech => {
+            const option = document.createElement('option');
+            option.value = tech.id;
+            option.textContent = escapeHtml(tech.name);
+            if (selectedTechnologyId === tech.id) {
+                option.selected = true;
+            }
+            if (hasChildren(tech.id)) {
+                option.disabled = true;
+                option.textContent += " (Parent - cannot assign)";
+            }
+            optgroup.appendChild(option);
+            appendOptionsRecursive(optgroup, tech.id, 1, selectedTechnologyId);
+        });
+        selectElement.appendChild(optgroup);
+    });
+    if (selectedTechnologyId) selectElement.value = selectedTechnologyId;
+}
+
+
+async function addNewTaskForMapping() {
+    const taskName = newTaskNameForMappingInput.value.trim();
+    const technologyId = newTaskTechnologySelectForMapping.value;
+
+    if (!taskName) {
+        displayMessage('Task name cannot be empty.', 'error');
+        return;
+    }
+    if (!technologyId) {
+        displayMessage('A technology must be selected for the new task.', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: taskName, technology_id: parseInt(technologyId) }),
+        });
+        const result = await response.json();
+        if (response.ok) {
+            displayMessage(`Task '${escapeHtml(result.name)}' added successfully.`, 'success');
+            newTaskNameForMappingInput.value = '';
+            newTaskTechnologySelectForMapping.value = ''; // Reset dropdown
+            await fetchAllTasksForMapping(); // Refresh the list
+        } else {
+            throw new Error(result.message || `Server error ${response.status}`);
+        }
+    } catch (error) {
+        displayMessage(`Error adding task: ${error.message}`, 'error');
+        console.error('Error in addNewTaskForMapping:', error);
+    }
+}
+
+
 async function fetchAllTasksForMapping() {
     if (allTechnologies.length === 0) {
         console.warn("fetchAllTasksForMapping: allTechnologies is empty. Retrying in 1.5s. Ensure fetchAllTechnologies completes successfully first.");
@@ -920,118 +1075,200 @@ async function fetchAllTasksForMapping() {
 function renderTasksForTechnologyMapping(tasks) {
     taskTechnologyMappingListContainerDiv.innerHTML = '';
     if (!tasks || tasks.length === 0) {
-        taskTechnologyMappingListContainerDiv.innerHTML = '<p>No tasks found to map.</p>';
+        taskTechnologyMappingListContainerDiv.innerHTML = '<p>No tasks found to map. Add a new task above.</p>';
         return;
     }
 
     if (allTechnologies.length === 0) {
         taskTechnologyMappingListContainerDiv.innerHTML = '<p>Technologies not loaded yet. Cannot map tasks.</p>';
+        if (newTaskTechnologySelectForMapping && newTaskTechnologySelectForMapping.options.length <= 1) {
+            populateTechnologySelectDropdown(newTaskTechnologySelectForMapping);
+        }
         return;
+    }
+    if (newTaskTechnologySelectForMapping) {
+        populateTechnologySelectDropdown(newTaskTechnologySelectForMapping);
     }
 
     tasks.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
-    // Helper to check if a technology has children
-    const hasChildren = (technologyId) => {
-        return allTechnologies.some(t => t.parent_id === technologyId);
-    };
-
-    // Prepare technologies for hierarchical display in select
-    const childrenByParentId = {};
-    allTechnologies.forEach(t => {
-        if (t.parent_id) {
-            if (!childrenByParentId[t.parent_id]) childrenByParentId[t.parent_id] = [];
-            childrenByParentId[t.parent_id].push(t);
-        }
-    });
-    for (const parentId in childrenByParentId) {
-        childrenByParentId[parentId].sort((a, b) => a.name.localeCompare(b.name));
-    }
-
     tasks.forEach(task => {
         const itemDiv = document.createElement('div');
-        itemDiv.classList.add('list-item'); // Re-use list-item style
+        itemDiv.classList.add('list-item', 'task-mapping-item');
+        itemDiv.dataset.taskId = task.id;
+        // Apply flex styles to itemDiv for overall layout
+        itemDiv.style.display = 'flex';
+        itemDiv.style.justifyContent = 'space-between';
+        itemDiv.style.alignItems = 'center';
+        itemDiv.style.paddingTop = '5px'; // Add some padding for visual separation
+        itemDiv.style.paddingBottom = '5px';
+
+
+        // Container for task name and technology (view mode)
+        const viewModeDiv = document.createElement('div');
+        viewModeDiv.classList.add('task-mapping-view');
+        viewModeDiv.style.display = 'flex'; // Use flex for children alignment
+        viewModeDiv.style.flexGrow = '1'; // Allow this div to grow
+        viewModeDiv.style.alignItems = 'center'; // Vertically align children
+        viewModeDiv.style.marginRight = '10px'; // Space before action buttons
 
         const taskNameSpan = document.createElement('span');
-        taskNameSpan.textContent = escapeHtml(task.name); // Removed (ID: X)
-        itemDiv.appendChild(taskNameSpan);
+        taskNameSpan.textContent = escapeHtml(task.name);
+        taskNameSpan.style.fontWeight = 'bold';
+        taskNameSpan.style.marginRight = '10px';
+        taskNameSpan.style.whiteSpace = 'nowrap'; // Prevent wrapping
+        viewModeDiv.appendChild(taskNameSpan);
+
+        const taskTechSpan = document.createElement('span');
+        // Use the new helper function for the full path
+        taskTechSpan.textContent = `(${getTechnologyHierarchyPath(task.technology_id, allTechnologies)})`;
+        taskTechSpan.style.fontSize = '0.9em';
+        taskTechSpan.style.color = '#555';
+        taskTechSpan.style.flexGrow = '1'; // Allow tech span to take remaining space
+        taskTechSpan.style.textAlign = 'right'; // Align text to the right
+        taskTechSpan.style.marginLeft = '10px'; // Space between name and tech path
+        taskTechSpan.style.whiteSpace = 'nowrap'; // Prevent wrapping
+        taskTechSpan.style.overflow = 'hidden'; // Hide overflow
+        taskTechSpan.style.textOverflow = 'ellipsis'; // Add ellipsis for overflow
+        viewModeDiv.appendChild(taskTechSpan);
+        itemDiv.appendChild(viewModeDiv);
+
+        // Container for edit mode (initially hidden)
+        const editModeDiv = document.createElement('div');
+        editModeDiv.classList.add('task-mapping-edit');
+        editModeDiv.style.display = 'none'; // Hidden by default
+        editModeDiv.style.flexGrow = '1';
+        editModeDiv.style.alignItems = 'center';
+        editModeDiv.style.marginRight = '10px'; // Space before action buttons
+
+
+        const taskNameInput = document.createElement('input');
+        taskNameInput.type = 'text';
+        taskNameInput.value = task.name;
+        taskNameInput.style.flexGrow = '0.5'; // Adjust as needed
+        taskNameInput.style.marginRight = '5px';
+        editModeDiv.appendChild(taskNameInput);
 
         const techSelect = document.createElement('select');
-        techSelect.dataset.taskId = task.id;
-        techSelect.style.width = '350px'; // Consistent width for the select bar, aligned right by flex parent
+        techSelect.style.flexGrow = '1'; // Adjust as needed
+        techSelect.style.marginRight = '5px';
+        populateTechnologySelectDropdown(techSelect, task.technology_id);
+        editModeDiv.appendChild(techSelect);
+        itemDiv.appendChild(editModeDiv);
 
-        const noTechOption = document.createElement('option');
-        noTechOption.value = ""; // Represents NULL or no technology
-        noTechOption.textContent = '-- No Technology --';
-        techSelect.appendChild(noTechOption);
 
-        // Group technologies by group_name
-        const technologiesByGroup = {};
-        allTechnologies.forEach(t => {
-            const groupName = t.group_name || 'Uncategorized';
-            if (!technologiesByGroup[groupName]) {
-                technologiesByGroup[groupName] = [];
+        // Actions (Edit, Delete, Save, Cancel)
+        const actionsDiv = document.createElement('div');
+        actionsDiv.classList.add('list-item-actions');
+        // Ensure actionsDiv does not shrink and items stay in a row
+        actionsDiv.style.flexShrink = '0';
+        actionsDiv.style.display = 'flex'; // Align buttons in a row
+
+        const editBtn = document.createElement('button');
+        editBtn.textContent = 'Edit';
+        editBtn.classList.add('edit-btn');
+        editBtn.onclick = () => {
+            viewModeDiv.style.display = 'none';
+            editModeDiv.style.display = 'flex'; // Show edit mode as flex
+            editBtn.style.display = 'none';
+            deleteBtn.style.display = 'none';
+            saveBtn.style.display = 'inline-block';
+            cancelBtn.style.display = 'inline-block';
+            populateTechnologySelectDropdown(techSelect, task.technology_id);
+            taskNameInput.value = task.name;
+        };
+        actionsDiv.appendChild(editBtn);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.classList.add('delete-btn');
+        deleteBtn.onclick = () => deleteTaskMapping(task.id, task.name);
+        actionsDiv.appendChild(deleteBtn);
+
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = 'Save';
+        saveBtn.classList.add('save-btn');
+        saveBtn.style.backgroundColor = '#28a745';
+        saveBtn.style.display = 'none';
+        saveBtn.onclick = async () => {
+            const newName = taskNameInput.value.trim();
+            const newTechnologyId = techSelect.value;
+            if (!newName) {
+                displayMessage('Task name cannot be empty.', 'error');
+                return;
             }
-            technologiesByGroup[groupName].push(t);
-        });
+            if (!newTechnologyId) {
+                displayMessage('Technology must be selected.', 'error');
+                return;
+            }
+            await updateTaskMapping(task.id, newName, parseInt(newTechnologyId));
+        };
+        actionsDiv.appendChild(saveBtn);
 
-        const sortedGroupNames = Object.keys(technologiesByGroup).sort();
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.classList.add('cancel-btn');
+        cancelBtn.style.backgroundColor = '#6c757d';
+        cancelBtn.style.display = 'none';
+        cancelBtn.onclick = () => {
+            viewModeDiv.style.display = 'flex'; // Show view mode as flex
+            editModeDiv.style.display = 'none';
+            editBtn.style.display = 'inline-block';
+            deleteBtn.style.display = 'inline-block';
+            saveBtn.style.display = 'none';
+            cancelBtn.style.display = 'none';
+        };
+        actionsDiv.appendChild(cancelBtn);
 
-        function appendOptionsRecursive(parentElement, technologyId, level, currentTaskTechnologyId) {
-            const children = childrenByParentId[technologyId] || [];
-            children.forEach(childTech => {
-                const option = document.createElement('option');
-                option.value = childTech.id;
-                option.textContent = `${'  '.repeat(level)}↳ ${escapeHtml(childTech.name)}`;
-                if (currentTaskTechnologyId === childTech.id) {
-                    option.selected = true;
-                }
-                if (hasChildren(childTech.id)) {
-                    option.disabled = true;
-                    option.textContent += " (Parent)";
-                }
-                parentElement.appendChild(option);
-                appendOptionsRecursive(parentElement, childTech.id, level + 1, currentTaskTechnologyId);
-            });
-        }
-
-        sortedGroupNames.forEach(groupName => {
-            const optgroup = document.createElement('optgroup');
-            optgroup.label = escapeHtml(groupName);
-
-            const topLevelTechsInGroup = technologiesByGroup[groupName]
-                .filter(t => t.parent_id === null)
-                .sort((a, b) => a.name.localeCompare(b.name));
-
-            topLevelTechsInGroup.forEach(tech => {
-                const option = document.createElement('option');
-                option.value = tech.id;
-                option.textContent = escapeHtml(tech.name); // Top-level in group, no indent needed beyond optgroup
-                if (task.technology_id === tech.id) {
-                    option.selected = true;
-                }
-                if (hasChildren(tech.id)) {
-                    option.disabled = true;
-                    option.textContent += " (Parent)";
-                }
-                optgroup.appendChild(option);
-                // Append children recursively
-                appendOptionsRecursive(optgroup, tech.id, 1, task.technology_id);
-            });
-            techSelect.appendChild(optgroup);
-        });
-
-
-        techSelect.addEventListener('change', async (e) => {
-            const selectedTechnologyId = e.target.value ? parseInt(e.target.value) : null;
-            await updateTaskTechnologyMapping(task.id, selectedTechnologyId);
-        });
-
-        itemDiv.appendChild(techSelect);
+        itemDiv.appendChild(actionsDiv);
         taskTechnologyMappingListContainerDiv.appendChild(itemDiv);
     });
 }
 
+async function updateTaskMapping(taskId, newName, newTechnologyId) {
+    try {
+        const response = await fetch(`/api/tasks/${taskId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newName, technology_id: newTechnologyId }),
+        });
+        const result = await response.json();
+        if (response.ok) {
+            displayMessage(`Task '${escapeHtml(result.name)}' updated successfully.`, 'success');
+            await fetchAllTasksForMapping(); // Refresh the entire list to reflect changes
+        } else {
+            throw new Error(result.message || `Server error ${response.status}`);
+        }
+    } catch (error) {
+        displayMessage(`Error updating task: ${error.message}`, 'error');
+        console.error('Error in updateTaskMapping:', error);
+        // Optionally, could try to revert UI or re-fetch to ensure consistency
+    }
+}
+
+async function deleteTaskMapping(taskId, taskName) {
+    if (!confirm(`Are you sure you want to delete task "${escapeHtml(taskName)}"? This will also remove its assignments to technicians.`)) {
+        return;
+    }
+    try {
+        const response = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+        const result = await response.json();
+        if (response.ok) {
+            displayMessage(result.message || `Task "${escapeHtml(taskName)}" deleted successfully.`, 'success');
+            await fetchAllTasksForMapping(); // Refresh the list
+        } else {
+            throw new Error(result.message || `Server error ${response.status}`);
+        }
+    } catch (error) {
+        displayMessage(`Error deleting task: ${error.message}`, 'error');
+        console.error('Error in deleteTaskMapping:', error);
+    }
+}
+
+
+// This function is kept for direct technology updates if an "edit mode" is not used for the select.
+// However, with the new Edit/Save buttons, this direct update on change is less critical for the main list.
+// It might still be useful if there are other places where technology is changed directly.
 async function updateTaskTechnologyMapping(taskId, technologyId) {
     try {
         const response = await fetch(`/api/tasks/${taskId}/technology`, {
@@ -1393,6 +1630,10 @@ async function initializePage() {
     if (assignSpecialityBtn) {
         assignSpecialityBtn.addEventListener('click', assignSpecialityToSelectedTechnician);
     }
+    // Listener for the new "Add Task" button in Task-Technology Mappings
+    if (addNewTaskForMappingBtn) {
+        addNewTaskForMappingBtn.addEventListener('click', addNewTaskForMapping);
+    }
 
     // Tech detail input listeners
     if (techSattelitePointInput) {
@@ -1503,14 +1744,15 @@ async function fetchAllInitialData() {
     await fetchTechnologyGroups(); // Fetches groups and populates newTechnologyGroupSelect
     await fetchAllTechnologies();  // Fetches all technologies
     await fetchSpecialities();
-    await fetchAllTasksForMapping(); // Depends on technologies
+    await fetchAllTasksForMapping(); // Depends on technologies, will also populate newTaskTechnologySelectForMapping
     await fetchMappings(); // Fetches technician data
 
     // After all data is loaded and initial rendering might have occurred,
     // ensure the dependent dropdowns for new technology are in the correct state.
-    // This will check name, and enable/disable group/parent accordingly.
-    // If a group was pre-selected by renderTechnologyGroups, handleTechnologyGroupChange (triggered by it)
-    // would have already called populateParentTechnologySelectFiltered.
-    // Calling this ensures consistency if no group was pre-selected or if name input is empty.
     handleTechnologyNameInputChange();
+
+    // Populate the technology select for adding new tasks in the mapping section
+    if (newTaskTechnologySelectForMapping) {
+        populateTechnologySelectDropdown(newTaskTechnologySelectForMapping);
+    }
 }

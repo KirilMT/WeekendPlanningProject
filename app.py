@@ -620,6 +620,143 @@ def update_technician_skill_api():
     finally:
         if conn: conn.close()
 
+@app.route('/api/tasks', methods=['POST'])
+def add_task_api():
+    conn = None
+    try:
+        data = request.get_json()
+        task_name = data.get('name', '').strip()
+        technology_id = data.get('technology_id')
+
+        if not task_name:
+            return jsonify({"message": "Task name is required."}), 400
+        if technology_id is None:
+            return jsonify({"message": "Technology ID is required for the task."}), 400
+
+        try:
+            technology_id = int(technology_id)
+        except ValueError:
+            return jsonify({"message": "Invalid Technology ID format."}), 400
+
+        conn = get_db_connection(DATABASE_PATH)
+        cursor = conn.cursor()
+
+        # Check if technology exists
+        cursor.execute("SELECT id FROM technologies WHERE id = ?", (technology_id,))
+        if not cursor.fetchone():
+            return jsonify({"message": f"Technology ID {technology_id} not found."}), 400
+
+        # Check if task with the same name already exists (optional, based on desired constraints)
+        # For now, allowing duplicate names but they will have different IDs.
+        # If unique names are required, add a check here.
+
+        cursor.execute("INSERT INTO tasks (name, technology_id) VALUES (?, ?)", (task_name, technology_id))
+        conn.commit()
+        task_id = cursor.lastrowid
+
+        # Fetch the newly created task to return it
+        cursor.execute("SELECT t.id, t.name, t.technology_id, tech.name as technology_name FROM tasks t LEFT JOIN technologies tech ON t.technology_id = tech.id WHERE t.id = ?", (task_id,))
+        new_task = cursor.fetchone()
+        return jsonify(dict(new_task)), 201
+
+    except sqlite3.IntegrityError as e:
+        if conn: conn.rollback()
+        # This might occur if there's a unique constraint on task name, or other DB integrity issues.
+        app.logger.error(f"Database integrity error adding task: {e}")
+        return jsonify({"message": f"Database integrity error: {e}"}), 409
+    except Exception as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Server error adding task: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn: conn.close()
+
+@app.route('/api/tasks/<int:task_id>', methods=['PUT'])
+def update_task_api(task_id):
+    conn = None
+    try:
+        data = request.get_json()
+        new_name = data.get('name', '').strip()
+        new_technology_id = data.get('technology_id')
+
+        if not new_name:
+            return jsonify({"message": "Task name cannot be empty."}), 400
+        if new_technology_id is None:
+            return jsonify({"message": "Technology ID is required."}), 400
+
+        try:
+            new_technology_id = int(new_technology_id)
+        except ValueError:
+            return jsonify({"message": "Invalid Technology ID format."}), 400
+
+        conn = get_db_connection(DATABASE_PATH)
+        cursor = conn.cursor()
+
+        # Check if task exists
+        cursor.execute("SELECT id FROM tasks WHERE id = ?", (task_id,))
+        if not cursor.fetchone():
+            return jsonify({"message": f"Task ID {task_id} not found."}), 404
+
+        # Check if new technology exists
+        cursor.execute("SELECT id FROM technologies WHERE id = ?", (new_technology_id,))
+        if not cursor.fetchone():
+            return jsonify({"message": f"Technology ID {new_technology_id} not found."}), 400
+
+        cursor.execute("UPDATE tasks SET name = ?, technology_id = ? WHERE id = ?", (new_name, new_technology_id, task_id))
+        conn.commit()
+
+        cursor.execute("SELECT t.id, t.name, t.technology_id, tech.name as technology_name FROM tasks t LEFT JOIN technologies tech ON t.technology_id = tech.id WHERE t.id = ?", (task_id,))
+        updated_task = cursor.fetchone()
+        return jsonify(dict(updated_task)), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Error updating task {task_id}: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn: conn.close()
+
+@app.route('/api/tasks/<int:task_id>', methods=['DELETE'])
+def delete_task_api(task_id):
+    conn = None
+    try:
+        conn = get_db_connection(DATABASE_PATH)
+        cursor = conn.cursor()
+
+        # Check if task exists
+        cursor.execute("SELECT name FROM tasks WHERE id = ?", (task_id,))
+        task = cursor.fetchone()
+        if not task:
+            return jsonify({"message": f"Task ID {task_id} not found."}), 404
+
+        task_name = task['name']
+
+        # Delete assignments of this task from technicians
+        cursor.execute("DELETE FROM technician_task_assignments WHERE task_id = ?", (task_id,))
+
+        # Delete the task itself
+        cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+
+        conn.commit()
+
+        if cursor.rowcount > 0: # Checks if the task itself was deleted
+            return jsonify({"message": f"Task '{task_name}' (ID: {task_id}) and its assignments deleted successfully."}), 200
+        else:
+            # This case should ideally be caught by the initial check if the task didn't exist
+            # Or if it existed but deletion failed for some reason (though IntegrityError should catch foreign key issues if not handled)
+            return jsonify({"message": f"Task ID {task_id} found but could not be deleted."}), 500
+
+    except sqlite3.Error as e: # Catch SQLite specific errors
+        if conn: conn.rollback()
+        app.logger.error(f"Database error deleting task {task_id}: {e}", exc_info=True)
+        return jsonify({"message": f"Database error: {str(e)}"}), 500
+    except Exception as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Server error deleting task {task_id}: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn: conn.close()
+
+
 @app.route('/api/tasks_for_mapping', methods=['GET'])
 def get_tasks_for_mapping_api():
     conn = None

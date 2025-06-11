@@ -59,8 +59,22 @@
             <span class="toggle-icon">+</span>
         </div>
         <div class="section-content collapsed">
-            <p>Assign a technology to each task. Tasks can be optionally linked to a specific technology. Changes are
-                saved immediately when you select a technology for a task.</p>
+            <!-- New Task Creation Area -->
+            <h4>Add New Task</h4>
+            <div class="form-inline-group" id="addNewTaskFormContainer">
+                <input type="text" id="newTaskNameForMapping" placeholder="New task name" aria-label="New task name for mapping" style="flex-grow: 1.5;">
+                <select id="newTaskTechnologySelectForMapping" style="flex-grow:1;" title="Assign Technology to New Task (Required)" aria-label="Assign Technology to New Task">
+                    <!-- Options will be populated by JS -->
+                </select>
+                <button id="addNewTaskForMappingBtn">Add Task</button>
+            </div>
+            <hr style="margin: 20px 0;">
+
+            <!-- Existing Task List Area -->
+            <h4>Existing Tasks</h4>
+            <p>View tasks and their assigned technologies. Click 'Edit' to modify a task's name or technology, or 'Delete' to remove it.
+            Changes to technology assignments via the select lists in view mode are saved immediately if no explicit 'Edit' mode is active for that row.
+            </p>
             <div id="taskTechnologyMappingListContainer" style="max-height: 400px; overflow-y: auto; margin-top: 10px;">
                 <!-- Task-technology mappings will be listed here -->
             </div>
