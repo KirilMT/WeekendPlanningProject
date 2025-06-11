@@ -111,14 +111,62 @@ async function fetchAllTechnologies() {
 }
 
 function populateParentTechnologySelect() {
+    const techName = newTechnologyNameInput.value.trim();
+    const selectedGroupId = newTechnologyGroupSelect.value;
+
+    if (techName === '') {
+        // If tech name is empty, newTechnologyGroupSelect and newTechnologyParentSelect
+        // are typically disabled by handleTechnologyNameInputChange.
+        // We ensure newTechnologyParentSelect is correctly reset and disabled.
+        newTechnologyParentSelect.innerHTML = '<option value="">No Parent (Top Level)</option>';
+        newTechnologyParentSelect.disabled = true;
+    } else {
+        // Tech name is present.
+        // newTechnologyGroupSelect should be enabled (handled by handleTechnologyNameInputChange).
+        // Populate newTechnologyParentSelect based on the selected group.
+        // populateParentTechnologySelectFiltered handles the content and disabled state
+        // of newTechnologyParentSelect based on selectedGroupId.
+        populateParentTechnologySelectFiltered(selectedGroupId);
+    }
+}
+
+function populateParentTechnologySelectFiltered(selectedGroupId) {
     newTechnologyParentSelect.innerHTML = '<option value="">No Parent (Top Level)</option>';
-    allTechnologies.sort((a, b) => a.name.localeCompare(b.name)).forEach(tech => {
+    if (!selectedGroupId) {
+        // If "No Group" or empty group ID is selected, parent select remains with only "No Parent"
+        newTechnologyParentSelect.disabled = true; // Also disable if no group is selected
+        return;
+    }
+    newTechnologyParentSelect.disabled = newTechnologyNameInput.value.trim() === ''; // Re-evaluate based on name input
+
+    const groupIdInt = parseInt(selectedGroupId);
+    const groupTechnologies = allTechnologies.filter(tech => tech.group_id === groupIdInt);
+
+    function addTechOptions(parentElement, currentParentIdInGroup, level) {
+        const children = groupTechnologies.filter(tech => tech.parent_id === currentParentIdInGroup);
+        children.sort((a, b) => a.name.localeCompare(b.name));
+
+        children.forEach(tech => {
+            const option = document.createElement('option');
+            option.value = tech.id;
+            option.textContent = `${ '  '.repeat(level) }↳ ${ escapeHtml(tech.name) }`;
+            parentElement.appendChild(option);
+            addTechOptions(parentElement, tech.id, level + 1);
+        });
+    }
+
+    const topLevelInGroup = groupTechnologies.filter(tech => tech.parent_id === null || !groupTechnologies.some(parentTech => parentTech.id === tech.parent_id));
+    topLevelInGroup.sort((a, b) => a.name.localeCompare(b.name));
+
+    topLevelInGroup.forEach(tech => {
         const option = document.createElement('option');
         option.value = tech.id;
-        option.textContent = escapeHtml(tech.name); // Removed (ID: X)
+        option.textContent = escapeHtml(tech.name);
         newTechnologyParentSelect.appendChild(option);
+        addTechOptions(newTechnologyParentSelect, tech.id, 1);
     });
 }
+
 
 function renderTechnologyTree(parentElement, technologies, parentId, level) {
     // parentId is the ID of the parent whose children we are rendering.
@@ -233,13 +281,21 @@ async function addNewTechnology() {
     const techName = newTechnologyNameInput.value.trim();
     const selectedGroupId = newTechnologyGroupSelect.value;
     const selectedParentId = newTechnologyParentSelect.value;
+
     if (!techName) {
         displayMessage('Technology name cannot be empty.', 'error');
         return;
     }
-    const payload = {name: techName};
-    if (selectedGroupId) payload.group_id = parseInt(selectedGroupId);
-    if (selectedParentId) payload.parent_id = parseInt(selectedParentId);
+
+    if (!selectedGroupId) {
+        displayMessage('Please assign a technology group. This field is mandatory.', 'error');
+        return;
+    }
+
+    const payload = { name: techName, group_id: parseInt(selectedGroupId) };
+    if (selectedParentId) {
+        payload.parent_id = parseInt(selectedParentId);
+    }
 
     try {
         const response = await fetch('/api/technologies', {
@@ -251,6 +307,8 @@ async function addNewTechnology() {
             newTechnologyNameInput.value = '';
             newTechnologyGroupSelect.value = '';
             newTechnologyParentSelect.value = '';
+            // Trigger input event on name input to reset disabled states and dependent dropdowns
+            newTechnologyNameInput.dispatchEvent(new Event('input'));
             fetchAllTechnologies();
         } else {
             throw new Error(result.message || `Server error ${response.status}`);
@@ -276,6 +334,7 @@ async function fetchTechnologyGroups() {
 
 function renderTechnologyGroups() {
     technologyGroupListContainerDiv.innerHTML = '';
+    const previousGroupValue = newTechnologyGroupSelect.value; // Preserve value if possible
     newTechnologyGroupSelect.innerHTML = '<option value="">No Group</option>';
     if (allTechnologyGroups.length === 0) {
         technologyGroupListContainerDiv.innerHTML = '<p>No groups defined.</p>';
@@ -313,6 +372,14 @@ function renderTechnologyGroups() {
             option.textContent = escapeHtml(group.name);
             newTechnologyGroupSelect.appendChild(option);
         });
+    }
+    // Attempt to restore previous selection if still valid
+    if (Array.from(newTechnologyGroupSelect.options).some(opt => opt.value === previousGroupValue)) {
+        newTechnologyGroupSelect.value = previousGroupValue;
+    }
+    // Manually trigger change if a group is selected to populate parents correctly
+    if(newTechnologyGroupSelect.value){
+        newTechnologyGroupSelect.dispatchEvent(new Event('change'));
     }
 }
 
@@ -1214,72 +1281,97 @@ async function saveAllChanges() {
 
 // --- Main Initialization Function ---
 async function initializePage() {
-    // Initial data fetching
-    await fetchSpecialities();
-    await fetchTechnologyGroups();
-    await fetchAllTechnologies(); // Depends on groups being available for display
-    // Fetch tasks for mapping after technologies are loaded
-    await fetchAllTasksForMapping(); // New call
-    await fetchMappings();    // Loads technicians and potentially triggers skill loading
+    // 1. Initial UI State Setup for technology form
+    newTechnologyGroupSelect.disabled = true;
+    newTechnologyParentSelect.disabled = true;
+    newTechnologyParentSelect.innerHTML = '<option value="">No Parent (Top Level)</option>';
 
-    // Event Listeners for global controls
-    technicianSelect.addEventListener('change', async (event) => {
-        if (unsavedChanges && selectedTechnician) {
-            let changesText = Array.from(changesSummary).join('\n- ');
-            if (changesText) changesText = `- ${changesText}`; else changesText = "General modifications.";
-            if (!confirm(`You have unsaved changes:\n${changesText}\n\nDiscard and switch?`)) {
-                event.target.value = selectedTechnician;
-                return;
+    // 2. Event Listeners
+    // Global controls
+    if (technicianSelect) {
+        technicianSelect.addEventListener('change', async (event) => {
+            if (unsavedChanges && selectedTechnician) {
+                let changesText = Array.from(changesSummary).join('\n- ');
+                if (changesText) changesText = `- ${changesText}`; else changesText = "General modifications.";
+                if (!confirm(`You have unsaved changes:\n${changesText}\n\nDiscard and switch?`)) {
+                    event.target.value = selectedTechnician;
+                    return;
+                }
             }
-        }
-        clearUnsavedChanges();
-        await loadTechnicianDetails(event.target.value);
-    });
-
-    addTaskBtn.addEventListener('click', () => {
-        if (!selectedTechnician || !currentMappings.technicians[selectedTechnician]) {
-            displayMessage('Select technician first.', 'error');
-            return;
-        }
-        const tasksArray = currentMappings.technicians[selectedTechnician].task_assignments || [];
-        currentMappings.technicians[selectedTechnician].task_assignments = tasksArray;
-        let maxUserPrio = 0;
-        tasksArray.forEach(t => {
-            if (t.user_prio && t.user_prio > maxUserPrio) maxUserPrio = t.user_prio;
+            clearUnsavedChanges();
+            await loadTechnicianDetails(event.target.value);
         });
-        const newTask = {task: "New Task", user_prio: maxUserPrio + 1, id: `new_${Date.now()}`};
-        tasksArray.push(newTask);
-        recordChange(`New task added for '${selectedTechnician}'`);
-        sortAndRecalculatePriorities(tasksArray);
-        loadTechnicianDetails(selectedTechnician); // Reload to show new task
-    });
+    }
 
-    saveChangesBtn.addEventListener('click', saveAllChanges);
-
-    backToDashboardBtn.addEventListener('click', (event) => {
-        if (unsavedChanges) {
-            let changesText = Array.from(changesSummary).join('\n- ');
-            if (changesText) changesText = `- ${changesText}`; else changesText = "General modifications.";
-            if (!confirm(`Unsaved changes:\n${changesText}\n\nLeave without saving?`)) {
-                event.preventDefault();
+    if (addTaskBtn) {
+        addTaskBtn.addEventListener('click', () => {
+            if (!selectedTechnician || !currentMappings.technicians[selectedTechnician]) {
+                displayMessage('Select technician first.', 'error');
                 return;
             }
-        }
-        window.location.href = "/";
-    });
+            const tasksArray = currentMappings.technicians[selectedTechnician].task_assignments || [];
+            currentMappings.technicians[selectedTechnician].task_assignments = tasksArray;
+            let maxUserPrio = 0;
+            tasksArray.forEach(t => {
+                if (t.user_prio && t.user_prio > maxUserPrio) maxUserPrio = t.user_prio;
+            });
+            const newTask = {task: "New Task", user_prio: maxUserPrio + 1, id: `new_${Date.now()}`};
+            tasksArray.push(newTask);
+            recordChange(`New task added for '${selectedTechnician}'`);
+            sortAndRecalculatePriorities(tasksArray);
+            loadTechnicianDetails(selectedTechnician); // Reload to show new task
+        });
+    }
 
-    // Listeners for add buttons in management sections
-    addTechnologyBtn.addEventListener('click', addNewTechnology);
-    addTechnologyGroupBtn.addEventListener('click', addNewTechnologyGroup);
-    addSpecialityBtn.addEventListener('click', addNewSpeciality);
-    assignSpecialityBtn.addEventListener('click', assignSpecialityToSelectedTechnician);
+    if (saveChangesBtn) {
+        saveChangesBtn.addEventListener('click', saveAllChanges);
+    }
+
+    if (backToDashboardBtn) {
+        backToDashboardBtn.addEventListener('click', (event) => {
+            if (unsavedChanges) {
+                let changesText = Array.from(changesSummary).join('\n- ');
+                if (changesText) changesText = `- ${changesText}`; else changesText = "General modifications.";
+                if (!confirm(`Unsaved changes:\n${changesText}\n\nLeave without saving?`)) {
+                    event.preventDefault();
+                    return;
+                }
+            }
+            window.location.href = "/";
+        });
+    }
+
+    // Management section "add" buttons
+    if (addTechnologyBtn) {
+        addTechnologyBtn.addEventListener('click', addNewTechnology);
+    }
+    if (addTechnologyGroupBtn) {
+        addTechnologyGroupBtn.addEventListener('click', addNewTechnologyGroup);
+    }
+    if (addSpecialityBtn) {
+        addSpecialityBtn.addEventListener('click', addNewSpeciality);
+    }
+    if (assignSpecialityBtn) {
+        assignSpecialityBtn.addEventListener('click', assignSpecialityToSelectedTechnician);
+    }
 
     // Tech detail input listeners
-    techSattelitePointInput.addEventListener('change', (e) => recordChange(`Sattelite point for '${selectedTechnician}' to '${e.target.value}'`));
-    techLinesInput.addEventListener('change', (e) => recordChange(`Lines for '${selectedTechnician}' to '${e.target.value}'`));
+    if (techSattelitePointInput) {
+        techSattelitePointInput.addEventListener('change', (e) => recordChange(`Sattelite point for '${selectedTechnician}' to '${e.target.value}'`));
+    }
+    if (techLinesInput) {
+        techLinesInput.addEventListener('change', (e) => recordChange(`Lines for '${selectedTechnician}' to '${e.target.value}'`));
+    }
 
+    // New technology form enhancements listeners
+    if (newTechnologyNameInput) {
+        newTechnologyNameInput.addEventListener('input', handleTechnologyNameInputChange);
+    }
+    if (newTechnologyGroupSelect) {
+        newTechnologyGroupSelect.addEventListener('change', handleTechnologyGroupChange);
+    }
 
-    // Make sections foldable
+    // Foldable sections
     document.querySelectorAll('.section-header').forEach(header => {
         const content = header.nextElementSibling;
         const icon = header.querySelector('.toggle-icon');
@@ -1324,9 +1416,13 @@ async function initializePage() {
             icon.textContent = content.classList.contains('collapsed') ? '+' : '-';
         });
     });
+
+    // 3. Fetch Initial Data
+    await fetchAllInitialData();
 }
 
 // --- DOMContentLoaded ---
+// This should be the only DOMContentLoaded listener for this script.
 document.addEventListener('DOMContentLoaded', () => {
     initializePage().catch(error => {
         console.error("Critical error during page initialization:", error);
@@ -1334,3 +1430,48 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+function handleTechnologyNameInputChange() {
+    const techName = newTechnologyNameInput.value.trim();
+    const isDisabled = techName === '';
+
+    newTechnologyGroupSelect.disabled = isDisabled;
+    // Parent select's disabled state is also affected by group selection, handled in populateParentTechnologySelectFiltered
+    // and handleTechnologyGroupChange. However, if techName is empty, parent should definitely be disabled.
+    newTechnologyParentSelect.disabled = isDisabled;
+
+    if (isDisabled) {
+        newTechnologyGroupSelect.value = ''; // Reset group selection
+        // Manually trigger change on group select to clear/update parent select
+        newTechnologyGroupSelect.dispatchEvent(new Event('change'));
+    } else {
+        // If enabling, and a group is already selected, ensure parent select is correctly populated
+        if (newTechnologyGroupSelect.value) {
+            populateParentTechnologySelectFiltered(newTechnologyGroupSelect.value);
+        } else {
+            // If no group selected yet, parent select should be empty or just "No Parent"
+            newTechnologyParentSelect.innerHTML = '<option value="">No Parent (Top Level)</option>';
+        }
+    }
+}
+
+function handleTechnologyGroupChange() {
+    const selectedGroupId = newTechnologyGroupSelect.value;
+    populateParentTechnologySelectFiltered(selectedGroupId);
+}
+
+// --- Centralized initial data fetching ---
+async function fetchAllInitialData() {
+    await fetchTechnologyGroups(); // Fetches groups and populates newTechnologyGroupSelect
+    await fetchAllTechnologies();  // Fetches all technologies
+    await fetchSpecialities();
+    await fetchAllTasksForMapping(); // Depends on technologies
+    await fetchMappings(); // Fetches technician data
+
+    // After all data is loaded and initial rendering might have occurred,
+    // ensure the dependent dropdowns for new technology are in the correct state.
+    // This will check name, and enable/disable group/parent accordingly.
+    // If a group was pre-selected by renderTechnologyGroups, handleTechnologyGroupChange (triggered by it)
+    // would have already called populateParentTechnologySelectFiltered.
+    // Calling this ensures consistency if no group was pre-selected or if name input is empty.
+    handleTechnologyNameInputChange();
+}
