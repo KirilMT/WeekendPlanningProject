@@ -11,7 +11,14 @@ import sqlite3 # Used for specific error handling in routes
 import logging # Import logging
 
 # Import from new modules
-from db_utils import get_db_connection, init_db, get_or_create_technology, get_or_create_task, get_all_technician_skills_by_name # Added new imports
+from db_utils import (
+    get_db_connection, init_db,
+    get_or_create_technology, get_or_create_task,
+    get_all_technician_skills_by_name, update_technician_skill, get_technician_skills_by_id,
+    get_or_create_technology_group, get_all_technology_groups, delete_technology, # Added delete_technology
+    get_all_specialities, get_or_create_speciality, # Added speciality imports
+    get_technician_specialities, add_speciality_to_technician, remove_speciality_from_technician # Added technician speciality imports
+)
 from config_manager import load_app_config, TECHNICIAN_LINES, TECHNICIANS, TECHNICIAN_GROUPS #, TASK_NAME_MAPPING, TECHNICIAN_TASKS
 from data_processing import sanitize_data, calculate_work_time #, calculate_available_time, validate_assignments_flat_input
 from dashboard import generate_html_files #, prepare_dashboard_data
@@ -60,9 +67,11 @@ def get_technician_mappings_api():
         for tech_row in db_technicians:
             tech_name = tech_row['name']
             tech_data = {
+                "id": tech_row['id'],
                 "sattelite_point": tech_row['sattelite_point'],
                 "technician_lines": [int(l.strip()) for l in tech_row['lines'].split(',') if l.strip().isdigit()] if tech_row['lines'] else [],
-                "task_assignments": []
+                "task_assignments": [],
+                "specialities": [] # Add specialities list
             }
             # Updated query to join with tasks table for task_name
             cursor.execute('''
@@ -74,6 +83,10 @@ def get_technician_mappings_api():
             ''', (tech_row['id'],))
             for assign_row in cursor.fetchall():
                 tech_data["task_assignments"].append({'task': assign_row['task_name'], 'prio': assign_row['priority']})
+
+            # Fetch and add specialities for the technician
+            tech_data["specialities"] = get_technician_specialities(conn, tech_row['id'])
+
             technicians_output[tech_name] = tech_data
         return jsonify({"technicians": technicians_output})
     except sqlite3.Error as e:
@@ -136,6 +149,438 @@ def save_technician_mappings_api():
         if conn: conn.rollback()
         print(f"Error saving technician mappings: {str(e)}")
         return jsonify({"message": f"Error saving mappings: {str(e)}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/technologies', methods=['GET'])
+def get_technologies_api():
+    conn = None
+    try:
+        conn = get_db_connection(app.config['DATABASE'])
+        cursor = conn.cursor()
+        # Join with technology_groups to get group_name, and include parent_id
+        cursor.execute("""
+            SELECT t.id, t.name, t.group_id, t.parent_id, tg.name as group_name
+            FROM technologies t
+            LEFT JOIN technology_groups tg ON t.group_id = tg.id
+            ORDER BY tg.name, t.name -- Consider a more sophisticated sort for hierarchy later if needed
+        """)
+        technologies = [
+            {"id": row['id'], "name": row['name'], "group_id": row['group_id'], "group_name": row['group_name'], "parent_id": row['parent_id']}
+            for row in cursor.fetchall()
+        ]
+        return jsonify(technologies)
+    except sqlite3.Error as e:
+        app.logger.error(f"Database error fetching technologies: {e}")
+        return jsonify({"message": f"Database error: {e}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/technologies', methods=['POST'])
+def add_technology_api():
+    conn = None
+    try:
+        data = request.get_json()
+        if not data or 'name' not in data or not data['name'].strip():
+            return jsonify({"message": "Technology name is required."}), 400
+
+        tech_name = data['name'].strip()
+        group_id = data.get('group_id')
+        parent_id = data.get('parent_id') # Get parent_id from request
+
+        if group_id is not None:
+            try:
+                group_id = int(group_id)
+            except ValueError:
+                return jsonify({"message": "Invalid group_id format."}), 400
+
+        if parent_id is not None:
+            try:
+                parent_id = int(parent_id)
+            except ValueError:
+                return jsonify({"message": "Invalid parent_id format."}), 400
+
+        conn = get_db_connection(app.config['DATABASE'])
+        cursor = conn.cursor() # Use cursor for direct insert with parent_id
+
+        # Check if technology with this name already exists to prevent duplicates by name
+        cursor.execute("SELECT id FROM technologies WHERE name = ?", (tech_name,))
+        existing_tech = cursor.fetchone()
+        if existing_tech:
+            # Optionally, could update existing tech's group_id/parent_id here if desired
+            # For now, returning conflict if name exists, as get_or_create_technology also implies uniqueness by name.
+            return jsonify({"message": f"Technology '{tech_name}' already exists."}), 409
+
+        cursor.execute("INSERT INTO technologies (name, group_id, parent_id) VALUES (?, ?, ?)",
+                       (tech_name, group_id, parent_id))
+        conn.commit()
+        technology_id = cursor.lastrowid
+
+        # Fetch the created technology to return its details, including group and parent info
+        cursor.execute(""" 
+            SELECT t.id, t.name, t.group_id, t.parent_id, tg.name as group_name
+            FROM technologies t
+            LEFT JOIN technology_groups tg ON t.group_id = tg.id
+            WHERE t.id = ?
+        """, (technology_id,))
+        technology = cursor.fetchone()
+
+        if technology:
+            return jsonify({
+                "id": technology['id'],
+                "name": technology['name'],
+                "group_id": technology['group_id'],
+                "group_name": technology['group_name'],
+                "parent_id": technology['parent_id']
+            }), 201
+        else: # Should not happen if get_or_create_technology works
+            return jsonify({"message": "Failed to create or retrieve technology."}), 500
+
+    except sqlite3.IntegrityError: # Handles unique constraint violation if name already exists (though get_or_create should handle this)
+        if conn: conn.rollback()
+        return jsonify({"message": f"Technology '{tech_name}' already exists."}), 409 # Conflict
+    except sqlite3.Error as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Database error adding technology: {e}")
+        return jsonify({"message": f"Database error: {e}"}), 500
+    except Exception as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Server error adding technology: {e}")
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/technologies/<int:technology_id>', methods=['DELETE'])
+def delete_technology_api(technology_id):
+    conn = None
+    try:
+        conn = get_db_connection(app.config['DATABASE'])
+        # Before deleting the technology, ensure child technologies have their parent_id updated to NULL
+        cursor = conn.cursor()
+        cursor.execute("UPDATE technologies SET parent_id = NULL WHERE parent_id = ?", (technology_id,))
+        conn.commit() # Commit this change first
+
+        # Now call the new db_utils function to delete the technology and its direct dependencies
+        rows_deleted = delete_technology(conn, technology_id) # This function now handles commit
+
+        if rows_deleted > 0:
+            return jsonify({"message": f"Technology ID {technology_id} and its dependencies deleted successfully."}), 200
+        else:
+            return jsonify({"message": f"Technology ID {technology_id} not found."}), 404
+    except sqlite3.Error as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Database error deleting technology {technology_id}: {e}")
+        return jsonify({"message": f"Database error: {e}"}), 500
+    except Exception as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Server error deleting technology {technology_id}: {e}")
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/technology_groups', methods=['GET'])
+def get_technology_groups_api():
+    conn = None
+    try:
+        conn = get_db_connection(app.config['DATABASE'])
+        groups = get_all_technology_groups(conn)
+        return jsonify(groups)
+    except sqlite3.Error as e:
+        app.logger.error(f"Database error fetching technology groups: {e}")
+        return jsonify({"message": f"Database error: {e}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/technology_groups', methods=['POST'])
+def add_technology_group_api():
+    conn = None
+    try:
+        data = request.get_json()
+        if not data or 'name' not in data or not data['name'].strip():
+            return jsonify({"message": "Technology group name is required."}), 400
+
+        group_name = data['name'].strip()
+
+        conn = get_db_connection(app.config['DATABASE'])
+        group_id = get_or_create_technology_group(conn, group_name)
+
+        # Fetch the created/existing group to return its details
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name FROM technology_groups WHERE id = ?", (group_id,))
+        group = cursor.fetchone()
+
+        if group:
+            return jsonify({"id": group['id'], "name": group['name']}), 201
+        else:
+            return jsonify({"message": "Failed to create or retrieve technology group."}), 500
+
+    except sqlite3.IntegrityError: # Handles unique constraint violation
+        if conn: conn.rollback()
+        return jsonify({"message": f"Technology group '{group_name}' already exists."}), 409
+    except sqlite3.Error as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Database error adding technology group: {e}")
+        return jsonify({"message": f"Database error: {e}"}), 500
+    except Exception as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Server error adding technology group: {e}")
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+# --- Speciality API Endpoints ---
+@app.route('/api/specialities', methods=['GET'])
+def get_specialities_api():
+    conn = None
+    try:
+        conn = get_db_connection(app.config['DATABASE'])
+        specialities = get_all_specialities(conn)
+        return jsonify(specialities)
+    except sqlite3.Error as e:
+        app.logger.error(f"Database error fetching specialities: {e}")
+        return jsonify({"message": f"Database error: {e}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/specialities', methods=['POST'])
+def add_speciality_api():
+    conn = None
+    try:
+        data = request.get_json()
+        if not data or 'name' not in data or not data['name'].strip():
+            return jsonify({"message": "Speciality name is required."}), 400
+
+        speciality_name = data['name'].strip()
+        conn = get_db_connection(app.config['DATABASE'])
+        speciality_id = get_or_create_speciality(conn, speciality_name)
+
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name FROM specialities WHERE id = ?", (speciality_id,))
+        speciality = cursor.fetchone()
+
+        if speciality:
+            return jsonify({"id": speciality['id'], "name": speciality['name']}), 201
+        else:
+            return jsonify({"message": "Failed to create or retrieve speciality."}), 500
+
+    except sqlite3.IntegrityError:
+        if conn: conn.rollback()
+        return jsonify({"message": f"Speciality '{speciality_name}' already exists."}), 409
+    except sqlite3.Error as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Database error adding speciality: {e}")
+        return jsonify({"message": f"Database error: {e}"}), 500
+    except Exception as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Server error adding speciality: {e}")
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+# --- Technician Speciality API Endpoints ---
+@app.route('/api/technicians/<int:technician_id>/specialities', methods=['GET'])
+def get_technician_specialities_api(technician_id):
+    conn = None
+    try:
+        conn = get_db_connection(app.config['DATABASE'])
+        specialities = get_technician_specialities(conn, technician_id)
+        return jsonify(specialities)
+    except sqlite3.Error as e:
+        app.logger.error(f"Database error fetching specialities for technician {technician_id}: {e}")
+        return jsonify({"message": f"Database error: {e}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/technicians/<int:technician_id>/specialities', methods=['POST'])
+def add_technician_speciality_api(technician_id):
+    conn = None
+    try:
+        data = request.get_json()
+        speciality_id = data.get('speciality_id')
+        if speciality_id is None:
+            return jsonify({"message": "speciality_id is required."}), 400
+        try:
+            speciality_id = int(speciality_id)
+        except ValueError:
+            return jsonify({"message": "Invalid speciality_id format."}), 400
+
+        conn = get_db_connection(app.config['DATABASE'])
+        add_speciality_to_technician(conn, technician_id, speciality_id)
+        return jsonify({"message": f"Speciality {speciality_id} added to technician {technician_id}."}), 201
+    except sqlite3.IntegrityError as e: # Handles FK constraints or if combo already exists
+        if conn: conn.rollback()
+        app.logger.warning(f"Integrity error adding speciality {speciality_id} to technician {technician_id}: {e}")
+        return jsonify({"message": f"Failed to add speciality. Ensure technician and speciality exist, and it's not a duplicate."}), 400
+    except sqlite3.Error as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Database error adding speciality to technician: {e}")
+        return jsonify({"message": f"Database error: {e}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/technicians/<int:technician_id>/specialities/<int:speciality_id>', methods=['DELETE'])
+def remove_technician_speciality_api(technician_id, speciality_id):
+    conn = None
+    try:
+        conn = get_db_connection(app.config['DATABASE'])
+        remove_speciality_from_technician(conn, technician_id, speciality_id)
+        # Check if the row was actually deleted if needed by checking cursor.rowcount, but for now assume success if no error
+        return jsonify({"message": f"Speciality {speciality_id} removed from technician {technician_id}."}), 200
+    except sqlite3.Error as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Database error removing speciality from technician: {e}")
+        return jsonify({"message": f"Database error: {e}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/technician_skills/<int:technician_id>', methods=['GET'])
+def get_technician_skills_api(technician_id):
+    conn = None
+    try:
+        conn = get_db_connection(app.config['DATABASE'])
+        # Use the new db_utils function
+        skills = get_technician_skills_by_id(conn, technician_id)
+        return jsonify({"technician_id": technician_id, "skills": skills})
+    except sqlite3.Error as e:
+        app.logger.error(f"Database error fetching skills for technician {technician_id}: {e}")
+        return jsonify({"message": f"Database error: {e}"}), 500
+    except Exception as e:
+        app.logger.error(f"Server error fetching skills for technician {technician_id}: {e}")
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/technician_skill', methods=['POST'])
+def update_technician_skill_api():
+    conn = None
+    try:
+        data = request.get_json()
+        technician_id = data.get('technician_id')
+        technology_id = data.get('technology_id')
+        skill_level = data.get('skill_level')
+
+        if technician_id is None or technology_id is None or skill_level is None:
+            return jsonify({"message": "Missing technician_id, technology_id, or skill_level."}), 400
+
+        try:
+            skill_level = int(skill_level)
+            if not (0 <= skill_level <= 4):
+                 raise ValueError("Skill level must be between 0 and 4.")
+        except ValueError as ve:
+            return jsonify({"message": str(ve)}), 400
+
+        conn = get_db_connection(app.config['DATABASE'])
+        # update_technician_skill handles commit internally
+        update_technician_skill(conn, technician_id, technology_id, skill_level)
+
+        return jsonify({
+            "message": "Technician skill updated successfully.",
+            "technician_id": technician_id,
+            "technology_id": technology_id,
+            "skill_level": skill_level
+        }), 200
+    except sqlite3.IntegrityError as e: # e.g. foreign key constraint failed
+        if conn: conn.rollback()
+        app.logger.error(f"Database integrity error updating skill: {e}")
+        return jsonify({"message": f"Database integrity error: {e}. Check if technician and technology IDs exist."}), 400
+    except sqlite3.Error as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Database error updating skill: {e}")
+        return jsonify({"message": f"Database error: {e}"}), 500
+    except Exception as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Server error updating skill: {e}")
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/tasks_for_mapping', methods=['GET'])
+def get_tasks_for_mapping_api():
+    conn = None
+    try:
+        conn = get_db_connection(app.config['DATABASE'])
+        cursor = conn.cursor()
+        # Fetch tasks along with their currently assigned technology_id and technology_name
+        cursor.execute('''
+            SELECT t.id, t.name, t.technology_id, tech.name as technology_name
+            FROM tasks t
+            LEFT JOIN technologies tech ON t.technology_id = tech.id
+            ORDER BY t.name
+        ''')
+        tasks = [
+            {
+                "id": row['id'],
+                "name": row['name'],
+                "technology_id": row['technology_id'],
+                "technology_name": row['technology_name']
+            }
+            for row in cursor.fetchall()
+        ]
+        return jsonify(tasks)
+    except sqlite3.Error as e:
+        app.logger.error(f"Database error fetching tasks for mapping: {e}")
+        return jsonify({"message": f"Database error: {e}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/tasks/<int:task_id>/technology', methods=['PUT'])
+def update_task_technology_api(task_id):
+    conn = None
+    try:
+        data = request.get_json()
+        technology_id = data.get('technology_id') # This can be None/null
+
+        # Validate technology_id if not None
+        if technology_id is not None:
+            try:
+                technology_id = int(technology_id)
+            except ValueError:
+                return jsonify({"message": "Invalid technology_id format."}), 400
+
+        conn = get_db_connection(app.config['DATABASE'])
+        cursor = conn.cursor()
+
+        # Check if task exists
+        cursor.execute("SELECT id FROM tasks WHERE id = ?", (task_id,))
+        task_row = cursor.fetchone()
+        if not task_row:
+            return jsonify({"message": f"Task with ID {task_id} not found."}), 404
+
+        # If technology_id is provided, check if it exists
+        if technology_id is not None:
+            cursor.execute("SELECT id FROM technologies WHERE id = ?", (technology_id,))
+            tech_row = cursor.fetchone()
+            if not tech_row:
+                return jsonify({"message": f"Technology with ID {technology_id} not found."}), 404
+
+        # Update the task's technology_id (can be set to NULL)
+        cursor.execute("UPDATE tasks SET technology_id = ? WHERE id = ?", (technology_id, task_id))
+        conn.commit()
+
+        return jsonify({"message": f"Task {task_id} technology mapping updated successfully."}), 200
+
+    except sqlite3.Error as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Database error updating task technology for task {task_id}: {e}")
+        return jsonify({"message": f"Database error: {e}"}), 500
+    except Exception as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Server error updating task technology for task {task_id}: {e}")
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
     finally:
         if conn:
             conn.close()
