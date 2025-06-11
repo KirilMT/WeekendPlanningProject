@@ -287,6 +287,78 @@ def add_technology_group_api():
     finally:
         if conn: conn.close()
 
+@app.route('/api/technology_groups/<int:group_id>', methods=['PUT'])
+def update_technology_group_api(group_id):
+    conn = None
+    try:
+        data = request.get_json()
+        new_name = data.get('name', '').strip()
+        if not new_name:
+            return jsonify({"message": "New name for technology group is required."}), 400
+
+        conn = get_db_connection(DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM technology_groups WHERE id = ?", (group_id,))
+        if not cursor.fetchone():
+            return jsonify({"message": f"Technology group ID {group_id} not found."}), 404
+
+        cursor.execute("SELECT id FROM technology_groups WHERE name = ? AND id != ?", (new_name, group_id))
+        if cursor.fetchone():
+            return jsonify({"message": f"Technology group name \'{new_name}\' already exists."}), 409
+
+        cursor.execute("UPDATE technology_groups SET name = ? WHERE id = ?", (new_name, group_id))
+        conn.commit()
+
+        cursor.execute("SELECT id, name FROM technology_groups WHERE id = ?", (group_id,))
+        updated_group = cursor.fetchone()
+        return jsonify(dict(updated_group)), 200
+    except sqlite3.IntegrityError:
+        if conn: conn.rollback()
+        return jsonify({"message": f"Technology group name \'{new_name}\' already exists."}), 409
+    except Exception as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Error updating technology group {group_id}: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn: conn.close()
+
+@app.route('/api/technology_groups/<int:group_id>', methods=['DELETE'])
+def delete_technology_group_api(group_id):
+    conn = None
+    try:
+        conn = get_db_connection(DATABASE_PATH)
+        cursor = conn.cursor()
+
+        # Check if group exists
+        cursor.execute("SELECT id FROM technology_groups WHERE id = ?", (group_id,))
+        if not cursor.fetchone():
+            return jsonify({"message": f"Technology group ID {group_id} not found."}), 404
+
+        # Optional: Check if any technologies are using this group
+        cursor.execute("SELECT COUNT(*) FROM technologies WHERE group_id = ?", (group_id,))
+        if cursor.fetchone()[0] > 0:
+            # Decide on behavior: disallow deletion, or nullify group_id in technologies
+            # For now, let's disallow if in use, or you can change to set group_id = NULL
+            return jsonify({"message": f"Technology group ID {group_id} is in use and cannot be deleted."}), 400
+            # To nullify instead:
+            # cursor.execute("UPDATE technologies SET group_id = NULL WHERE group_id = ?", (group_id,))
+            # conn.commit()
+
+        cursor.execute("DELETE FROM technology_groups WHERE id = ?", (group_id,))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": f"Technology group ID {group_id} deleted."}), 200
+        else:
+            # This case should ideally be caught by the initial check
+            return jsonify({"message": f"Technology group ID {group_id} not found or already deleted."}), 404
+    except Exception as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Error deleting technology group {group_id}: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn: conn.close()
+
 @app.route('/api/specialities', methods=['GET'])
 def get_specialities_api():
     conn = None
@@ -322,6 +394,74 @@ def add_speciality_api():
     except Exception as e:
         if conn: conn.rollback()
         app.logger.error(f"Error adding speciality: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn: conn.close()
+
+@app.route('/api/specialities/<int:speciality_id>', methods=['PUT'])
+def update_speciality_api(speciality_id):
+    conn = None
+    try:
+        data = request.get_json()
+        new_name = data.get('name', '').strip()
+        if not new_name:
+            return jsonify({"message": "New name for speciality is required."}), 400
+
+        conn = get_db_connection(DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM specialities WHERE id = ?", (speciality_id,))
+        if not cursor.fetchone():
+            return jsonify({"message": f"Speciality ID {speciality_id} not found."}), 404
+
+        cursor.execute("SELECT id FROM specialities WHERE name = ? AND id != ?", (new_name, speciality_id))
+        if cursor.fetchone():
+            return jsonify({"message": f"Speciality name \'{new_name}\' already exists."}), 409
+
+        cursor.execute("UPDATE specialities SET name = ? WHERE id = ?", (new_name, speciality_id))
+        conn.commit()
+
+        cursor.execute("SELECT id, name FROM specialities WHERE id = ?", (speciality_id,))
+        updated_speciality = cursor.fetchone()
+        return jsonify(dict(updated_speciality)), 200
+    except sqlite3.IntegrityError:
+        if conn: conn.rollback()
+        # This case might be redundant due to the explicit name check above, but good for safety
+        return jsonify({"message": f"Speciality name \'{new_name}\' already exists."}), 409
+    except Exception as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Error updating speciality {speciality_id}: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn: conn.close()
+
+@app.route('/api/specialities/<int:speciality_id>', methods=['DELETE'])
+def delete_speciality_api(speciality_id):
+    conn = None
+    try:
+        conn = get_db_connection(DATABASE_PATH)
+        cursor = conn.cursor()
+
+        # Check if speciality exists
+        cursor.execute("SELECT id FROM specialities WHERE id = ?", (speciality_id,))
+        if not cursor.fetchone():
+            return jsonify({"message": f"Speciality ID {speciality_id} not found."}), 404
+
+        # Remove associations from technician_specialities
+        cursor.execute("DELETE FROM technician_specialities WHERE speciality_id = ?", (speciality_id,))
+        conn.commit() # Commit this change first
+
+        # Delete the speciality itself
+        cursor.execute("DELETE FROM specialities WHERE id = ?", (speciality_id,))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": f"Speciality ID {speciality_id} and its assignments deleted."}), 200
+        else:
+            # This case should ideally be caught by the initial check if the speciality didn't exist
+            return jsonify({"message": f"Speciality ID {speciality_id} not found or already deleted."}), 404
+    except Exception as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Error deleting speciality {speciality_id}: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
     finally:
         if conn: conn.close()

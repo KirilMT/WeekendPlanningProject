@@ -341,6 +341,52 @@ async function addNewTechnologyGroup() {
     }
 }
 
+async function editTechnologyGroup(groupId, currentName) {
+    const newName = prompt("Enter the new name for the technology group:", currentName);
+    if (newName === null || newName.trim() === "") {
+        displayMessage("Edit cancelled or name empty.", "info");
+        return;
+    }
+    try {
+        const response = await fetch(`/api/technology_groups/${groupId}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: newName.trim()})
+        });
+        const result = await response.json();
+        if (response.ok) {
+            displayMessage(`Technology group '${escapeHtml(result.name)}' updated.`, 'success');
+            fetchTechnologyGroups(); // Refresh the list of groups
+            fetchAllTechnologies(); // Also refresh technologies as group names might be displayed there
+        } else {
+            throw new Error(result.message || `Server error ${response.status}`);
+        }
+    } catch (error) {
+        displayMessage(`Error updating technology group: ${error.message}`, 'error');
+        console.error(error);
+    }
+}
+
+async function deleteTechnologyGroup(groupId) {
+    if (!confirm(`Are you sure you want to delete technology group ID ${groupId}? This might affect associated technologies.`)) {
+        return;
+    }
+    try {
+        const response = await fetch(`/api/technology_groups/${groupId}`, {method: 'DELETE'});
+        const result = await response.json();
+        if (response.ok) {
+            displayMessage(result.message || `Technology group ID ${groupId} deleted.`, 'success');
+            fetchTechnologyGroups(); // Refresh the list of groups
+            fetchAllTechnologies(); // Also refresh technologies
+        } else {
+            throw new Error(result.message || `Server error ${response.status}`);
+        }
+    } catch (error) {
+        displayMessage(`Error deleting technology group: ${error.message}`, 'error');
+        console.error(error);
+    }
+}
+
 // --- Speciality Management ---
 async function fetchSpecialities() {
     try {
@@ -416,6 +462,126 @@ async function addNewSpeciality() {
         }
     } catch (error) {
         displayMessage(`Error adding speciality: ${error.message}`, 'error');
+        console.error(error);
+    }
+}
+
+async function editSpeciality(specialityId, currentName) {
+    const newName = prompt("Enter the new name for the speciality:", currentName);
+    if (newName === null || newName.trim() === "") {
+        displayMessage("Edit cancelled or name empty.", "info");
+        return;
+    }
+    try {
+        const response = await fetch(`/api/specialities/${specialityId}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: newName.trim()})
+        });
+        const result = await response.json();
+        if (response.ok) {
+            displayMessage(`Speciality '${escapeHtml(result.name)}' updated.`, 'success');
+            fetchSpecialities(); // Refresh the list of specialities
+            // If a technician is selected and their specialities are displayed, refresh that too
+            if (selectedTechnician && currentMappings.technicians[selectedTechnician]) {
+                fetchMappings(selectedTechnician); // This re-fetches all mappings including technician specialities
+            }
+        } else {
+            throw new Error(result.message || `Server error ${response.status}`);
+        }
+    } catch (error) {
+        displayMessage(`Error updating speciality: ${error.message}`, 'error');
+        console.error(error);
+    }
+}
+
+async function deleteSpeciality(specialityId) {
+    if (!confirm(`Are you sure you want to delete speciality ID ${specialityId}? This might affect assigned technician specialities.`)) {
+        return;
+    }
+    try {
+        const response = await fetch(`/api/specialities/${specialityId}`, {method: 'DELETE'});
+        const result = await response.json();
+        if (response.ok) {
+            displayMessage(result.message || `Speciality ID ${specialityId} deleted.`, 'success');
+            fetchSpecialities(); // Refresh the list of specialities
+            // If a technician is selected and their specialities are displayed, refresh that too
+            if (selectedTechnician && currentMappings.technicians[selectedTechnician]) {
+                fetchMappings(selectedTechnician);
+            }
+        } else {
+            throw new Error(result.message || `Server error ${response.status}`);
+        }
+    } catch (error) {
+        displayMessage(`Error deleting speciality: ${error.message}`, 'error');
+        console.error(error);
+    }
+}
+
+
+// --- Technology Management (Edit and Delete stubs) ---
+async function editTechnology(techId, currentName, currentGroupId, currentParentId) {
+    const newName = prompt("Enter the new name for the technology:", currentName);
+    if (newName === null || newName.trim() === "") {
+        displayMessage("Edit cancelled or name empty.", "info");
+        return;
+    }
+
+    // For simplicity, this example only updates the name.
+    // A more complete implementation would involve selects for group and parent, similar to the add form.
+    // For now, we'll keep the group and parent the same unless explicitly changed via a more complex UI.
+    // This prompt is just for the name. Group/parent changes would need more UI elements.
+
+    const payload = {
+        name: newName.trim(),
+        group_id: currentGroupId, // Assuming currentGroupId is passed correctly
+        parent_id: currentParentId // Assuming currentParentId is passed correctly
+    };
+    // Potentially, you could add more prompts here for group_id and parent_id
+    // or build a small modal/form for editing.
+
+    try {
+        const response = await fetch(`/api/technologies/${techId}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+        if (response.ok) {
+            displayMessage(`Technology '${escapeHtml(result.name)}' updated.`, 'success');
+            fetchAllTechnologies(); // Refresh the list of technologies
+            // Potentially refresh technician skills if they are displayed and might be affected
+            if (selectedTechnician) renderTechnicianSkills();
+        } else {
+            throw new Error(result.message || `Server error ${response.status}`);
+        }
+    } catch (error) {
+        displayMessage(`Error updating technology: ${error.message}`, 'error');
+        console.error(error);
+    }
+}
+
+async function deleteTechnology(techId) {
+    if (!confirm(`Are you sure you want to delete technology ID ${techId}? This may affect child technologies, task mappings, and technician skills.`)) {
+        return;
+    }
+    try {
+        const response = await fetch(`/api/technologies/${techId}`, {method: 'DELETE'});
+        const result = await response.json();
+        if (response.ok) {
+            displayMessage(result.message || `Technology ID ${techId} deleted.`, 'success');
+            fetchAllTechnologies(); // Refresh the list of technologies
+            fetchAllTasksForMapping(); // Refresh task mappings as a technology might have been removed
+            // Potentially refresh technician skills
+            if (selectedTechnician) {
+                // Re-fetch skills for the current technician as one they had might be deleted
+                await fetchTechnicianSkills(selectedTechnician);
+            }
+        } else {
+            throw new Error(result.message || `Server error ${response.status}`);
+        }
+    } catch (error) {
+        displayMessage(`Error deleting technology: ${error.message}`, 'error');
         console.error(error);
     }
 }
@@ -1167,3 +1333,4 @@ document.addEventListener('DOMContentLoaded', () => {
         displayMessage("Page failed to load completely. Check console for errors.", "error");
     });
 });
+
