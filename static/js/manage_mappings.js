@@ -1032,6 +1032,30 @@ function renderTasksForTechnologyMapping(tasks) {
     });
 }
 
+async function updateTaskTechnologyMapping(taskId, technologyId) {
+    try {
+        const response = await fetch(`/api/tasks/${taskId}/technology`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({technology_id: technologyId}),
+        });
+        const result = await response.json();
+        if (response.ok) {
+            displayMessage(result.message || `Task ${taskId} technology updated.`, 'success');
+            // Optionally, record change or refresh specific data if needed
+            // For example, find the task in a local cache and update its technology_id
+            // recordChange(`Technology for task ID ${taskId} updated to ${technologyId === null ? 'none' : `ID ${technologyId}`}`);
+        } else {
+            throw new Error(result.message || `Server error ${response.status}`);
+        }
+    } catch (error) {
+        displayMessage(`Error updating task technology: ${error.message}`, 'error');
+        console.error('Error in updateTaskTechnologyMapping:', error);
+        // Optionally, re-fetch task mappings to revert UI if the update failed
+        // await fetchAllTasksForMapping();
+    }
+}
+
 // --- Technician Data Fetching and UI Population ---
 async function fetchMappings(technicianNameToSelect = null) {
     try {
