@@ -1,0 +1,331 @@
+body {
+    font-family: sans-serif;
+    margin: 20px;
+    background-color: #f4f4f4;
+}
+
+.container {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.section-divider {
+    margin: 30px 0;
+}
+
+.header-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+h1 {
+    color: #333;
+    margin-top: 0;
+}
+
+.section {
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    background-color: #f9f9f9;
+}
+
+.section-header {
+    background-color: #e9ecef;
+    padding: 10px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #ddd;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.section-header h2, .section-header h3 {
+    margin: 0;
+    color: #007bff;
+    font-size: 1.25em;
+}
+
+.section-content {
+    padding: 15px;
+}
+
+.section-content.collapsed {
+    display: none;
+}
+
+.toggle-icon {
+    font-weight: bold;
+    margin-left: 10px;
+    font-size: 1.2em;
+}
+
+h4 {
+    color: #555;
+    margin-top: 15px;
+    margin-bottom: 5px;
+    font-size: 1.1em;
+}
+
+label {
+    display: block;
+    margin-top: 10px;
+}
+
+input[type="text"], input[type="number"], select {
+    width: 95%;
+    padding: 8px;
+    margin-top: 5px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+}
+
+.form-inline-group {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.form-inline-group input[type="text"], .form-inline-group select {
+    flex-grow: 1;
+    margin-right: 10px;
+    width: auto;
+}
+
+.form-inline-group button {
+    width: auto;
+    flex-shrink: 0;
+}
+
+button, .button-link {
+    background-color: #007bff;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    margin-right: 10px;
+    text-decoration: none;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+button:hover, .button-link:hover {
+    background-color: #0056b3;
+}
+
+.list-item {
+    border: 1px solid #e0e0e0;
+    padding: 8px 12px;
+    margin-bottom: 5px;
+    border-radius: 4px;
+    background-color: #f0f0f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.list-item span {
+    flex-grow: 1;
+    margin-right: 10px;
+}
+
+.list-item-actions button {
+    padding: 5px 8px;
+    font-size: 12px;
+    margin-left: 5px;
+}
+
+.edit-btn {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+.edit-btn:hover {
+    background-color: #e0a800;
+}
+
+.delete-btn {
+    background-color: #dc3545;
+}
+
+.delete-btn:hover {
+    background-color: #c82333;
+}
+
+.task-item, .skill-item { /* .technology-item will use .list-item primarily */
+    border: 1px solid #eee;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+}
+
+.task-item > label, .skill-item > label {
+    margin-right: 5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.task-item input[type="text"].task-name-input {
+    flex-grow: 1;
+    min-width: 150px;
+    margin-right: 10px;
+}
+
+.task-item input[type="number"].task-prio-input {
+    width: 70px;
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+
+.task-item .task-action-btn, .skill-item select { /* Removed .technology-item button here */
+    margin-right: 5px;
+    flex-shrink: 0;
+    padding: 6px 10px;
+    font-size: 14px;
+}
+
+.skill-item select {
+    width: auto;
+    min-width: 100px;
+}
+
+.skill-item .skill-label {
+    flex-grow: 1;
+    margin-right: 10px;
+}
+
+.task-item .delete-task-btn {
+    background-color: #dc3545;
+}
+
+.task-item .make-unique-btn {
+    background-color: #17a2b8;
+}
+
+.task-item .pm-link {
+    font-size: 0.9em;
+    white-space: nowrap;
+    margin-left: 5px;
+    flex-shrink: 0;
+}
+
+/* .technology-item span { flex-grow: 1; } */ /* Handled by .list-item span */
+/* .technology-group-item is replaced by .list-item */
+.technology-tree-node { /* Applied to child .list-item for technologies */
+    /* margin-left is set by JS */
+    /* border-left: 1px dashed #ccc; */ /* Visually cleaner to rely on margin only */
+    /* padding-left: 10px; */
+}
+
+.no-parent { /* Applied to top-level .list-item for technologies */
+    margin-left: 0;
+    border-left: none;
+    padding-left: 0;
+}
+
+#statusMessage {
+    /* margin-top: 15px; padding: 10px; border-radius: 4px; */ /* Replaced by new fixed styling */
+    display: none; /* Initially hidden */
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    padding: 12px 20px;
+    border-radius: 6px;
+    min-width: 300px;
+    max-width: 80%;
+    text-align: center;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+#statusMessage.success, #statusMessage.error, #statusMessage.info { /* Make visible when class is applied */
+    display: block;
+}
+
+.success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.info {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+/* Styles for new foldable subsections */
+.subsection {
+    margin-top: 20px;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+}
+
+.subsection-header {
+    background-color: #f0f0f0;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #ddd;
+    border-top-left-radius: 3px;
+    border-top-right-radius: 3px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.subsection-header h4 {
+    margin: 0;
+    color: #0056b3;
+    font-size: 1.1em;
+}
+
+.subsection-content {
+    padding: 10px;
+    background-color: #fff;
+}
+
+.subsection-content.collapsed {
+    display: none;
+}
+
+/* Visual improvements for skill items and their group headers */
+.skill-item {
+    border: 1px solid #e0e0e0; /* Adjusted border */
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    background-color: #f0f0f0; /* Changed background to white for better contrast */
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+}
+
+.skill-group-header { /* Class for h4 in renderTechnicianSkills */
+    margin-top: 15px;
+    margin-bottom: 8px;
+    font-weight: bold;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #ccc;
+    color: #333;
+    font-size: 1.05em;
+}
