@@ -5,7 +5,7 @@ from jinja2 import Environment, FileSystemLoader
 import json
 import pandas as pd
 from io import BytesIO
-import traceback
+
 import random
 import sqlite3 # For error types
 import logging
@@ -37,7 +37,6 @@ app = Flask(__name__,
 app.config.from_object(Config)
 
 DATABASE_PATH = app.config['DATABASE_PATH']
-UPLOAD_FOLDER_ABS = app.config['UPLOAD_FOLDER']
 OUTPUT_FOLDER_ABS = app.config['OUTPUT_FOLDER']
 
 app.logger.setLevel(logging.DEBUG)
@@ -187,6 +186,7 @@ def get_technologies_api():
 @app.route('/api/technologies', methods=['POST'])
 def add_technology_api():
     conn = None
+    tech_name = None  # Initialize tech_name
     try:
         data = request.get_json()
         tech_name = data.get('name', '').strip()
@@ -264,6 +264,7 @@ def get_technology_groups_api():
 @app.route('/api/technology_groups', methods=['POST'])
 def add_technology_group_api():
     conn = None
+    group_name = None  # Initialize group_name
     try:
         data = request.get_json()
         group_name = data.get('name', '').strip()
@@ -302,6 +303,7 @@ def get_specialities_api():
 @app.route('/api/specialities', methods=['POST'])
 def add_speciality_api():
     conn = None
+    speciality_name = None  # Initialize speciality_name
     try:
         data = request.get_json()
         speciality_name = data.get('name', '').strip()
