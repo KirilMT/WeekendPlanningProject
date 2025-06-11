@@ -309,7 +309,8 @@ async function addNewTechnology() {
             newTechnologyParentSelect.value = '';
             // Trigger input event on name input to reset disabled states and dependent dropdowns
             newTechnologyNameInput.dispatchEvent(new Event('input'));
-            fetchAllTechnologies();
+            await fetchAllTechnologies();
+            fetchAllTasksForMapping(); // Refresh task mappings
         } else {
             throw new Error(result.message || `Server error ${response.status}`);
         }
@@ -616,7 +617,8 @@ async function editTechnology(techId, currentName, currentGroupId, currentParent
         const result = await response.json();
         if (response.ok) {
             displayMessage(`Technology '${escapeHtml(result.name)}' updated.`, 'success');
-            fetchAllTechnologies(); // Refresh the list of technologies
+            await fetchAllTechnologies(); // Refresh the list of technologies
+            fetchAllTasksForMapping(); // Refresh task mappings
             // Potentially refresh technician skills if they are displayed and might be affected
             if (selectedTechnician) renderTechnicianSkills();
         } else {
@@ -637,7 +639,7 @@ async function deleteTechnology(techId) {
         const result = await response.json();
         if (response.ok) {
             displayMessage(result.message || `Technology ID ${techId} deleted.`, 'success');
-            fetchAllTechnologies(); // Refresh the list of technologies
+            await fetchAllTechnologies(); // Refresh the list of technologies
             fetchAllTasksForMapping(); // Refresh task mappings as a technology might have been removed
             // Potentially refresh technician skills
             if (selectedTechnician) {
@@ -929,6 +931,11 @@ function renderTasksForTechnologyMapping(tasks) {
 
     tasks.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
+    // Helper to check if a technology has children
+    const hasChildren = (technologyId) => {
+        return allTechnologies.some(t => t.parent_id === technologyId);
+    };
+
     // Prepare technologies for hierarchical display in select
     const childrenByParentId = {};
     allTechnologies.forEach(t => {
@@ -979,6 +986,10 @@ function renderTasksForTechnologyMapping(tasks) {
                 if (currentTaskTechnologyId === childTech.id) {
                     option.selected = true;
                 }
+                if (hasChildren(childTech.id)) {
+                    option.disabled = true;
+                    option.textContent += " (Parent)";
+                }
                 parentElement.appendChild(option);
                 appendOptionsRecursive(parentElement, childTech.id, level + 1, currentTaskTechnologyId);
             });
@@ -998,6 +1009,10 @@ function renderTasksForTechnologyMapping(tasks) {
                 option.textContent = escapeHtml(tech.name); // Top-level in group, no indent needed beyond optgroup
                 if (task.technology_id === tech.id) {
                     option.selected = true;
+                }
+                if (hasChildren(tech.id)) {
+                    option.disabled = true;
+                    option.textContent += " (Parent)";
                 }
                 optgroup.appendChild(option);
                 // Append children recursively
