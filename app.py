@@ -23,9 +23,7 @@ from .services.db_utils import (
     get_db_connection, init_db,
     get_or_create_technology, get_or_create_task,
     get_all_technician_skills_by_name, update_technician_skill, get_technician_skills_by_id,
-    get_or_create_technology_group, get_all_technology_groups, delete_technology,
-    get_all_specialities, get_or_create_speciality,
-    get_technician_specialities, add_speciality_to_technician, remove_speciality_from_technician
+    get_or_create_technology_group, get_all_technology_groups, delete_technology
 )
 from .services.config_manager import load_app_config, TECHNICIAN_LINES, TECHNICIANS, TECHNICIAN_GROUPS
 from .services.data_processing import sanitize_data, calculate_work_time
@@ -89,8 +87,7 @@ def get_technician_mappings_api():
                 "id": tech_row['id'],
                 "sattelite_point": tech_row['sattelite_point'],
                 "technician_lines": [int(l.strip()) for l in tech_row['lines'].split(',') if l.strip().isdigit()] if tech_row['lines'] else [],
-                "task_assignments": [],
-                "specialities": []
+                "task_assignments": []
             }
             cursor.execute(
                 "SELECT t.name as task_name, tta.priority FROM technician_task_assignments tta JOIN tasks t ON tta.task_id = t.id WHERE tta.technician_id = ? ORDER BY tta.priority ASC",
@@ -98,7 +95,6 @@ def get_technician_mappings_api():
             )
             for assign_row in cursor.fetchall():
                 tech_data["task_assignments"].append({'task': assign_row['task_name'], 'prio': assign_row['priority']})
-            tech_data["specialities"] = get_technician_specialities(conn, tech_row['id'])
             technicians_output[tech_name] = tech_data
         return jsonify({"technicians": technicians_output})
     except sqlite3.Error as e:
@@ -413,165 +409,6 @@ def delete_technology_group_api(group_id):
     except Exception as e:
         if conn: conn.rollback()
         app.logger.error(f"Error deleting technology group {group_id}: {e}", exc_info=True)
-        return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
-
-@app.route('/api/specialities', methods=['GET'])
-def get_specialities_api():
-    conn = None
-    try:
-        conn = get_db_connection(DATABASE_PATH)
-        specialities = get_all_specialities(conn)
-        return jsonify(specialities)
-    except Exception as e:
-        app.logger.error(f"Error fetching specialities: {e}", exc_info=True)
-        return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
-
-@app.route('/api/specialities', methods=['POST'])
-def add_speciality_api():
-    conn = None
-    speciality_name = None  # Initialize speciality_name
-    try:
-        data = request.get_json()
-        speciality_name = data.get('name', '').strip()
-        if not speciality_name:
-            return jsonify({"message": "Speciality name is required."}), 400
-
-        conn = get_db_connection(DATABASE_PATH)
-        speciality_id = get_or_create_speciality(conn, speciality_name)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, name FROM specialities WHERE id = ?", (speciality_id,))
-        speciality = cursor.fetchone()
-        return jsonify(dict(speciality)), 201
-    except sqlite3.IntegrityError:
-        if conn: conn.rollback()
-        return jsonify({"message": f"Speciality '{speciality_name}' already exists."}), 409
-    except Exception as e:
-        if conn: conn.rollback()
-        app.logger.error(f"Error adding speciality: {e}", exc_info=True)
-        return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
-
-@app.route('/api/specialities/<int:speciality_id>', methods=['PUT'])
-def update_speciality_api(speciality_id):
-    conn = None
-    try:
-        data = request.get_json()
-        new_name = data.get('name', '').strip()
-        if not new_name:
-            return jsonify({"message": "New name for speciality is required."}), 400
-
-        conn = get_db_connection(DATABASE_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM specialities WHERE id = ?", (speciality_id,))
-        if not cursor.fetchone():
-            return jsonify({"message": f"Speciality ID {speciality_id} not found."}), 404
-
-        cursor.execute("SELECT id FROM specialities WHERE name = ? AND id != ?", (new_name, speciality_id))
-        if cursor.fetchone():
-            return jsonify({"message": f"Speciality name \'{new_name}\' already exists."}), 409
-
-        cursor.execute("UPDATE specialities SET name = ? WHERE id = ?", (new_name, speciality_id))
-        conn.commit()
-
-        cursor.execute("SELECT id, name FROM specialities WHERE id = ?", (speciality_id,))
-        updated_speciality = cursor.fetchone()
-        return jsonify(dict(updated_speciality)), 200
-    except sqlite3.IntegrityError:
-        if conn: conn.rollback()
-        # This case might be redundant due to the explicit name check above, but good for safety
-        return jsonify({"message": f"Speciality name \'{new_name}\' already exists."}), 409
-    except Exception as e:
-        if conn: conn.rollback()
-        app.logger.error(f"Error updating speciality {speciality_id}: {e}", exc_info=True)
-        return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
-
-@app.route('/api/specialities/<int:speciality_id>', methods=['DELETE'])
-def delete_speciality_api(speciality_id):
-    conn = None
-    try:
-        conn = get_db_connection(DATABASE_PATH)
-        cursor = conn.cursor()
-
-        # Check if speciality exists
-        cursor.execute("SELECT id FROM specialities WHERE id = ?", (speciality_id,))
-        if not cursor.fetchone():
-            return jsonify({"message": f"Speciality ID {speciality_id} not found."}), 404
-
-        # Remove associations from technician_specialities
-        cursor.execute("DELETE FROM technician_specialities WHERE speciality_id = ?", (speciality_id,))
-        conn.commit() # Commit this change first
-
-        # Delete the speciality itself
-        cursor.execute("DELETE FROM specialities WHERE id = ?", (speciality_id,))
-        conn.commit()
-
-        if cursor.rowcount > 0:
-            return jsonify({"message": f"Speciality ID {speciality_id} and its assignments deleted."}), 200
-        else:
-            # This case should ideally be caught by the initial check if the speciality didn't exist
-            return jsonify({"message": f"Speciality ID {speciality_id} not found or already deleted."}), 404
-    except Exception as e:
-        if conn: conn.rollback()
-        app.logger.error(f"Error deleting speciality {speciality_id}: {e}", exc_info=True)
-        return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
-
-@app.route('/api/technicians/<int:technician_id>/specialities', methods=['GET'])
-def get_technician_specialities_api(technician_id):
-    conn = None
-    try:
-        conn = get_db_connection(DATABASE_PATH)
-        specialities = get_technician_specialities(conn, technician_id)
-        return jsonify(specialities)
-    except Exception as e:
-        app.logger.error(f"Error fetching specialities for technician {technician_id}: {e}", exc_info=True)
-        return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
-
-@app.route('/api/technicians/<int:technician_id>/specialities', methods=['POST'])
-def add_technician_speciality_api(technician_id):
-    conn = None
-    try:
-        data = request.get_json()
-        speciality_id = data.get('speciality_id')
-        if speciality_id is None:
-            return jsonify({"message": "speciality_id is required."}), 400
-        speciality_id = int(speciality_id)
-
-        conn = get_db_connection(DATABASE_PATH)
-        add_speciality_to_technician(conn, technician_id, speciality_id)
-        return jsonify({"message": f"Speciality {speciality_id} added to technician {technician_id}."}), 201
-    except ValueError:
-        return jsonify({"message": "Invalid speciality_id format."}), 400
-    except sqlite3.IntegrityError:
-        if conn: conn.rollback()
-        return jsonify({"message": "Failed to add speciality. Ensure IDs exist and it's not a duplicate."}), 400
-    except Exception as e:
-        if conn: conn.rollback()
-        app.logger.error(f"Error adding speciality to technician: {e}", exc_info=True)
-        return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
-
-@app.route('/api/technicians/<int:technician_id>/specialities/<int:speciality_id>', methods=['DELETE'])
-def remove_technician_speciality_api(technician_id, speciality_id):
-    conn = None
-    try:
-        conn = get_db_connection(DATABASE_PATH)
-        remove_speciality_from_technician(conn, technician_id, speciality_id)
-        return jsonify({"message": f"Speciality {speciality_id} removed from technician {technician_id}."}), 200
-    except Exception as e:
-        if conn: conn.rollback()
-        app.logger.error(f"Error removing speciality from technician: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
     finally:
         if conn: conn.close()

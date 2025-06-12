@@ -55,25 +55,6 @@ def init_db(database_path, logger=None): # Added logger argument
         )
     ''')
 
-    # Specialities Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS specialities (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL
-        )
-    ''')
-
-    # Technician Specialities Table (Linking Table)
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS technician_specialities (
-            technician_id INTEGER NOT NULL,
-            speciality_id INTEGER NOT NULL,
-            FOREIGN KEY (technician_id) REFERENCES technicians (id),
-            FOREIGN KEY (speciality_id) REFERENCES specialities (id),
-            PRIMARY KEY (technician_id, speciality_id)
-        )
-    ''')
-
     # Tasks Table (new schema)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS tasks (
@@ -137,15 +118,6 @@ def init_db(database_path, logger=None): # Added logger argument
     cursor.execute('''
         CREATE INDEX IF NOT EXISTS idx_technologies_parent_id
         ON technologies (parent_id)
-    ''')
-    # Indexes for technician_specialities
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_technician_specialities_technician_id
-        ON technician_specialities (technician_id)
-    ''')
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_technician_specialities_speciality_id
-        ON technician_specialities (speciality_id)
     ''')
 
     conn.commit()
@@ -217,53 +189,6 @@ def get_all_technology_groups(conn):
     cursor = conn.cursor()
     cursor.execute("SELECT id, name FROM technology_groups ORDER BY name")
     return [{"id": row['id'], "name": row['name']} for row in cursor.fetchall()]
-
-# --- Speciality Management ---
-def get_or_create_speciality(conn, speciality_name):
-    """Gets the ID of an existing speciality or creates it if it doesn't exist."""
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM specialities WHERE name = ?", (speciality_name,))
-    row = cursor.fetchone()
-    if row:
-        return row['id']
-    else:
-        cursor.execute("INSERT INTO specialities (name) VALUES (?)", (speciality_name,))
-        conn.commit()
-        return cursor.lastrowid
-
-def get_all_specialities(conn):
-    """Fetches all specialities."""
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, name FROM specialities ORDER BY name")
-    return [{"id": row['id'], "name": row['name']} for row in cursor.fetchall()]
-
-def get_technician_specialities(conn, technician_id):
-    """Fetches all specialities for a given technician_id."""
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT s.id, s.name 
-        FROM specialities s
-        JOIN technician_specialities ts ON s.id = ts.speciality_id
-        WHERE ts.technician_id = ?
-        ORDER BY s.name
-    """, (technician_id,))
-    return [{"id": row['id'], "name": row['name']} for row in cursor.fetchall()]
-
-def add_speciality_to_technician(conn, technician_id, speciality_id):
-    """Adds a speciality to a technician."""
-    cursor = conn.cursor()
-    try:
-        cursor.execute("INSERT INTO technician_specialities (technician_id, speciality_id) VALUES (?, ?)", (technician_id, speciality_id))
-        conn.commit()
-    except sqlite3.IntegrityError:
-        # Combination already exists, or foreign key constraint failed. Silently ignore for now or log.
-        pass # Or raise an error to be handled by the caller
-
-def remove_speciality_from_technician(conn, technician_id, speciality_id):
-    """Removes a speciality from a technician."""
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM technician_specialities WHERE technician_id = ? AND speciality_id = ?", (technician_id, speciality_id))
-    conn.commit()
 
 # --- Task Management (with Technology) ---
 def get_or_create_task(conn, task_name, technology_id):

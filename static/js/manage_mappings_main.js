@@ -67,12 +67,6 @@ async function initializePage() {
     if (addTechnologyGroupBtn) {
         addTechnologyGroupBtn.addEventListener('click', addNewTechnologyGroup);
     }
-    if (addSpecialityBtn) {
-        addSpecialityBtn.addEventListener('click', addNewSpeciality);
-    }
-    if (assignSpecialityBtn) {
-        assignSpecialityBtn.addEventListener('click', assignSpecialityToSelectedTechnician);
-    }
     if (addNewTaskForMappingBtn) {
         addNewTaskForMappingBtn.addEventListener('click', addNewTaskForMapping);
     }
@@ -176,7 +170,6 @@ function handleTechnologyGroupChange() {
 async function fetchAllInitialData() {
     await fetchTechnologyGroups();
     await fetchAllTechnologies();
-    await fetchSpecialities();
     await fetchAllTasksForMapping();
     await fetchMappings();
 
@@ -186,4 +179,3 @@ async function fetchAllInitialData() {
         populateTechnologySelectDropdown(newTaskTechnologySelectForMapping);
     }
 }
-

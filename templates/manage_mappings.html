@@ -82,25 +82,6 @@
     </div>
     <div class="section-divider"></div>
 
-    <!-- Manage Specialities Section -->
-    <div id="manageSpecialitiesSection" class="section">
-        <div class="section-header">
-            <h2>Manage Specialities</h2>
-            <span class="toggle-icon">+</span>
-        </div>
-        <div class="section-content collapsed">
-            <div id="specialityListContainer" style="max-height: 200px; overflow-y: auto; margin-bottom: 10px;">
-                <!-- Specialities will be listed here -->
-            </div>
-            <div class="form-inline-group">
-                <input type="text" id="newSpecialityName" placeholder="New speciality name"
-                       aria-label="New speciality name">
-                <button id="addSpecialityBtn">Add Speciality</button>
-            </div>
-        </div>
-    </div>
-    <div class="section-divider"></div>
-
     <!-- Manage Technician Details Section -->
     <div id="manageTechnicianDetailsSection" class="section">
         <div class="section-header">
@@ -118,26 +99,6 @@
 
                 <label for="techLines">Lines (comma-separated):</label>
                 <input type="text" id="techLines">
-
-                <!-- Foldable Subsection for Specialities -->
-                <div class="subsection">
-                    <div class="subsection-header">
-                        <h4>Technician Specialities</h4>
-                        <span class="toggle-icon">+</span>
-                    </div>
-                    <div class="subsection-content collapsed">
-                        <div id="technicianSpecialitiesContainer" style="margin-bottom: 10px;">
-                            <!-- Assigned specialities will be listed here -->
-                        </div>
-                        <div class="form-inline-group">
-                            <select id="assignSpecialitySelect" style="flex-grow:1;"
-                                    aria-label="Select speciality to add to technician">
-                                <option value="">Select speciality to add</option>
-                            </select>
-                            <button id="assignSpecialityBtn">Add Speciality to Technician</button>
-                        </div>
-                    </div>
-                </div>
 
                 <!-- Foldable Subsection for Technology Skills -->
                 <div class="subsection">
@@ -173,9 +134,7 @@
 <script src="{{ url_for('static', filename='js/manage_mappings_globals.js') }}"></script>
 <script src="{{ url_for('static', filename='js/manage_mappings_utils.js') }}"></script>
 <script src="{{ url_for('static', filename='js/manage_mappings_technologies.js') }}"></script>
-<script src="{{ url_for('static', filename='js/manage_mappings_specialities.js') }}"></script>
 <script src="{{ url_for('static', filename='js/manage_mappings_technician_skills.js') }}"></script>
-<script src="{{ url_for('static', filename='js/manage_mappings_technician_specialities.js') }}"></script>
 <script src="{{ url_for('static', filename='js/manage_mappings_task_technology.js') }}"></script>
 <script src="{{ url_for('static', filename='js/manage_mappings_technician_data.js') }}"></script>
 <script src="{{ url_for('static', filename='js/manage_mappings_main.js') }}"></script>

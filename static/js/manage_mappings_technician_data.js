@@ -40,7 +40,6 @@ async function fetchMappings(technicianNameToSelect = null) {
             }
             if (currentTechNameDisplay) currentTechNameDisplay.textContent = '';
             if (taskListDiv) taskListDiv.innerHTML = '';
-            if (technicianSpecialitiesContainerDiv) technicianSpecialitiesContainerDiv.innerHTML = '<p>Select a technician.</p>';
             if (technicianSkillsListContainerDiv) technicianSkillsListContainerDiv.innerHTML = '<p>Select a technician.</p>';
         }
     } catch (error) {
@@ -64,7 +63,6 @@ async function loadTechnicianDetails(technicianName) {
         document.getElementById('technicianDetails').style.display = 'none';
         if (currentTechNameDisplay) currentTechNameDisplay.textContent = '';
         if (taskListDiv) taskListDiv.innerHTML = '';
-        if (technicianSpecialitiesContainerDiv) technicianSpecialitiesContainerDiv.innerHTML = '<p>Select a technician.</p>';
         if (technicianSkillsListContainerDiv) technicianSkillsListContainerDiv.innerHTML = '<p>Select a technician.</p>';
         return;
     }
@@ -171,8 +169,6 @@ async function loadTechnicianDetails(technicianName) {
         });
     }
 
-    renderTechnicianSpecialities(techData);
-
     if (!techData.skills || Object.keys(techData.skills).length === 0) {
         await fetchTechnicianSkills(selectedTechnician);
     } else {
@@ -238,4 +234,3 @@ async function saveAllChanges() {
         console.error('Error in saveAllChanges:', error);
     }
 }
-
