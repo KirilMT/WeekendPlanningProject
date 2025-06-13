@@ -420,7 +420,8 @@ def update_technician_api(technician_id):
         app.logger.error(f"Server error updating technician {technician_id}: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
     finally:
-        if conn: conn.close()
+        if conn:
+            conn.close()
 
 @app.route('/api/technicians/<int:technician_id>', methods=['DELETE'])
 def delete_technician_api(technician_id):
@@ -463,7 +464,8 @@ def delete_technician_api(technician_id):
         app.logger.error(f"Server error deleting technician {technician_id}: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
     finally:
-        if conn: conn.close()
+        if conn:
+            conn.close()
 
 @app.route('/api/technologies', methods=['GET'])
 def get_technologies_api():
@@ -973,10 +975,11 @@ def add_task_api():
              app.logger.error(f"Failed to fetch newly created task with ID {task_id}")
              return jsonify({"message": "Error retrieving created task."}), 500
 
-        required_skills = get_required_skills_for_task(conn, task_id)
+        required_skills_objects = get_required_skills_for_task(conn, task_id)
 
         response_data = dict(new_task_data)
-        response_data['required_skills'] = required_skills
+        response_data['required_skills'] = required_skills_objects # Keep for detailed info
+        response_data['technology_ids'] = [skill['technology_id'] for skill in required_skills_objects] # Add for frontend compatibility
 
         return jsonify(response_data), 201
 
@@ -1034,10 +1037,11 @@ def update_task_api(task_id):
 
         cursor.execute("SELECT id, name FROM tasks WHERE id = ?", (task_id,))
         updated_task_data = cursor.fetchone()
-        required_skills = get_required_skills_for_task(conn, task_id)
+        required_skills_objects = get_required_skills_for_task(conn, task_id)
 
         response_data = dict(updated_task_data)
-        response_data['required_skills'] = required_skills
+        response_data['required_skills'] = required_skills_objects # Keep for detailed info
+        response_data['technology_ids'] = [skill['technology_id'] for skill in required_skills_objects] # Add for frontend compatibility
 
         return jsonify(response_data), 200
     except Exception as e:
@@ -1101,7 +1105,9 @@ def get_tasks_for_mapping_api():
         tasks_with_skills = []
         for task_row in tasks_raw:
             task_data = dict(task_row)
-            task_data['required_skills'] = get_required_skills_for_task(conn, task_row['id'])
+            required_skills_objects = get_required_skills_for_task(conn, task_row['id'])
+            task_data['required_skills'] = required_skills_objects # Keep for detailed info
+            task_data['technology_ids'] = [skill['technology_id'] for skill in required_skills_objects] # Add for frontend compatibility
             tasks_with_skills.append(task_data)
 
         return jsonify(tasks_with_skills)
@@ -1303,4 +1309,3 @@ def generate_dashboard_route():
 
 # Note: The explicit /css/ and /js/ routes are removed because Flask's static_folder setting handles /static/*
 # HTML files should be updated to link to /static/css/file.css and /static/js/file.js
-

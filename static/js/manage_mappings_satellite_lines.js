@@ -170,7 +170,7 @@ async function handleDeleteSatellitePoint(event) {
     const pointId = event.target.dataset.id;
     const rawPointName = event.target.dataset.name; // Raw name
 
-    const cleanedPointName = typeof rawPointName === 'string' ? rawPointName.replace(/\\\"/g, '"') : rawPointName;
+    const cleanedPointName = typeof rawPointName === 'string' ? rawPointName.replace(/\"/g, '"') : rawPointName;
 
     if (!confirm(`Are you sure you want to delete satellite point "${cleanedPointName}"?`)) {
         return;
@@ -271,12 +271,17 @@ function renderLines(lines) {
             editButton.dataset.name = line.name; // Store raw name
             editButton.dataset.spId = line.satellite_point_id;
             editButton.textContent = 'Edit';
+            editButton.style.padding = '2px 6px';
+            editButton.style.fontSize = '0.8em';
+            editButton.style.marginRight = '5px';
 
             const deleteButton = document.createElement('button');
             deleteButton.className = 'delete-button delete-line-button';
             deleteButton.dataset.id = line.id;
             deleteButton.dataset.name = line.name; // Store raw name
             deleteButton.textContent = 'Delete';
+            deleteButton.style.padding = '2px 6px';
+            deleteButton.style.fontSize = '0.8em';
 
             actionsDiv.appendChild(editButton);
             actionsDiv.appendChild(deleteButton);
@@ -465,7 +470,7 @@ async function handleDeleteLine(event) {
     const lineId = event.target.dataset.id;
     const rawLineName = event.target.dataset.name; // Raw name
 
-    const cleanedLineName = typeof rawLineName === 'string' ? rawLineName.replace(/\\\"/g, '"') : rawLineName;
+    const cleanedLineName = typeof rawLineName === 'string' ? rawLineName.replace(/\"/g, '"') : rawLineName;
 
     if (!confirm(`Are you sure you want to delete line "${cleanedLineName}"?`)) {
         return;
@@ -708,7 +713,7 @@ async function handleDeleteTechnician(event) {
     const technicianId = event.target.dataset.id;
     const rawTechnicianName = event.target.dataset.name; // Raw name
 
-    const cleanedTechName = typeof rawTechnicianName === 'string' ? rawTechnicianName.replace(/\\\"/g, '"') : rawTechnicianName;
+    const cleanedTechName = typeof rawTechnicianName === 'string' ? rawTechnicianName.replace(/\"/g, '"') : rawTechnicianName;
 
     if (!confirm(`Are you sure you want to delete technician "${cleanedTechName}" (ID: ${technicianId})?`)) {
         return;

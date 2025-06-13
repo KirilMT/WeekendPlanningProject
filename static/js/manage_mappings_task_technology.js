@@ -225,7 +225,7 @@ function renderTasksForTechnologyMapping(tasks) {
         let techNames = 'No skills assigned';
         if (task.technology_ids && task.technology_ids.length > 0 && allTechnologies.length > 0) {
             techNames = task.technology_ids.map(id => {
-                const tech = allTechnologies.find(t => t.id === id);
+                const tech = allTechnologies.find(t => String(t.id) === String(id)); // Ensure string comparison for IDs
                 return tech ? escapeHtml(tech.name) : 'Unknown Skill';
             }).join(', ');
         } else if (task.technologies && task.technologies.length > 0) { // Alternative if API sends full tech objects
