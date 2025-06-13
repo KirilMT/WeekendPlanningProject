@@ -1,13 +1,18 @@
 // --- Task-Technology Mapping Functions ---
 
 // Function to populate a technology select dropdown (used for new task form and edit form)
-function populateTechnologySelectDropdown(selectElement, selectedTechnologyId = null) {
+function populateTechnologySelectDropdown(selectElement, selectedTechnologyValues = null) { // Renamed for clarity, can be single ID or array
     selectElement.innerHTML = ''; // Clear existing options
 
     const noTechOption = document.createElement('option');
     noTechOption.value = "";
-    noTechOption.textContent = '-- Select Technology (Required) --';
-    selectElement.appendChild(noTechOption);
+    // For multi-select, a "select technology" might not be appropriate if it's a required field.
+    // However, keeping it for now, its behavior in multi-select might need UX review.
+    noTechOption.textContent = selectElement.multiple ? '-- Select Technologies --' : '-- Select Technology (Required) --';
+    if (!selectElement.multiple) { // Only add "no selection" option for single select
+        selectElement.appendChild(noTechOption);
+    }
+
 
     if (allTechnologies.length === 0) {
         noTechOption.textContent = '-- No Technologies Defined --';
@@ -40,21 +45,25 @@ function populateTechnologySelectDropdown(selectElement, selectedTechnologyId = 
 
     const hasChildren = (technologyId) => allTechnologies.some(t => t.parent_id === technologyId);
 
-    function appendOptionsRecursive(parentElement, technologyId, level, currentSelectedId) {
+    function appendOptionsRecursive(parentElement, technologyId, level, currentSelectedValues) {
         const children = childrenByParentId[technologyId] || [];
         children.forEach(childTech => {
             const option = document.createElement('option');
             option.value = childTech.id;
             option.textContent = `${'  '.repeat(level)}↳ ${escapeHtml(childTech.name)}`;
-            if (currentSelectedId === childTech.id) {
-                option.selected = true;
+            if (currentSelectedValues) {
+                if (Array.isArray(currentSelectedValues) && currentSelectedValues.map(String).includes(String(childTech.id))) {
+                    option.selected = true;
+                } else if (String(currentSelectedValues) === String(childTech.id)) {
+                    option.selected = true;
+                }
             }
             if (hasChildren(childTech.id)) {
                 option.disabled = true;
                 option.textContent += " (Parent - cannot assign)";
             }
             parentElement.appendChild(option);
-            appendOptionsRecursive(parentElement, childTech.id, level + 1, currentSelectedId);
+            appendOptionsRecursive(parentElement, childTech.id, level + 1, currentSelectedValues);
         });
     }
 
@@ -70,32 +79,43 @@ function populateTechnologySelectDropdown(selectElement, selectedTechnologyId = 
             const option = document.createElement('option');
             option.value = tech.id;
             option.textContent = escapeHtml(tech.name);
-            if (selectedTechnologyId === tech.id) {
-                option.selected = true;
+            if (selectedTechnologyValues) {
+                 if (Array.isArray(selectedTechnologyValues) && selectedTechnologyValues.map(String).includes(String(tech.id))) {
+                    option.selected = true;
+                } else if (String(selectedTechnologyValues) === String(tech.id)) {
+                    option.selected = true;
+                }
             }
             if (hasChildren(tech.id)) {
                 option.disabled = true;
                 option.textContent += " (Parent - cannot assign)";
             }
             optgroup.appendChild(option);
-            appendOptionsRecursive(optgroup, tech.id, 1, selectedTechnologyId);
+            appendOptionsRecursive(optgroup, tech.id, 1, selectedTechnologyValues);
         });
         selectElement.appendChild(optgroup);
     });
-    if (selectedTechnologyId) selectElement.value = selectedTechnologyId;
+    // For single select, setting .value is fine. For multi-select, 'selected' attribute on options is key.
+    // The below line might be redundant if options are correctly marked 'selected', or problematic for multi-select.
+    // if (!selectElement.multiple && selectedTechnologyValues && !Array.isArray(selectedTechnologyValues)) {
+    //     selectElement.value = selectedTechnologyValues;
+    // }
 }
 
 
 async function addNewTaskForMapping() {
     const taskName = newTaskNameForMappingInput.value.trim();
-    const technologyId = newTaskTechnologySelectForMapping.value;
+    // Assuming newTaskTechnologySelectForMapping is a multi-select dropdown
+    const selectedTechOptions = Array.from(newTaskTechnologySelectForMapping.selectedOptions);
+    const technologyIds = selectedTechOptions.map(opt => parseInt(opt.value)).filter(id => !isNaN(id));
+
 
     if (!taskName) {
         displayMessage('Task name cannot be empty.', 'error');
         return;
     }
-    if (!technologyId) {
-        displayMessage('A technology must be selected for the new task.', 'error');
+    if (technologyIds.length === 0) {
+        displayMessage('At least one technology must be selected for the new task.', 'error');
         return;
     }
 
@@ -103,13 +123,17 @@ async function addNewTaskForMapping() {
         const response = await fetch('/api/tasks', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: taskName, technology_id: parseInt(technologyId) }),
+            body: JSON.stringify({ name: taskName, technology_ids: technologyIds }), // Changed to technology_ids
         });
         const result = await response.json();
         if (response.ok) {
             displayMessage(`Task '${escapeHtml(result.name)}' added successfully.`, 'success');
             newTaskNameForMappingInput.value = '';
-            newTaskTechnologySelectForMapping.value = ''; // Reset dropdown
+            // Reset multi-select dropdown
+            Array.from(newTaskTechnologySelectForMapping.options).forEach(option => option.selected = false);
+            if (newTaskTechnologySelectForMapping.options.length > 0 && !newTaskTechnologySelectForMapping.multiple) {
+                 newTaskTechnologySelectForMapping.value = ''; // Reset for single select if it was one
+            }
             await fetchAllTasksForMapping(); // Refresh the list
         } else {
             throw new Error(result.message || `Server error ${response.status}`);
@@ -153,14 +177,17 @@ function renderTasksForTechnologyMapping(tasks) {
 
     if (allTechnologies.length === 0) {
         taskTechnologyMappingListContainerDiv.innerHTML = '<p>Technologies not loaded yet. Cannot map tasks.</p>';
-        if (newTaskTechnologySelectForMapping && newTaskTechnologySelectForMapping.options.length <= 1) {
-            populateTechnologySelectDropdown(newTaskTechnologySelectForMapping);
+        if (newTaskTechnologySelectForMapping && newTaskTechnologySelectForMapping.options.length <= 1) { // Check if it has more than the placeholder
+            populateTechnologySelectDropdown(newTaskTechnologySelectForMapping); // Populate for new task form
         }
         return;
     }
+    // Ensure the main new task technology dropdown is populated
     if (newTaskTechnologySelectForMapping) {
+         // Assuming newTaskTechnologySelectForMapping is already set to multiple in HTML if needed
         populateTechnologySelectDropdown(newTaskTechnologySelectForMapping);
     }
+
 
     tasks.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
@@ -168,6 +195,7 @@ function renderTasksForTechnologyMapping(tasks) {
         const itemDiv = document.createElement('div');
         itemDiv.classList.add('list-item', 'task-mapping-item');
         itemDiv.dataset.taskId = task.id;
+        // ... (itemDiv styling) ...
         itemDiv.style.display = 'flex';
         itemDiv.style.justifyContent = 'space-between';
         itemDiv.style.alignItems = 'center';
@@ -177,6 +205,7 @@ function renderTasksForTechnologyMapping(tasks) {
 
         const viewModeDiv = document.createElement('div');
         viewModeDiv.classList.add('task-mapping-view');
+        // ... (viewModeDiv styling) ...
         viewModeDiv.style.display = 'flex';
         viewModeDiv.style.flexGrow = '1';
         viewModeDiv.style.alignItems = 'center';
@@ -184,13 +213,26 @@ function renderTasksForTechnologyMapping(tasks) {
 
         const taskNameSpan = document.createElement('span');
         taskNameSpan.textContent = escapeHtml(task.name);
+        // ... (taskNameSpan styling) ...
         taskNameSpan.style.fontWeight = 'bold';
         taskNameSpan.style.marginRight = '10px';
         taskNameSpan.style.whiteSpace = 'nowrap';
         viewModeDiv.appendChild(taskNameSpan);
 
         const taskTechSpan = document.createElement('span');
-        taskTechSpan.textContent = `(${getTechnologyHierarchyPath(task.technology_id, allTechnologies)})`;
+        // Assuming task.technology_ids is an array of IDs and allTechnologies is available
+        // Or task.technologies is an array of {id, name} objects
+        let techNames = 'No skills assigned';
+        if (task.technology_ids && task.technology_ids.length > 0 && allTechnologies.length > 0) {
+            techNames = task.technology_ids.map(id => {
+                const tech = allTechnologies.find(t => t.id === id);
+                return tech ? escapeHtml(tech.name) : 'Unknown Skill';
+            }).join(', ');
+        } else if (task.technologies && task.technologies.length > 0) { // Alternative if API sends full tech objects
+             techNames = task.technologies.map(t => escapeHtml(t.name)).join(', ');
+        }
+        taskTechSpan.textContent = `(${techNames})`;
+        // ... (taskTechSpan styling) ...
         taskTechSpan.style.fontSize = '0.9em';
         taskTechSpan.style.color = '#555';
         taskTechSpan.style.flexGrow = '1';
@@ -204,6 +246,7 @@ function renderTasksForTechnologyMapping(tasks) {
 
         const editModeDiv = document.createElement('div');
         editModeDiv.classList.add('task-mapping-edit');
+        // ... (editModeDiv styling) ...
         editModeDiv.style.display = 'none';
         editModeDiv.style.flexGrow = '1';
         editModeDiv.style.alignItems = 'center';
@@ -213,20 +256,26 @@ function renderTasksForTechnologyMapping(tasks) {
         const taskNameInput = document.createElement('input');
         taskNameInput.type = 'text';
         taskNameInput.value = task.name;
-        taskNameInput.style.flexGrow = '0.5';
+        // ... (taskNameInput styling) ...
+        taskNameInput.style.flexGrow = '0.5'; // Adjust as needed
         taskNameInput.style.marginRight = '5px';
         editModeDiv.appendChild(taskNameInput);
 
         const techSelect = document.createElement('select');
+        techSelect.multiple = true; // Make it a multi-select dropdown
+        // ... (techSelect styling) ...
         techSelect.style.flexGrow = '1';
         techSelect.style.marginRight = '5px';
-        populateTechnologySelectDropdown(techSelect, task.technology_id);
+        // Populate with all technologies, and select current task's technologies
+        // Assuming task.technology_ids is an array of IDs.
+        populateTechnologySelectDropdown(techSelect, task.technology_ids || []);
         editModeDiv.appendChild(techSelect);
         itemDiv.appendChild(editModeDiv);
 
 
         const actionsDiv = document.createElement('div');
         actionsDiv.classList.add('list-item-actions');
+        // ... (actionsDiv styling) ...
         actionsDiv.style.flexShrink = '0';
         actionsDiv.style.display = 'flex';
 
@@ -240,8 +289,9 @@ function renderTasksForTechnologyMapping(tasks) {
             deleteBtn.style.display = 'none';
             saveBtn.style.display = 'inline-block';
             cancelBtn.style.display = 'inline-block';
-            populateTechnologySelectDropdown(techSelect, task.technology_id);
-            taskNameInput.value = task.name;
+            // Repopulate and set selected values for the multi-select dropdown
+            populateTechnologySelectDropdown(techSelect, task.technology_ids || []);
+            taskNameInput.value = task.name; // Ensure name is current
         };
         actionsDiv.appendChild(editBtn);
 
@@ -258,16 +308,18 @@ function renderTasksForTechnologyMapping(tasks) {
         saveBtn.style.display = 'none';
         saveBtn.onclick = async () => {
             const newName = taskNameInput.value.trim();
-            const newTechnologyId = techSelect.value;
+            const selectedTechOptions = Array.from(techSelect.selectedOptions);
+            const newTechnologyIds = selectedTechOptions.map(opt => parseInt(opt.value)).filter(id => !isNaN(id));
+
             if (!newName) {
                 displayMessage('Task name cannot be empty.', 'error');
                 return;
             }
-            if (!newTechnologyId) {
-                displayMessage('Technology must be selected.', 'error');
+            if (newTechnologyIds.length === 0) {
+                displayMessage('At least one technology must be selected.', 'error');
                 return;
             }
-            await updateTaskMapping(task.id, newName, parseInt(newTechnologyId));
+            await updateTaskMapping(task.id, newName, newTechnologyIds); // Pass array of IDs
         };
         actionsDiv.appendChild(saveBtn);
 
@@ -291,12 +343,12 @@ function renderTasksForTechnologyMapping(tasks) {
     });
 }
 
-async function updateTaskMapping(taskId, newName, newTechnologyId) {
+async function updateTaskMapping(taskId, newName, newTechnologyIds) { // Changed to newTechnologyIds (array)
     try {
         const response = await fetch(`/api/tasks/${taskId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: newName, technology_id: newTechnologyId }),
+            body: JSON.stringify({ name: newName, technology_ids: newTechnologyIds }), // Send technology_ids
         });
         const result = await response.json();
         if (response.ok) {
@@ -348,4 +400,3 @@ async function updateTaskTechnologyMapping(taskId, technologyId) {
         console.error('Error in updateTaskTechnologyMapping:', error);
     }
 }
-

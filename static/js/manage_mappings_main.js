@@ -72,11 +72,34 @@ async function initializePage() {
     }
 
     // Tech detail input listeners
-    if (techSattelitePointInput) {
-        techSattelitePointInput.addEventListener('change', (e) => recordChange(`Sattelite point for '${selectedTechnician}' to '${e.target.value}'`));
-    }
-    if (techLinesInput) {
-        techLinesInput.addEventListener('change', (e) => recordChange(`Lines for '${selectedTechnician}' to '${e.target.value}'`));
+    if (techSatellitePointSelect) { // New select dropdown
+        techSatellitePointSelect.addEventListener('change', (e) => {
+            if (selectedTechnician && currentMappings.technicians && currentMappings.technicians[selectedTechnician]) {
+                const technicianData = currentMappings.technicians[selectedTechnician];
+                const oldSatellitePointId = technicianData.satellite_point_id;
+                const newSatellitePointId = e.target.value ? parseInt(e.target.value, 10) : null;
+                const newSatellitePointName = e.target.options[e.target.selectedIndex].text;
+
+                // Record the change before updating currentMappings
+                // Ensure oldSatellitePointId is defined, could be null if not previously set
+                const technicianId = technicianData.id; // Assuming technician object has an 'id' field
+
+                recordChange(
+                    'Technician Satellite Point Update',
+                    technicianId, // entityId (actual ID of the technician)
+                    'satellite_point_id', // field
+                    oldSatellitePointId, // oldValue
+                    newSatellitePointId, // newValue
+                    selectedTechnician // entityName (name of the technician for logging)
+                );
+
+                // Update currentMappings after recording the change
+                technicianData.satellite_point_id = newSatellitePointId;
+                technicianData.satellite_point_name = newSatellitePointId ? newSatellitePointName : null;
+            } else {
+                console.warn('Cannot record satellite point change: selectedTechnician or technician data is missing.');
+            }
+        });
     }
 
     // New technology form enhancements listeners
@@ -130,7 +153,13 @@ async function initializePage() {
         });
     });
 
-    // 3. Fetch Initial Data
+    // Initialize Satellite Points and Lines Management
+    document.getElementById('addSatellitePointBtn').addEventListener('click', handleAddSatellitePoint);
+    document.getElementById('addLineBtn').addEventListener('click', handleAddLine); // Added event listener for Add Line button
+    loadSatellitePoints(); // Also populates dropdowns for other sections
+    loadLines(); // Load lines after satellite points are loaded
+
+    // Initialize Technologies & Groups Management
     await fetchAllInitialData();
 }
 
@@ -171,6 +200,7 @@ async function fetchAllInitialData() {
     await fetchTechnologyGroups();
     await fetchAllTechnologies();
     await fetchAllTasksForMapping();
+    await fetchAndPopulateSatellitePointsDropdown(); // Added call
     await fetchMappings();
 
     handleTechnologyNameInputChange();

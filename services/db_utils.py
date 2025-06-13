@@ -7,20 +7,78 @@ def get_db_connection(database_path):
     conn.row_factory = sqlite3.Row  # Access columns by name
     return conn
 
-def init_db(database_path, logger=None): # Added logger argument
-    conn = get_db_connection(database_path)
+def init_db(db_path, logger=None):
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # 1. Define and ensure all tables exist with the LATEST schema
-    # Technicians Table
+    # Create satellite_points table
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS technicians (
+        CREATE TABLE IF NOT EXISTS satellite_points (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
-            sattelite_point TEXT,
-            lines TEXT
+            name TEXT UNIQUE NOT NULL
         )
     ''')
+    logger.info("Table 'satellite_points' ensured.") if logger else None
+
+    # Add a default satellite point if the table is empty
+    cursor.execute("SELECT COUNT(*) FROM satellite_points")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("INSERT INTO satellite_points (name) VALUES (?)", ("Default Satellite Point",))
+        # conn.commit() # Commit will be handled later in the function or should be done immediately if critical path
+        if logger: logger.info("Added 'Default Satellite Point' as no satellite points were found.")
+
+    # Create lines table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS lines (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            satellite_point_id INTEGER,
+            FOREIGN KEY(satellite_point_id) REFERENCES satellite_points(id)
+        )
+    ''')
+    logger.info("Table 'lines' ensured.") if logger else None
+
+    # Create technicians table (or alter if exists)
+    cursor.execute("PRAGMA table_info(technicians)")
+    columns = [column[1] for column in cursor.fetchall()]
+
+    if 'sattelite_point' in columns or 'lines' in columns or 'satellite_point_id' not in columns:
+        logger.info("Old 'technicians' table structure found. Recreating with new schema.") if logger else None
+        # Need to handle data migration if this were a production system
+        # For development, we might drop and recreate or carefully alter
+        # Simplified approach: drop and recreate if old columns exist or new one is missing.
+        # This will lose existing technician data if not migrated.
+        # A more robust solution would use ALTER TABLE commands carefully.
+
+        # Try to preserve data (basic example, assumes id and name are key)
+        cursor.execute("SELECT id, name FROM technicians")
+        existing_technicians_simple = cursor.fetchall()
+
+        cursor.execute("DROP TABLE IF EXISTS technicians")
+        cursor.execute('''
+            CREATE TABLE technicians (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                satellite_point_id INTEGER,
+                FOREIGN KEY(satellite_point_id) REFERENCES satellite_points(id)
+            )
+        ''')
+        logger.info("Table 'technicians' recreated with new schema (satellite_point_id).") if logger else None
+
+        # Restore basic data if any was backed up (without old satellite/lines info)
+        if existing_technicians_simple:
+            cursor.executemany("INSERT INTO technicians (id, name) VALUES (?, ?)", existing_technicians_simple)
+            logger.info(f"Restored {len(existing_technicians_simple)} technicians (name/id only) to new table structure.") if logger else None
+    else:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS technicians (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                satellite_point_id INTEGER,
+                FOREIGN KEY(satellite_point_id) REFERENCES satellite_points(id)
+            )
+        ''')
+        logger.info("Table 'technicians' (new schema) ensured.") if logger else None
 
     # Technologies Table
     cursor.execute('''
@@ -59,9 +117,9 @@ def init_db(database_path, logger=None): # Added logger argument
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
-            technology_id INTEGER,
-            FOREIGN KEY (technology_id) REFERENCES technologies (id)
+            name TEXT UNIQUE NOT NULL
+            -- technology_id INTEGER, -- Removed: Tasks can have multiple skills via task_required_skills
+            -- FOREIGN KEY (technology_id) REFERENCES technologies (id) -- Removed
         )
     ''')
 
@@ -84,11 +142,23 @@ def init_db(database_path, logger=None): # Added logger argument
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             technician_id INTEGER NOT NULL,
             task_id INTEGER NOT NULL,
-            priority INTEGER NOT NULL,
             FOREIGN KEY (technician_id) REFERENCES technicians (id),
             FOREIGN KEY (task_id) REFERENCES tasks (id)
         )
     ''')
+
+    # New Table: Task Required Skills
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS task_required_skills (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER,
+            technology_id INTEGER,
+            FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+            FOREIGN KEY(technology_id) REFERENCES technologies(id) ON DELETE CASCADE,
+            UNIQUE(task_id, technology_id)
+        )
+    ''')
+    logger.info("Table 'task_required_skills' ensured.") if logger else None
 
     # 3. Create Indexes (idempotently)
     cursor.execute('''
@@ -120,8 +190,134 @@ def init_db(database_path, logger=None): # Added logger argument
         ON technologies (parent_id)
     ''')
 
+    # Indexes for task_required_skills
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_task_required_skills_task_id
+        ON task_required_skills (task_id)
+    ''')
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_task_required_skills_technology_id
+        ON task_required_skills (technology_id)
+    ''')
+
     conn.commit()
     conn.close()
+
+def get_or_create_satellite_point(conn, name):
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM satellite_points WHERE name = ?", (name,))
+    row = cursor.fetchone()
+    if row:
+        return row['id']
+    else:
+        cursor.execute("INSERT INTO satellite_points (name) VALUES (?)", (name,))
+        conn.commit()
+        return cursor.lastrowid
+
+def get_all_satellite_points(conn):
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name FROM satellite_points ORDER BY name")
+    return [{'id': row['id'], 'name': row['name']} for row in cursor.fetchall()]
+
+def update_satellite_point(conn, point_id, new_name):
+    """Updates the name of an existing satellite point."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE satellite_points SET name = ? WHERE id = ?", (new_name, point_id))
+        conn.commit()
+        if cursor.rowcount == 0:
+            return False, "Satellite point not found or name unchanged."
+        return True, "Satellite point updated successfully."
+    except sqlite3.IntegrityError: # Handles unique constraint violation for name
+        return False, "Satellite point name already exists."
+
+def delete_satellite_point(conn, point_id):
+    """Deletes a satellite point if it's not associated with any lines or technicians."""
+    cursor = conn.cursor()
+    # Check if any lines are associated with this satellite point
+    cursor.execute("SELECT COUNT(*) FROM lines WHERE satellite_point_id = ?", (point_id,))
+    if cursor.fetchone()[0] > 0:
+        return False, "Satellite point is associated with lines and cannot be deleted."
+
+    # Check if any technicians are associated with this satellite point
+    cursor.execute("SELECT COUNT(*) FROM technicians WHERE satellite_point_id = ?", (point_id,))
+    if cursor.fetchone()[0] > 0:
+        return False, "Satellite point is associated with technicians and cannot be deleted."
+
+    cursor.execute("DELETE FROM satellite_points WHERE id = ?", (point_id,))
+    conn.commit()
+    if cursor.rowcount == 0:
+        return False, "Satellite point not found."
+    return True, "Satellite point deleted successfully."
+
+def add_line(conn, name, satellite_point_id):
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO lines (name, satellite_point_id) VALUES (?, ?)", (name, satellite_point_id))
+    conn.commit()
+    return cursor.lastrowid
+
+def get_lines_for_satellite_point(conn, satellite_point_id):
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name FROM lines WHERE satellite_point_id = ? ORDER BY name", (satellite_point_id,))
+    return [{'id': row['id'], 'name': row['name']} for row in cursor.fetchall()]
+
+# New helper function to get lines for a technician via their satellite point
+def get_technician_lines_via_satellite_point(conn, technician_id):
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT l.name
+        FROM lines l
+        JOIN technicians t ON l.satellite_point_id = t.satellite_point_id
+        WHERE t.id = ?
+        ORDER BY l.name
+    ''', (technician_id,))
+    return [row['name'] for row in cursor.fetchall()]
+
+def get_all_lines(conn):
+    """Fetches all lines with their satellite point information."""
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT l.id, l.name, l.satellite_point_id, sp.name as satellite_point_name
+        FROM lines l
+        JOIN satellite_points sp ON l.satellite_point_id = sp.id
+        ORDER BY sp.name, l.name
+    """)
+    return [dict(row) for row in cursor.fetchall()]
+
+def update_line(conn, line_id, new_name, new_satellite_point_id):
+    """Updates a line's name and/or its satellite point."""
+    cursor = conn.cursor()
+    try:
+        # Check if the new satellite_point_id is valid
+        cursor.execute("SELECT id FROM satellite_points WHERE id = ?", (new_satellite_point_id,))
+        if not cursor.fetchone():
+            return False, "Invalid satellite point ID."
+
+        # Check for duplicate line name within the same satellite point (optional, depends on requirements)
+        # For now, allowing duplicate line names if they are under different satellite points, or even same.
+        # If unique constraint (name, satellite_point_id) is desired, it should be added to DB schema.
+
+        cursor.execute("UPDATE lines SET name = ?, satellite_point_id = ? WHERE id = ?",
+                       (new_name, new_satellite_point_id, line_id))
+        conn.commit()
+        if cursor.rowcount == 0:
+            return False, "Line not found or data unchanged."
+        return True, "Line updated successfully."
+    except sqlite3.Error as e: # Catch any potential SQLite errors, like FK issues if SP ID was invalid (though checked)
+        return False, f"Database error: {e}"
+
+def delete_line(conn, line_id):
+    """Deletes a line by its ID."""
+    cursor = conn.cursor()
+    # No direct dependencies on the lines table from other tables that would prevent deletion by default FK constraints.
+    # Technicians are linked via satellite_point_id, not directly to lines.
+    # If there were other direct dependencies, checks would be needed here.
+    cursor.execute("DELETE FROM lines WHERE id = ?", (line_id,))
+    conn.commit()
+    if cursor.rowcount == 0:
+        return False, "Line not found."
+    return True, "Line deleted successfully."
+
 
 # --- Technology Management ---
 def get_or_create_technology(conn, technology_name, group_id=None):
@@ -161,10 +357,13 @@ def delete_technology(conn, technology_id):
     #    could violate this if not handled (e.g., ON DELETE CASCADE or setting to NULL if allowed).
     #    Assuming for now that related skills should also be removed or handled by the database schema (e.g. CASCADE).
     #    Let's ensure related skills are deleted first to avoid FK constraint issues if not cascaded.
+
+    # First, delete from task_required_skills where technology_id = technology_id
+    cursor.execute("DELETE FROM task_required_skills WHERE technology_id = ?", (technology_id,))
+
     cursor.execute("DELETE FROM technician_technology_skills WHERE technology_id = ?", (technology_id,))
-    # Also, tasks might be linked to this technology.
-    # cursor.execute("UPDATE tasks SET technology_id = NULL WHERE technology_id = ?", (technology_id,)) # Option 1: Set to NULL
-    cursor.execute("DELETE FROM tasks WHERE technology_id = ?", (technology_id,)) # Option 2: Delete tasks (if appropriate)
+    # No direct action needed on tasks table here due to schema change.
+    # task_required_skills entries will be cascaded by DB if technology is deleted.
 
     # Now, attempt to delete the technology itself
     cursor.execute("DELETE FROM technologies WHERE id = ?", (technology_id,))
@@ -191,27 +390,58 @@ def get_all_technology_groups(conn):
     return [{"id": row['id'], "name": row['name']} for row in cursor.fetchall()]
 
 # --- Task Management (with Technology) ---
-def get_or_create_task(conn, task_name, technology_id):
-    """Gets the ID of an existing task or creates it with a technology link."""
+def get_or_create_task(conn, task_name): # Removed technology_id parameter
+    """Gets the ID of an existing task or creates it."""
     cursor = conn.cursor()
-    # Check if task exists and if its technology_id needs update (or is NULL)
-    cursor.execute("SELECT id, technology_id FROM tasks WHERE name = ?", (task_name,))
+    cursor.execute("SELECT id FROM tasks WHERE name = ?", (task_name,)) # Removed technology_id from query
     row = cursor.fetchone()
     if row:
         task_id = row['id']
-        # Update technology_id if it's different or was null and a new one is provided.
-        # This function will now update the technology_id if a valid one is passed.
-        if technology_id is not None and row['technology_id'] != technology_id:
-            cursor.execute("UPDATE tasks SET technology_id = ? WHERE id = ?", (technology_id, task_id))
-            conn.commit()
-        elif technology_id is None and row['technology_id'] is not None: # If passed technology_id is null, set it to null in DB
-            cursor.execute("UPDATE tasks SET technology_id = NULL WHERE id = ?", (task_id,))
-            conn.commit()
+        # No technology_id to update directly on the task anymore
         return task_id
     else:
-        cursor.execute("INSERT INTO tasks (name, technology_id) VALUES (?, ?)", (task_name, technology_id))
+        cursor.execute("INSERT INTO tasks (name) VALUES (?)", (task_name,)) # Removed technology_id
         conn.commit()
         return cursor.lastrowid
+
+# --- Task Required Skills Management ---
+def add_required_skill_to_task(conn, task_id, technology_id):
+    """Adds a required technology/skill to a task. Ignores if already present."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT OR IGNORE INTO task_required_skills (task_id, technology_id) VALUES (?, ?)",
+                       (task_id, technology_id))
+        conn.commit()
+    except sqlite3.IntegrityError as e:
+        # This might happen if task_id or technology_id does not exist,
+        # though INSERT OR IGNORE should handle UNIQUE constraint violations silently.
+        print(f"Error adding required skill to task: {e}") # Or log this
+
+def remove_required_skill_from_task(conn, task_id, technology_id):
+    """Removes a required technology/skill from a task."""
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM task_required_skills WHERE task_id = ? AND technology_id = ?",
+                   (task_id, technology_id))
+    conn.commit()
+
+def get_required_skills_for_task(conn, task_id):
+    """Fetches all required technology/skill details for a given task."""
+    cursor = conn.cursor()
+    query = """
+        SELECT trs.technology_id, t.name as technology_name
+        FROM task_required_skills trs
+        JOIN technologies t ON trs.technology_id = t.id
+        WHERE trs.task_id = ?
+        ORDER BY t.name
+    """
+    cursor.execute(query, (task_id,))
+    return [{"technology_id": row["technology_id"], "technology_name": row["technology_name"]} for row in cursor.fetchall()]
+
+def remove_all_required_skills_for_task(conn, task_id):
+    """Removes all technology/skill requirements for a given task."""
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM task_required_skills WHERE task_id = ?", (task_id,))
+    conn.commit()
 
 # --- Technician Skill Management ---
 def get_all_technician_skills_by_name(conn):

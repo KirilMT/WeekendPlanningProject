@@ -91,11 +91,11 @@ def _assign_task_definition_to_schedule(
     num_technicians_needed = int(task_to_assign.get('mitarbeiter_pro_aufgabe', 1))
     quantity = int(task_to_assign.get('quantity', 1))
     is_additional_task_flag = task_to_assign.get('isAdditionalTask', False)
-    # Assume technology_id is now part of task_to_assign
-    task_technology_id = task_to_assign.get('technology_id')
+    # Task now has a list of technology_ids
+    task_technology_ids = task_to_assign.get('technology_ids', []) # Expect a list of IDs
 
 
-    # _log(logger, "debug", f"  (Helper) Processing task ID {task_id} ({task_name_excel}), Type: {task_type}, Prio: {task_to_assign.get('priority', 'C')}, Qty: {quantity}, Additional: {is_additional_task_flag}, TechID: {task_technology_id}")
+    # _log(logger, "debug", f"  (Helper) Processing task ID {task_id} ({task_name_excel}), Type: {task_type}, Prio: {task_to_assign.get('priority', 'C')}, Qty: {quantity}, Additional: {is_additional_task_flag}, TechIDs: {task_technology_ids}")
 
     if quantity <= 0:
         reason = f"Skipped ({task_type}): Invalid 'Quantity' ({quantity})."
@@ -281,133 +281,155 @@ def _assign_task_definition_to_schedule(
                 _log(logger, "warning", f"      Failed to assign Add.PM instance {instance_task_display_name}. Reason: {last_known_failure_reason_for_instance}")
 
         elif task_type == 'PM' and not is_additional_task_flag:
-            # --- Standard PM Task Logic (modified for skills) ---
-            _log(logger, "debug", f"    (Helper) Assigning Standard PM instance: {instance_task_display_name}, Technology ID: {task_technology_id}")
+            # --- Standard PM Task Logic (modified for multi-skills) ---
+            _log(logger, "debug", f"    (Helper) Assigning Standard PM instance: {instance_task_display_name}, Required Technology IDs: {task_technology_ids}")
             json_task_name_lookup_pm = TASK_NAME_MAPPING.get(task_name_excel, task_name_excel)
             normalized_current_excel_task_name_pm = normalize_string(json_task_name_lookup_pm)
 
+            if not task_technology_ids:
+                last_known_failure_reason_for_instance = f"Skipped (PM): Task {task_name_excel} (ID: {task_id}) has no required technology_ids defined."
+                unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                _log(logger, "warning", f"      {last_known_failure_reason_for_instance}")
+                continue # Next instance or task
+
             eligible_technicians_details_pm = []
-            if not task_technology_id:
-                _log(logger, "warning", f"      Task {task_name_excel} (ID: {task_id}) has no technology_id. Skipping skill-based assignment for this task, may fall back to old logic or fail.")
-                # Potentially fall back to old logic or mark as unassignable if technology is mandatory
-                # For now, if no tech_id, no one is eligible by skill.
-            else:
-                for tech_cand_pm in present_technicians:
-                    tech_lines_pm = TECHNICIAN_LINES.get(tech_cand_pm, [])
+            for tech_cand_pm in present_technicians:
+                tech_lines_pm = TECHNICIAN_LINES.get(tech_cand_pm, [])
+                tech_skills_map = technician_technology_skills.get(tech_cand_pm, {})
 
-                    # 1. Check skill for the task's technology
-                    tech_skills_for_task_tech = technician_technology_skills.get(tech_cand_pm, {}).get(task_technology_id)
-                    if tech_skills_for_task_tech is None:
-                        # _log(logger, "debug", f"      Technician {tech_cand_pm} does not have skill for technology {task_technology_id}.")
-                        continue # Must have skill for this technology
+                # 1. Check if technician possesses AT LEAST ONE of the task\'s required skills
+                possesses_at_least_one_required_skill = any(skill_id in tech_skills_map for skill_id in task_technology_ids)
+                if not possesses_at_least_one_required_skill:
+                    # _log(logger, "debug", f"      Technician {tech_cand_pm} does not possess any of the required skills {task_technology_ids} for task {task_name_excel}.")
+                    continue
 
-                    # 2. Check line compatibility
-                    line_match = not task_lines_list or any(line in tech_lines_pm for line in task_lines_list)
-                    if not line_match:
-                        # _log(logger, "debug", f"      Technician {tech_cand_pm} failed line match for task {task_name_excel}.")
-                        continue
+                # 2. Check line compatibility
+                line_match = not task_lines_list or any(line in tech_lines_pm for line in task_lines_list)
+                if not line_match:
+                    # _log(logger, "debug", f"      Technician {tech_cand_pm} failed line match for task {task_name_excel}.")
+                    continue
 
-                    # 3. Get technician's priority for this specific task (tie-breaker)
-                    tech_task_defs_pm = TECHNICIAN_TASKS.get(tech_cand_pm, [])
-                    cand_stated_prio_pm = None
-                    can_do_pm_task_name = False # Check if technician is mapped to this task name
-                    for tech_task_obj_pm in tech_task_defs_pm:
-                        norm_tech_task_str_pm = normalize_string(tech_task_obj_pm['task_name']) # Changed 'task' to 'task_name'
-                        # Task name matching (as before)
-                        task_name_match_for_prio = normalized_current_excel_task_name_pm in norm_tech_task_str_pm or norm_tech_task_str_pm in normalized_current_excel_task_name_pm
-                        if task_name_match_for_prio: # Found the task in technician's list
-                            can_do_pm_task_name = True
-                            cand_stated_prio_pm = tech_task_obj_pm['prio']
-                            break
+                # 3. Check if technician is mapped to this task name
+                tech_task_defs_pm = TECHNICIAN_TASKS.get(tech_cand_pm, [])
+                can_do_pm_task_name = False
+                for tech_task_obj_pm in tech_task_defs_pm:
+                    norm_tech_task_str_pm = normalize_string(tech_task_obj_pm['task_name'])
+                    task_name_match = normalized_current_excel_task_name_pm in norm_tech_task_str_pm or norm_tech_task_str_pm in normalized_current_excel_task_name_pm
+                    if task_name_match:
+                        can_do_pm_task_name = True
+                        break
+                if not can_do_pm_task_name:
+                    # _log(logger, "debug", f"      Technician {tech_cand_pm} not mapped to task name {task_name_excel} for assignment.")
+                    continue
 
-                    if not can_do_pm_task_name:
-                        # _log(logger, "debug", f"      Technician {tech_cand_pm} not mapped to task name {task_name_excel} for priority.")
-                        continue # Technician must be mapped to the task to have a priority for it.
-
-                    # Calculate effective priority (eff_prio_pm) as before
-                    active_task_prios_for_tech_pm = [
-                        tech_json_task_def['prio']
-                        for tech_json_task_def in tech_task_defs_pm
-                        if any(normalize_string(tech_json_task_def['task_name']) in en_iter or en_iter in normalize_string(tech_json_task_def['task_name']) # Changed 'task' to 'task_name'
-                               for en_iter in all_pm_task_names_from_excel_normalized_set)
-                    ]
-                    eff_prio_pm = cand_stated_prio_pm # Default if not in active list or list is empty
-                    if active_task_prios_for_tech_pm:
-                        sorted_unique_active_prios_pm = sorted(list(set(active_task_prios_for_tech_pm)))
-                        if cand_stated_prio_pm in sorted_unique_active_prios_pm:
-                            eff_prio_pm = sorted_unique_active_prios_pm.index(cand_stated_prio_pm) + 1
-
-                    eligible_technicians_details_pm.append({
-                        'name': tech_cand_pm,
-                        'skill_level': tech_skills_for_task_tech, # Primary sort key
-                        'task_priority': eff_prio_pm,             # Secondary sort key
-                        'original_stated_prio': cand_stated_prio_pm
-                    })
+                # Store all skills the technician has that are relevant to this task
+                relevant_skills_for_tech = {skill_id: tech_skills_map[skill_id] for skill_id in task_technology_ids if skill_id in tech_skills_map}
+                eligible_technicians_details_pm.append({
+                    'name': tech_cand_pm,
+                    'relevant_skills': relevant_skills_for_tech # Dict of {skill_id: level}
+                })
 
             if not eligible_technicians_details_pm:
-                last_known_failure_reason_for_instance = "No technicians eligible for this PM task (check skills, technology, lines, or task mapping)."
+                last_known_failure_reason_for_instance = "No technicians eligible for this PM task (possess at least one skill, meet line/task mapping)."
                 unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
                 _log(logger, "warning", f"      {last_known_failure_reason_for_instance} for {instance_task_display_name}")
-                continue # Next instance or task
+                continue
 
-            # Sort eligible technicians: 1. Skill (desc), 2. Task Prio (asc)
-            eligible_technicians_details_pm.sort(key=lambda x: (-x['skill_level'], x['task_priority']))
-
-            # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Sorted Eligible Technicians: {eligible_technicians_details_pm}")
-
-            # Map for easy lookup of sorted details by name
-            tech_details_map_pm = {
-                d['name']: {
-                    'skill': d['skill_level'],
-                    'effective_task_prio': d['task_priority'],
-                    'stated_task_prio': d['original_stated_prio']
-                } for d in eligible_technicians_details_pm
-            }
-            # Use the sorted list of names for combinations to maintain order preference
+            # Sort eligible technicians by the highest skill level they possess for any of the task\'s required skills (desc), then by name (asc)
+            # This is a preliminary sort for forming combinations; group scoring will be more detailed.
+            eligible_technicians_details_pm.sort(key=lambda x: (
+                -max(x['relevant_skills'].values() or [0]), # Max skill level for relevant skills
+                x['name']
+            ))
             sorted_eligible_tech_names_pm = [d['name'] for d in eligible_technicians_details_pm]
-
+            tech_details_map_pm = {d['name']: d for d in eligible_technicians_details_pm}
 
             viable_groups_with_scores_pm = []
-            for r_size in range(1, len(sorted_eligible_tech_names_pm) + 1):
-                for group_tuple in combinations(sorted_eligible_tech_names_pm, r_size):
-                    group = list(group_tuple)
-                    if not group: continue
+            if num_technicians_needed > 0 and len(sorted_eligible_tech_names_pm) >= num_technicians_needed:
+                for group_tuple in combinations(sorted_eligible_tech_names_pm, num_technicians_needed):
+                    group_tech_names = list(group_tuple)
+                    if not group_tech_names: continue
 
-                    avg_skill_level_group = sum(tech_details_map_pm.get(t, {}).get('skill', 0) for t in group) / len(group)
-                    avg_eff_task_prio_group = sum(tech_details_map_pm.get(t, {}).get('effective_task_prio', float('inf')) for t in group) / len(group)
-                    workload = sum(sum(end - start for start, end, _ in technician_schedules[tn]) for tn in group)
+                    # Check if the group collectively covers all required skills for the task
+                    group_skills_possessed = set()
+                    for tech_name_in_group in group_tech_names:
+                        group_skills_possessed.update(tech_details_map_pm[tech_name_in_group]['relevant_skills'].keys())
+
+                    if not set(task_technology_ids).issubset(group_skills_possessed):
+                        # _log(logger, "debug", f"      Group {group_tech_names} does not collectively cover all required skills {task_technology_ids}. Missing: {set(task_technology_ids) - group_skills_possessed}")
+                        continue # This group cannot perform the task
+
+                    # Calculate per-skill average levels for the group
+                    per_skill_avg_levels = {}
+                    for req_skill_id in task_technology_ids:
+                        techs_with_this_skill_in_group = [tech_name for tech_name in group_tech_names if req_skill_id in tech_details_map_pm[tech_name]['relevant_skills']]
+                        if techs_with_this_skill_in_group:
+                            avg_level_for_skill = sum(tech_details_map_pm[tech_name]['relevant_skills'][req_skill_id] for tech_name in techs_with_this_skill_in_group) / len(techs_with_this_skill_in_group)
+                            per_skill_avg_levels[req_skill_id] = avg_level_for_skill
+                        else:
+                            # This should not happen if the group covers all skills, but as a safeguard:
+                            per_skill_avg_levels[req_skill_id] = 0
+
+                    # Tie-breaker: Combined average skill level for the group
+                    # (sum of all relevant skill levels of all techs in group) / (num_skills_covered_by_group_for_this_task)
+                    # More precisely: sum of (skill_level for each tech for each *required* skill they possess) / sum of (count of required skills possessed by each tech)
+                    total_skill_points_in_group_for_required_skills = 0
+                    count_of_possessed_required_skills_in_group = 0
+                    for tech_name_in_group in group_tech_names:
+                        for req_skill_id in task_technology_ids:
+                            if req_skill_id in tech_details_map_pm[tech_name_in_group]['relevant_skills']:
+                                total_skill_points_in_group_for_required_skills += tech_details_map_pm[tech_name_in_group]['relevant_skills'][req_skill_id]
+                                count_of_possessed_required_skills_in_group += 1
+
+                    combined_avg_skill_level_group = 0
+                    if count_of_possessed_required_skills_in_group > 0:
+                        combined_avg_skill_level_group = total_skill_points_in_group_for_required_skills / count_of_possessed_required_skills_in_group
+
+
+                    workload = sum(sum(end - start for start, end, _ in technician_schedules[tn]) for tn in group_tech_names)
 
                     viable_groups_with_scores_pm.append({
-                        'group': group,
-                        'len': len(group),
-                        'avg_skill': avg_skill_level_group,       # For sorting groups
-                        'avg_task_prio': avg_eff_task_prio_group, # For sorting groups
-                        'workload': workload
+                        'group': group_tech_names,
+                        'len': len(group_tech_names),
+                        'per_skill_avg': per_skill_avg_levels, # Dict {skill_id: avg_level}
+                        'combined_avg_skill': combined_avg_skill_level_group, # Tie-breaker 1
+                        'workload': workload # Tie-breaker 2
                     })
 
-            # Sort groups: 1. Closeness to num_technicians_needed, 2. Avg Skill (desc), 3. Avg Task Prio (asc), 4. Workload (asc)
+            # Sort groups:
+            # Primary: Compare per_skill_avg_levels. Higher is better for each skill.
+            #   Need a custom comparison for this. For now, sort by combined_avg_skill, then workload, then names.
+            #   A more precise sort would iterate through sorted skill_ids and compare averages one by one.
+            #   For simplicity, we\'ll use combined_avg_skill as the main skill-based sorter after ensuring all skills are covered.
+            #   Then, if per_skill_avg is tied (which combined_avg_skill might approximate), use workload.
+
+            # Create a sortable tuple for per_skill_avg for comparison
+            # Sort skill IDs to ensure consistent comparison order
+            sorted_req_skill_ids = sorted(list(task_technology_ids))
+
             viable_groups_with_scores_pm.sort(key=lambda x: (
-                abs(x['len'] - num_technicians_needed),
-                -x['avg_skill'],
-                x['avg_task_prio'],
-                x['workload'],
+                # Sort by per-skill averages in a defined order (descending for each skill)
+                tuple(-x['per_skill_avg'].get(skill_id, 0) for skill_id in sorted_req_skill_ids),
+                -x['combined_avg_skill'], # Higher combined average is better (tie-breaker)
+                x['workload'],             # Lower workload is better (tie-breaker)
                 ''.join(sorted(x['group'])) # Deterministic tie-breaker
             ))
-            # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Sorted Viable Groups: {viable_groups_with_scores_pm[:5]}")
 
+            # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Sorted Viable Groups (Target size {num_technicians_needed}, Multi-Skill): {viable_groups_with_scores_pm[:3]}")
 
-            if not viable_groups_with_scores_pm:
-                last_known_failure_reason_for_instance = "No viable technician groups found for PM task after skill/priority filtering."
+            if not viable_groups_with_scores_pm and num_technicians_needed > 0:
+                last_known_failure_reason_for_instance = f"No viable technician groups of size {num_technicians_needed} found that collectively cover all required skills: {task_technology_ids}."
                 unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
                 _log(logger, "warning", f"      {last_known_failure_reason_for_instance} for {instance_task_display_name}")
-                continue # Next instance or task
+                continue
 
             assignment_successful_and_full = False
             final_chosen_group_for_instance = None
             final_start_time_for_instance = 0
             final_assigned_duration_for_instance = 0
             final_actual_num_assigned_for_instance = 0
-            final_original_stated_priority_for_instance = 'N/A_PM_0Tech' # Default for 0-tech PM tasks
+            # final_original_stated_priority_for_instance = 'N/A_PM_0Tech' # This was based on old prio, now skill based
+            final_technician_task_info = 'Skill_Based' # Placeholder for removed priority info
             final_current_effective_duration_for_chosen_group = 0
 
             for group_candidate_data in viable_groups_with_scores_pm:
@@ -501,17 +523,21 @@ def _assign_task_definition_to_schedule(
                 if instance_id_str in unassigned_tasks_reasons_dict:
                     del unassigned_tasks_reasons_dict[instance_id_str]
 
-                if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                     # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Proceeding with fully assigned group: {final_chosen_group_for_instance} at {final_start_time_for_instance}")
-                     pass
+                # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Proceeding with fully assigned group: {final_chosen_group_for_instance} at {final_start_time_for_instance}")
 
-                if not final_chosen_group_for_instance: # Handles 0-tech PM task assigned to an empty group
+                resource_mismatch_note_pm = None
+                if num_technicians_needed > 0 and final_actual_num_assigned_for_instance != num_technicians_needed:
+                    resource_mismatch_note_pm = f"Task requires {num_technicians_needed} techs; assigned to {final_actual_num_assigned_for_instance}."
+                elif num_technicians_needed == 0 and final_actual_num_assigned_for_instance > 0:
+                    resource_mismatch_note_pm = f"Task planned for 0 techs; assigned to {final_actual_num_assigned_for_instance}."
+
+                if not final_chosen_group_for_instance: # Handles 0-tech PM task
                     all_task_assignments_details.append({
                         'technician': None, 'task_name': instance_task_display_name,
                         'start': final_start_time_for_instance, 'duration': 0, 'is_incomplete': False,
                         'original_duration': 0, 'instance_id': instance_id_str,
-                        'technician_task_priority': final_original_stated_priority_for_instance,
-                        'resource_mismatch_info': "0-duration/0-tech PM task"
+                        'technician_task_info\\': final_technician_task_info,
+                        'resource_mismatch_info': resource_mismatch_note_pm or "0-duration/0-tech PM task"
                     })
                 else:
                     for tech_assigned_name in final_chosen_group_for_instance:
@@ -519,20 +545,21 @@ def _assign_task_definition_to_schedule(
                             (final_start_time_for_instance, final_start_time_for_instance + final_assigned_duration_for_instance, instance_task_display_name)
                         )
                         technician_schedules[tech_assigned_name].sort()
-                        # Get the specific stated priority for this technician for this task
-                        tech_specific_stated_prio = tech_details_map_pm.get(tech_assigned_name, {}).get('stated_task_prio', 'N/A_Skill')
                         all_task_assignments_details.append({
                             'technician': tech_assigned_name, 'task_name': instance_task_display_name,
                             'start': final_start_time_for_instance, 'duration': final_assigned_duration_for_instance,
-                            'is_incomplete': False, 'original_duration': final_current_effective_duration_for_chosen_group, # This is effective duration for the group
+                            'is_incomplete': False,
+                            'original_duration': base_duration, # Store base_duration, effective duration is per group
                             'instance_id': instance_id_str,
-                            'technician_task_priority': tech_specific_stated_prio, # Store individual tech's stated prio for the task
-                            'resource_mismatch_info': None # Add mismatch info if actual assigned != needed, or skill related notes
+                            'technician_task_info\\': final_technician_task_info,
+                            'resource_mismatch_info': resource_mismatch_note_pm
                         })
-                # _log(logger, "info", f"    (Helper) Successfully scheduled (fully) {instance_task_display_name} for group {final_chosen_group_for_instance}...")
+                _log(logger, "info", f"    (Helper) Successfully scheduled (fully) {instance_task_display_name} for group {final_chosen_group_for_instance} at {final_start_time_for_instance} for {final_assigned_duration_for_instance} min. Required skills: {task_technology_ids}")
             else:
-                last_known_failure_reason_for_instance = "No technician group could be fully assigned to the PM task."
+                if not last_known_failure_reason_for_instance or "No technician group could be fully assigned" in last_known_failure_reason_for_instance:
+                    last_known_failure_reason_for_instance = f"No suitable time slot found for any group covering all skills for PM task {instance_task_display_name}. Required skills: {task_technology_ids}"
                 unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                _log(logger, "warning", f"      Failed to assign PM instance {instance_task_display_name}. Reason: {last_known_failure_reason_for_instance}")
 
         elif task_type == 'REP':
             # --- REP Task Logic (Copied and adapted from original) ---

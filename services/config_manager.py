@@ -2,7 +2,7 @@
 import sqlite3
 import traceback
 import os
-from .db_utils import get_db_connection
+from .db_utils import get_db_connection, get_technician_lines_via_satellite_point
 
 # --- Configuration Store ---
 TECHNICIAN_TASKS = {}
@@ -27,8 +27,10 @@ def load_app_config(database_path, logger=None): # Added logger argument
     TECHNICIAN_LINES.clear()
     TECHNICIANS.clear()
     TECHNICIAN_GROUPS.clear()
-    TECHNICIAN_GROUPS.update({"Fuchsbau": [], "Closures": [], "Aquarium": []})
-    valid_groups = {"Fuchsbau", "Closures", "Aquarium"}
+    # Initialize default groups. Satellite points will be dynamic from DB.
+    # The concept of TECHNICIAN_GROUPS might need to align with satellite points now.
+    # For now, keeping its structure but it will be populated based on technician's satellite point name.
+    # We will fetch all satellite points and use their names as keys if needed.
 
     def _log(message, level='info'):
         if logger:
@@ -55,7 +57,16 @@ def load_app_config(database_path, logger=None): # Added logger argument
         _log("  Successfully connected to the database for config load.")
         cursor = conn.cursor()
 
-        sql_query = "SELECT id, name, sattelite_point, lines FROM technicians ORDER BY name"
+        # Fetch all satellite points to map their IDs to names for TECHNICIAN_GROUPS population
+        cursor.execute("SELECT id, name FROM satellite_points")
+        satellite_points_map = {sp['id']: sp['name'] for sp in cursor.fetchall()}
+        # Initialize TECHNICIAN_GROUPS with names from satellite_points table
+        for sp_name in satellite_points_map.values():
+            if sp_name not in TECHNICIAN_GROUPS:
+                TECHNICIAN_GROUPS[sp_name] = []
+
+        # Updated query to fetch satellite_point_id
+        sql_query = "SELECT id, name, satellite_point_id FROM technicians ORDER BY name"
         cursor.execute(sql_query)
         db_technicians = cursor.fetchall()
         _log(f"  Query executed. Number of rows fetched from 'technicians' table: {len(db_technicians)}")
@@ -66,38 +77,34 @@ def load_app_config(database_path, logger=None): # Added logger argument
         for row_idx, row in enumerate(db_technicians):
             tech_id = row['id']
             tech_name = row['name']
-            sattelite_point = row['sattelite_point']
-            lines_str = row['lines']
+            tech_satellite_point_id = row['satellite_point_id']
 
-            if not tech_name or not sattelite_point or sattelite_point not in valid_groups:
-                _log(f"      SKIPPING row {row_idx + 1} (ID {tech_id}, Name '{tech_name}', Sattelite '{sattelite_point}') due to missing/invalid critical data.", 'warning')
+            # Determine satellite point name for grouping
+            tech_satellite_point_name = None
+            if tech_satellite_point_id in satellite_points_map:
+                tech_satellite_point_name = satellite_points_map[tech_satellite_point_id]
+
+            if not tech_name or not tech_satellite_point_name:
+                _log(f"      SKIPPING row {row_idx + 1} (ID {tech_id}, Name '{tech_name}', SP_ID '{tech_satellite_point_id}') due to missing name or unresolvable/unassigned satellite point.", 'warning')
                 continue
 
             TECHNICIANS.append(tech_name)
-            TECHNICIAN_LINES[tech_name] = [int(l.strip()) for l in lines_str.split(',') if l.strip().isdigit()] if lines_str else []
-            if sattelite_point in TECHNICIAN_GROUPS:
-                TECHNICIAN_GROUPS[sattelite_point].append(tech_name)
-            # else: # This case was already handled by the skip condition
 
-            # Modified query to join with tasks table to get task_name and use task_id
-            task_assignments_query = """
-                SELECT tta.task_id, tta.priority, t.name as task_name
-                FROM technician_task_assignments tta
-                JOIN tasks t ON tta.task_id = t.id
-                WHERE tta.technician_id = ?
-                ORDER BY tta.priority ASC
-            """
-            cursor.execute(task_assignments_query, (tech_id,))
-            assignments_for_tech = []
-            db_assignments = cursor.fetchall()
-            for assign_row in db_assignments:
-                # Store task_id, priority, and task_name
-                assignments_for_tech.append({
-                    'task_id': assign_row['task_id'],
-                    'task_name': assign_row['task_name'], # For reference/logging if needed
-                    'prio': assign_row['priority']
-                })
-            TECHNICIAN_TASKS[tech_name] = assignments_for_tech
+            # Fetch lines for the technician using their satellite_point_id via the new db_utils function
+            # get_technician_lines_via_satellite_point returns a list of line names
+            # The original code expected line numbers, this needs to be clarified if line names or IDs are expected here.
+            # Assuming line *names* are now expected in TECHNICIAN_LINES based on the db structure.
+            # If line IDs (integers) were expected, the get_technician_lines_via_satellite_point would need to return IDs or this logic adjusted.
+            # For now, proceeding with line names as strings.
+            technician_actual_lines = get_technician_lines_via_satellite_point(conn, tech_id)
+            TECHNICIAN_LINES[tech_name] = technician_actual_lines
+
+            if tech_satellite_point_name in TECHNICIAN_GROUPS:
+                TECHNICIAN_GROUPS[tech_satellite_point_name].append(tech_name)
+            else:
+                # This case should ideally not happen if TECHNICIAN_GROUPS is pre-populated from all satellite_points
+                _log(f"  Warning: Satellite point '{tech_satellite_point_name}' for technician '{tech_name}' not found in pre-populated TECHNICIAN_GROUPS. Adding it.", 'warning')
+                TECHNICIAN_GROUPS[tech_satellite_point_name] = [tech_name]
 
         _log(f"Successfully loaded configuration for {len(TECHNICIANS)} technicians from database via config_manager.")
 

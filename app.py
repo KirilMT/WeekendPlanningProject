@@ -23,7 +23,10 @@ from .services.db_utils import (
     get_db_connection, init_db,
     get_or_create_technology, get_or_create_task,
     get_all_technician_skills_by_name, update_technician_skill, get_technician_skills_by_id,
-    get_or_create_technology_group, get_all_technology_groups, delete_technology
+    get_or_create_technology_group, get_all_technology_groups, delete_technology,
+    add_required_skill_to_task, remove_all_required_skills_for_task, get_required_skills_for_task, remove_required_skill_from_task, # Added new functions
+    get_or_create_satellite_point, update_satellite_point, delete_satellite_point, get_all_satellite_points, # Added satellite point functions
+    add_line, get_all_lines, update_line, delete_line, get_lines_for_satellite_point # Added line functions
 )
 from .services.config_manager import load_app_config, TECHNICIAN_LINES, TECHNICIANS, TECHNICIAN_GROUPS
 from .services.data_processing import sanitize_data, calculate_work_time
@@ -48,7 +51,7 @@ session_excel_data_cache = {}
 
 with app.app_context():
     init_db(DATABASE_PATH, app.logger)
-    load_app_config(DATABASE_PATH, app.logger) # Populates globals in .services.config_manager
+    load_app_config(DATABASE_PATH, app.logger) # Ensure this line is present and uncommented
 
 @app.route('/')
 def index_route():
@@ -68,10 +71,18 @@ def output_file_route(filename):
 
 @app.route('/technicians', methods=['GET'])
 def get_technicians_route():
-    if TECHNICIAN_GROUPS:
-        return jsonify(TECHNICIAN_GROUPS)
-    else:
-        return jsonify({"error": "Technician groups not available."}), 500
+    try:
+        if TECHNICIAN_GROUPS is not None and isinstance(TECHNICIAN_GROUPS, dict) and TECHNICIAN_GROUPS:
+            return jsonify(TECHNICIAN_GROUPS), 200
+        elif TECHNICIAN_GROUPS is None:
+            app.logger.warning("/technicians route: TECHNICIAN_GROUPS is None. Returning empty JSON with 200.")
+            return jsonify({}), 200 # Explicitly handle None
+        else: # Covers empty dict or other unexpected states
+            app.logger.info(f"/technicians route: TECHNICIAN_GROUPS is empty or not a populated dict (type: {type(TECHNICIAN_GROUPS)}). Value: {TECHNICIAN_GROUPS}. Returning empty JSON with 200.")
+            return jsonify({}), 200
+    except Exception as e:
+        app.logger.error(f"Error in /technicians route: {e}", exc_info=True)
+        return jsonify({"error": "Failed to retrieve technician groups due to an internal error."}), 500
 
 @app.route('/api/get_technician_mappings', methods=['GET'])
 def get_technician_mappings_api():
@@ -79,22 +90,117 @@ def get_technician_mappings_api():
     cursor = conn.cursor()
     technicians_output = {}
     try:
-        cursor.execute("SELECT id, name, sattelite_point, lines FROM technicians ORDER BY name")
+        # Get all tasks and their required skills first
+        cursor.execute("SELECT t.id as task_id, t.name as task_name, GROUP_CONCAT(trs.technology_id) as required_skill_ids, GROUP_CONCAT(tech.name) as required_skill_names FROM tasks t LEFT JOIN task_required_skills trs ON t.id = trs.task_id LEFT JOIN technologies tech ON trs.technology_id = tech.id GROUP BY t.id, t.name ORDER BY t.name")
+        all_tasks_raw = cursor.fetchall()
+
+        all_tasks_with_parsed_skills = []
+        for task_row in all_tasks_raw:
+            required_skills_list = []
+            if task_row['required_skill_ids']:
+                ids = str(task_row['required_skill_ids']).split(',')
+                names = str(task_row['required_skill_names']).split(',')
+                for i, skill_id_str in enumerate(ids):
+                    try:
+                        skill_id = int(skill_id_str)
+                        skill_name = names[i] if i < len(names) else "Unknown Skill"
+                        required_skills_list.append({'id': skill_id, 'name': skill_name})
+                    except ValueError:
+                        app.logger.warning(f"Invalid skill_id '{skill_id_str}' for task {task_row['task_name']}")
+            all_tasks_with_parsed_skills.append({
+                'task_id': task_row['task_id'],
+                'task_name': task_row['task_name'],
+                'required_skills_list': required_skills_list
+            })
+
+        cursor.execute("""
+            SELECT t.id, t.name, t.satellite_point_id, sp.name as satellite_point_name
+            FROM technicians t
+            LEFT JOIN satellite_points sp ON t.satellite_point_id = sp.id
+            ORDER BY t.name
+        """)
         db_technicians = cursor.fetchall()
+
         for tech_row in db_technicians:
+            tech_id = tech_row['id']
             tech_name = tech_row['name']
+
             tech_data = {
-                "id": tech_row['id'],
-                "sattelite_point": tech_row['sattelite_point'],
-                "technician_lines": [int(l.strip()) for l in tech_row['lines'].split(',') if l.strip().isdigit()] if tech_row['lines'] else [],
-                "task_assignments": []
+                "id": tech_id,
+                "satellite_point_id": tech_row['satellite_point_id'],
+                "satellite_point_name": tech_row['satellite_point_name'],
+                "skill_matched_tasks": {
+                    "full_match": [],
+                    "partial_match": []
+                },
+                "explicitly_assigned_tasks": [] # For tasks from technician_task_assignments
             }
-            cursor.execute(
-                "SELECT t.name as task_name, tta.priority FROM technician_task_assignments tta JOIN tasks t ON tta.task_id = t.id WHERE tta.technician_id = ? ORDER BY tta.priority ASC",
-                (tech_row['id'],)
-            )
+
+            # Get technician's skills
+            cursor.execute("SELECT technology_id, skill_level FROM technician_technology_skills WHERE technician_id = ?", (tech_id,))
+            tech_skills = {row['technology_id']: row['skill_level'] for row in cursor.fetchall()}
+
+            for task_info in all_tasks_with_parsed_skills:
+                task_id = task_info['task_id']
+                task_name = task_info['task_name']
+                task_required_skills_list = task_info['required_skills_list']
+
+                if not task_required_skills_list: # Skip tasks with no defined required skills for this view
+                    continue
+
+                possessed_skill_details_for_task = []
+                missing_skill_details_for_task = []
+                highest_possessed_level_for_task = 0
+
+                num_required = len(task_required_skills_list)
+                num_possessed = 0
+
+                for req_skill in task_required_skills_list:
+                    skill_id = req_skill['id']
+                    skill_name = req_skill['name']
+                    if skill_id in tech_skills and tech_skills[skill_id] > 0:
+                        num_possessed += 1
+                        level = tech_skills[skill_id]
+                        possessed_skill_details_for_task.append({'skill_id': skill_id, 'skill_name': skill_name, 'possessed': True, 'level': level})
+                        if level > highest_possessed_level_for_task:
+                            highest_possessed_level_for_task = level
+                    else:
+                        missing_skill_details_for_task.append({'skill_id': skill_id, 'skill_name': skill_name, 'possessed': False, 'level': None})
+
+                if num_possessed == 0: # Technician does not possess any of the required skills
+                    continue
+
+                is_full_match = (num_possessed == num_required)
+                missing_skill_count = num_required - num_possessed
+
+                task_display_data = {
+                    'task_id': task_id,
+                    'task_name': task_name,
+                    'all_required_skills_info': possessed_skill_details_for_task + missing_skill_details_for_task,
+                    'highest_possessed_skill_level': highest_possessed_level_for_task,
+                    'missing_skill_count': missing_skill_count
+                }
+
+                if is_full_match:
+                    tech_data["skill_matched_tasks"]["full_match"].append(task_display_data)
+                else:
+                    tech_data["skill_matched_tasks"]["partial_match"].append(task_display_data)
+
+            # Sort tasks
+            tech_data["skill_matched_tasks"]["full_match"].sort(key=lambda x: -x['highest_possessed_skill_level'])
+            tech_data["skill_matched_tasks"]["partial_match"].sort(key=lambda x: (-x['highest_possessed_skill_level'], x['missing_skill_count']))
+
+            # Fetch explicitly assigned tasks (from technician_task_assignments)
+            # This part remains to show what tasks are *currently selected* for the technician to do,
+            # which might be a subset of what they are skilled for.
+            # The UI will need to handle how to "Remove Assignment" from this list.
+            cursor.execute("SELECT t.id as task_id, t.name as task_name FROM technician_task_assignments tta JOIN tasks t ON tta.task_id = t.id WHERE tta.technician_id = ? ORDER BY t.name", (tech_id,))
             for assign_row in cursor.fetchall():
-                tech_data["task_assignments"].append({'task': assign_row['task_name'], 'prio': assign_row['priority']})
+                tech_data["explicitly_assigned_tasks"].append({
+                    'task_id': assign_row['task_id'],
+                    'task_name': assign_row['task_name']
+                })
+
             technicians_output[tech_name] = tech_data
         return jsonify({"technicians": technicians_output})
     except sqlite3.Error as e:
@@ -116,37 +222,34 @@ def save_technician_mappings_api():
 
         technicians_from_payload = updated_data.get('technicians', {})
         for tech_name, tech_payload_data in technicians_from_payload.items():
-            sattelite_point = tech_payload_data.get('sattelite_point')
-            lines_list = tech_payload_data.get('technician_lines', [])
-            lines_str = ",".join(map(str, [l for l in lines_list if isinstance(l, int)])) if lines_list else ""
+            satellite_point_id = tech_payload_data.get('satellite_point_id') # Changed from sattelite_point
 
-            task_assignments_payload = sorted(
-                filter(lambda ta: isinstance(ta, dict) and 'task' in ta and 'prio' in ta and isinstance(ta['prio'], int) and ta['prio'] >= 1,
-                       tech_payload_data.get('task_assignments', [])),
-                key=lambda x: x.get('prio')
-            )
+            # Ensure task_assignments remains an empty array as per instructions
+            task_assignments_payload = [] # Kept as empty array
 
             cursor.execute("SELECT id FROM technicians WHERE name = ?", (tech_name,))
             tech_row = cursor.fetchone()
             technician_id = None
             if tech_row:
                 technician_id = tech_row['id']
-                cursor.execute("UPDATE technicians SET sattelite_point = ?, lines = ? WHERE id = ?", (sattelite_point, lines_str, technician_id))
+                # Updated to use satellite_point_id and remove lines
+                cursor.execute("UPDATE technicians SET satellite_point_id = ? WHERE id = ?", (satellite_point_id, technician_id))
                 cursor.execute("DELETE FROM technician_task_assignments WHERE technician_id = ?", (technician_id,))
             else:
-                cursor.execute("INSERT INTO technicians (name, sattelite_point, lines) VALUES (?, ?, ?)", (tech_name, sattelite_point, lines_str))
+                # Updated to use satellite_point_id and remove lines
+                cursor.execute("INSERT INTO technicians (name, satellite_point_id) VALUES (?, ?)", (tech_name, satellite_point_id))
                 technician_id = cursor.lastrowid
 
+            # Task assignment logic remains, but based on an empty task_assignments_payload, no assignments will be made here.
             for assignment in task_assignments_payload:
                 task_name_assign = assignment.get('task')
-                priority_assign = assignment.get('prio')
-                if task_name_assign and isinstance(priority_assign, int) and priority_assign >= 1:
+                if task_name_assign:
                     cursor.execute("SELECT id FROM tasks WHERE name = ?", (task_name_assign,))
                     task_db_row = cursor.fetchone()
                     if task_db_row:
                         task_id_assign = task_db_row['id']
-                        cursor.execute("INSERT INTO technician_task_assignments (technician_id, task_id, priority) VALUES (?, ?, ?)",
-                                       (technician_id, task_id_assign, priority_assign))
+                        cursor.execute("INSERT INTO technician_task_assignments (technician_id, task_id) VALUES (?, ?)",
+                                       (technician_id, task_id_assign))
                     else:
                         app.logger.warning(f"Task '{task_name_assign}' not found. Cannot save assignment for '{tech_name}'.")
         conn.commit()
@@ -178,6 +281,180 @@ def get_technologies_api():
         return jsonify({"message": f"Database error: {e}"}), 500
     finally:
         if conn: conn.close()
+
+@app.route('/api/lines', methods=['GET', 'POST']) # Added 'POST'
+def get_lines_api():
+    conn = None
+    try:
+        conn = get_db_connection(DATABASE_PATH)
+        if request.method == 'POST':
+            data = request.get_json()
+            name = data.get('name')
+            satellite_point_id = data.get('satellite_point_id')
+            if not name or satellite_point_id is None:
+                return jsonify({"message": "Line name and satellite_point_id are required"}), 400
+            try:
+                # Ensure satellite_point_id is an integer
+                satellite_point_id = int(satellite_point_id)
+                # Check if satellite point exists
+                cursor = conn.cursor()
+                cursor.execute("SELECT id FROM satellite_points WHERE id = ?", (satellite_point_id,))
+                if not cursor.fetchone():
+                    return jsonify({"message": f"Satellite point ID {satellite_point_id} not found."}), 400
+
+                line_id = add_line(conn, name, satellite_point_id)
+                # Fetch the created line to return its details
+                cursor.execute("SELECT id, name, satellite_point_id FROM lines WHERE id = ?", (line_id,))
+                line = cursor.fetchone()
+                return jsonify(dict(line)), 201
+            except ValueError: # Catches if int(satellite_point_id) fails
+                return jsonify({"message": "Invalid satellite_point_id format. Must be an integer."}), 400
+            except sqlite3.IntegrityError:
+                 return jsonify({"message": f"Line with name '{name}' may already exist for the given satellite point or other integrity issue."}), 409
+            except Exception as e:
+                app.logger.error(f"Error creating line: {e}", exc_info=True)
+                return jsonify({"message": f"Server error: {str(e)}"}), 500
+
+        # GET request part
+        lines = get_all_lines(conn)
+        return jsonify(lines)
+    except Exception as e:
+        app.logger.error(f"Error in /api/lines: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn: conn.close()
+
+@app.route('/api/lines/<int:line_id>', methods=['PUT', 'DELETE'])
+def manage_line_item_api(line_id):
+    conn = None
+    try:
+        conn = get_db_connection(DATABASE_PATH)
+        if request.method == 'PUT':
+            data = request.get_json()
+            name = data.get('name')
+            satellite_point_id = data.get('satellite_point_id')
+            if not name or satellite_point_id is None:
+                return jsonify({"message": "Name and satellite_point_id are required for update"}), 400
+            try:
+                satellite_point_id = int(satellite_point_id)
+                # Check if satellite point exists
+                cursor = conn.cursor()
+                cursor.execute("SELECT id FROM satellite_points WHERE id = ?", (satellite_point_id,))
+                if not cursor.fetchone():
+                    return jsonify({"message": f"Satellite point ID {satellite_point_id} not found."}), 400
+
+                updated_line_data = update_line(conn, line_id, name, satellite_point_id)
+                if updated_line_data:
+                    return jsonify(updated_line_data), 200
+                else:
+                    return jsonify({"message": "Line not found"}), 404
+            except ValueError: # Catches if int(satellite_point_id) fails
+                return jsonify({"message": "Invalid satellite_point_id format. Must be an integer."}), 400
+            except sqlite3.IntegrityError:
+                 return jsonify({"message": f"Line with name '{name}' may already exist for the given satellite point or other integrity issue."}), 409
+            except Exception as e:
+                app.logger.error(f"Error updating line {line_id}: {e}", exc_info=True)
+                return jsonify({"message": f"Server error: {str(e)}"}), 500
+
+        elif request.method == 'DELETE':
+            try:
+                success = delete_line(conn, line_id)
+                if success:
+                    return jsonify({"message": "Line deleted successfully"}), 200
+                else:
+                    return jsonify({"message": "Line not found or could not be deleted"}), 404
+            except sqlite3.IntegrityError as e: # e.g. if line is referenced by technicians or other entities
+                app.logger.error(f"Integrity error deleting line {line_id}: {e}", exc_info=True)
+                return jsonify({"message": f"Cannot delete line: it is currently in use. Details: {str(e)}"}), 409
+            except Exception as e:
+                app.logger.error(f"Error deleting line {line_id}: {e}", exc_info=True)
+                return jsonify({"message": f"Server error: {str(e)}"}), 500
+    except Exception as e:
+        app.logger.error(f"Error in /api/lines/<id>: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/satellite_points', methods=['GET', 'POST']) # Added 'POST'
+def get_satellite_points_api():
+    conn = None
+    try:
+        conn = get_db_connection(DATABASE_PATH)
+        if request.method == 'POST':
+            data = request.get_json()
+            name = data.get('name')
+            if not name:
+                return jsonify({"message": "Satellite point name is required"}), 400
+            try:
+                point_id = get_or_create_satellite_point(conn, name)
+                # Fetch the created/existing point to return its details
+                cursor = conn.cursor()
+                cursor.execute("SELECT id, name FROM satellite_points WHERE id = ?", (point_id,))
+                point = cursor.fetchone()
+                return jsonify(dict(point)), 201 # Return the created or existing point
+            except sqlite3.IntegrityError: # Should be caught by get_or_create if it tries to insert duplicate
+                return jsonify({"message": f"Satellite point '{name}' may already exist or another integrity issue."}), 409
+            except Exception as e:
+                app.logger.error(f"Error creating satellite point: {e}", exc_info=True)
+                return jsonify({"message": f"Server error: {str(e)}"}), 500
+
+        # GET request part remains the same
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name FROM satellite_points ORDER BY name")
+        satellite_points = [{"id": row['id'], "name": row['name']} for row in cursor.fetchall()]
+        return jsonify(satellite_points)
+    except sqlite3.Error as e:
+        app.logger.error(f"Database error fetching satellite points: {e}")
+        return jsonify({"message": f"Database error: {e}"}), 500
+    except Exception as e: # Catch other potential errors, e.g., if request.get_json() fails
+        app.logger.error(f"Error in /api/satellite_points: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/satellite_points/<int:point_id>', methods=['PUT', 'DELETE'])
+def manage_satellite_point_item_api(point_id):
+    conn = None
+    try:
+        conn = get_db_connection(DATABASE_PATH)
+        if request.method == 'PUT':
+            data = request.get_json()
+            name = data.get('name')
+            if not name:
+                return jsonify({"message": "Name is required for update"}), 400
+            try:
+                updated_point = update_satellite_point(conn, point_id, name)
+                if updated_point:
+                    return jsonify(updated_point), 200
+                else:
+                    return jsonify({"message": "Satellite point not found"}), 404
+            except sqlite3.IntegrityError:
+                 return jsonify({"message": f"Satellite point with name '{name}' may already exist."}), 409
+            except Exception as e:
+                app.logger.error(f"Error updating satellite point {point_id}: {e}", exc_info=True)
+                return jsonify({"message": f"Server error: {str(e)}"}), 500
+
+        elif request.method == 'DELETE':
+            try:
+                success = delete_satellite_point(conn, point_id)
+                if success:
+                    return jsonify({"message": "Satellite point deleted successfully"}), 200
+                else:
+                    return jsonify({"message": "Satellite point not found or could not be deleted"}), 404
+            except sqlite3.IntegrityError as e: # e.g. if point is referenced by technicians
+                app.logger.error(f"Integrity error deleting satellite point {point_id}: {e}", exc_info=True)
+                return jsonify({"message": f"Cannot delete satellite point: it is currently in use. Details: {str(e)}"}), 409
+            except Exception as e:
+                app.logger.error(f"Error deleting satellite point {point_id}: {e}", exc_info=True)
+                return jsonify({"message": f"Server error: {str(e)}"}), 500
+    except Exception as e:
+        app.logger.error(f"Error in /api/satellite_points/<id>: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            conn.close()
 
 @app.route('/api/technologies', methods=['POST'])
 def add_technology_api():
@@ -226,10 +503,11 @@ def add_technology_api():
 @app.route('/api/technologies/<int:technology_id>', methods=['PUT', 'DELETE'])
 def manage_technology_item_api(technology_id):
     conn = None
+    new_name = None # Initialize new_name here
     try:
         if request.method == 'PUT':
             data = request.get_json()
-            new_name = data.get('name', '').strip()
+            new_name = data.get('name', '').strip() # Assigned here
             group_id = data.get('group_id')
             parent_id = data.get('parent_id')
 
@@ -291,10 +569,9 @@ def manage_technology_item_api(technology_id):
 
     except ValueError as ve:
         return jsonify({"message": f"Invalid data format: {str(ve)}"}), 400
-    except sqlite3.IntegrityError as e:
+    except sqlite3.IntegrityError:
         if conn: conn.rollback()
-        app.logger.error(f"Database integrity error for technology {technology_id} ({request.method}): {e}")
-        return jsonify({"message": f"Database integrity error: {e}"}), 409
+        return jsonify({"message": f"Technology group name \'{new_name}\' already exists."}), 409
     except Exception as e:
         if conn: conn.rollback()
         app.logger.error(f"Error processing technology {technology_id} ({request.method}): {e}", exc_info=True)
@@ -463,42 +740,50 @@ def add_task_api():
     try:
         data = request.get_json()
         task_name = data.get('name', '').strip()
-        technology_id = data.get('technology_id')
+        technology_ids = data.get('technology_ids', []) # Expect a list of technology IDs
 
         if not task_name:
             return jsonify({"message": "Task name is required."}), 400
-        if technology_id is None:
-            return jsonify({"message": "Technology ID is required for the task."}), 400
-
-        try:
-            technology_id = int(technology_id)
-        except ValueError:
-            return jsonify({"message": "Invalid Technology ID format."}), 400
+        if not isinstance(technology_ids, list) or not technology_ids: # Ensure it's a non-empty list
+            return jsonify({"message": "At least one Technology ID is required for the task."}), 400
 
         conn = get_db_connection(DATABASE_PATH)
         cursor = conn.cursor()
 
-        # Check if technology exists
-        cursor.execute("SELECT id FROM technologies WHERE id = ?", (technology_id,))
-        if not cursor.fetchone():
-            return jsonify({"message": f"Technology ID {technology_id} not found."}), 400
+        # Validate all technology IDs
+        for tech_id in technology_ids:
+            try:
+                tech_id_int = int(tech_id)
+                cursor.execute("SELECT id FROM technologies WHERE id = ?", (tech_id_int,))
+                if not cursor.fetchone():
+                    return jsonify({"message": f"Technology ID {tech_id_int} not found."}), 400
+            except ValueError:
+                return jsonify({"message": f"Invalid Technology ID format: {tech_id}."}), 400
 
-        # Check if task with the same name already exists (optional, based on desired constraints)
-        # For now, allowing duplicate names but they will have different IDs.
-        # If unique names are required, add a check here.
+        task_id = get_or_create_task(conn, task_name) # Creates task if not exists, no technology_id here
 
-        cursor.execute("INSERT INTO tasks (name, technology_id) VALUES (?, ?)", (task_name, technology_id))
+        # Add required skills
+        for tech_id in technology_ids:
+            add_required_skill_to_task(conn, task_id, int(tech_id))
+
         conn.commit()
-        task_id = cursor.lastrowid
 
-        # Fetch the newly created task to return it
-        cursor.execute("SELECT t.id, t.name, t.technology_id, tech.name as technology_name FROM tasks t LEFT JOIN technologies tech ON t.technology_id = tech.id WHERE t.id = ?", (task_id,))
-        new_task = cursor.fetchone()
-        return jsonify(dict(new_task)), 201
+        # Fetch the newly created task and its skills to return it
+        cursor.execute("SELECT id, name FROM tasks WHERE id = ?", (task_id,))
+        new_task_data = cursor.fetchone()
+        if not new_task_data: # Should not happen if creation was successful
+             app.logger.error(f"Failed to fetch newly created task with ID {task_id}")
+             return jsonify({"message": "Error retrieving created task."}), 500
+
+        required_skills = get_required_skills_for_task(conn, task_id)
+
+        response_data = dict(new_task_data)
+        response_data['required_skills'] = required_skills
+
+        return jsonify(response_data), 201
 
     except sqlite3.IntegrityError as e:
         if conn: conn.rollback()
-        # This might occur if there's a unique constraint on task name, or other DB integrity issues.
         app.logger.error(f"Database integrity error adding task: {e}")
         return jsonify({"message": f"Database integrity error: {e}"}), 409
     except Exception as e:
@@ -514,17 +799,12 @@ def update_task_api(task_id):
     try:
         data = request.get_json()
         new_name = data.get('name', '').strip()
-        new_technology_id = data.get('technology_id')
+        new_technology_ids = data.get('technology_ids', []) # Expect a list of technology IDs
 
         if not new_name:
             return jsonify({"message": "Task name cannot be empty."}), 400
-        if new_technology_id is None:
-            return jsonify({"message": "Technology ID is required."}), 400
-
-        try:
-            new_technology_id = int(new_technology_id)
-        except ValueError:
-            return jsonify({"message": "Invalid Technology ID format."}), 400
+        if not isinstance(new_technology_ids, list) or not new_technology_ids: # Ensure it's a non-empty list
+            return jsonify({"message": "At least one Technology ID is required for the task."}), 400
 
         conn = get_db_connection(DATABASE_PATH)
         cursor = conn.cursor()
@@ -534,17 +814,34 @@ def update_task_api(task_id):
         if not cursor.fetchone():
             return jsonify({"message": f"Task ID {task_id} not found."}), 404
 
-        # Check if new technology exists
-        cursor.execute("SELECT id FROM technologies WHERE id = ?", (new_technology_id,))
-        if not cursor.fetchone():
-            return jsonify({"message": f"Technology ID {new_technology_id} not found."}), 400
+        # Validate all new technology IDs
+        for tech_id in new_technology_ids:
+            try:
+                tech_id_int = int(tech_id)
+                cursor.execute("SELECT id FROM technologies WHERE id = ?", (tech_id_int,))
+                if not cursor.fetchone():
+                    return jsonify({"message": f"Technology ID {tech_id_int} not found."}), 400
+            except ValueError:
+                return jsonify({"message": f"Invalid Technology ID format: {tech_id}."}), 400
 
-        cursor.execute("UPDATE tasks SET name = ?, technology_id = ? WHERE id = ?", (new_name, new_technology_id, task_id))
+        # Update task name
+        cursor.execute("UPDATE tasks SET name = ? WHERE id = ?", (new_name, task_id))
+
+        # Update required skills
+        remove_all_required_skills_for_task(conn, task_id) # Remove old skills
+        for tech_id in new_technology_ids:
+            add_required_skill_to_task(conn, task_id, int(tech_id)) # Add new skills
+
         conn.commit()
 
-        cursor.execute("SELECT t.id, t.name, t.technology_id, tech.name as technology_name FROM tasks t LEFT JOIN technologies tech ON t.technology_id = tech.id WHERE t.id = ?", (task_id,))
-        updated_task = cursor.fetchone()
-        return jsonify(dict(updated_task)), 200
+        cursor.execute("SELECT id, name FROM tasks WHERE id = ?", (task_id,))
+        updated_task_data = cursor.fetchone()
+        required_skills = get_required_skills_for_task(conn, task_id)
+
+        response_data = dict(updated_task_data)
+        response_data['required_skills'] = required_skills
+
+        return jsonify(response_data), 200
     except Exception as e:
         if conn: conn.rollback()
         app.logger.error(f"Error updating task {task_id}: {e}", exc_info=True)
@@ -600,9 +897,16 @@ def get_tasks_for_mapping_api():
     try:
         conn = get_db_connection(DATABASE_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT t.id, t.name, t.technology_id, tech.name as technology_name FROM tasks t LEFT JOIN technologies tech ON t.technology_id = tech.id ORDER BY t.name")
-        tasks = [{"id": row['id'], "name": row['name'], "technology_id": row['technology_id'], "technology_name": row['technology_name']} for row in cursor.fetchall()]
-        return jsonify(tasks)
+        cursor.execute("SELECT id, name FROM tasks ORDER BY name") # Removed technology_id and technology_name from direct task query
+        tasks_raw = cursor.fetchall()
+
+        tasks_with_skills = []
+        for task_row in tasks_raw:
+            task_data = dict(task_row)
+            task_data['required_skills'] = get_required_skills_for_task(conn, task_row['id'])
+            tasks_with_skills.append(task_data)
+
+        return jsonify(tasks_with_skills)
     except Exception as e:
         app.logger.error(f"Error fetching tasks for mapping: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
@@ -611,34 +915,14 @@ def get_tasks_for_mapping_api():
 
 @app.route('/api/tasks/<int:task_id>/technology', methods=['PUT'])
 def update_task_technology_api(task_id):
-    conn = None
-    try:
-        data = request.get_json()
-        technology_id = data.get('technology_id')
-        if technology_id is not None:
-            technology_id = int(technology_id)
-
-        conn = get_db_connection(DATABASE_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM tasks WHERE id = ?", (task_id,))
-        if not cursor.fetchone():
-            return jsonify({"message": f"Task ID {task_id} not found."}), 404
-        if technology_id is not None:
-            cursor.execute("SELECT id FROM technologies WHERE id = ?", (technology_id,))
-            if not cursor.fetchone():
-                return jsonify({"message": f"Technology ID {technology_id} not found."}), 404
-
-        cursor.execute("UPDATE tasks SET technology_id = ? WHERE id = ?", (technology_id, task_id))
-        conn.commit()
-        return jsonify({"message": f"Task {task_id} technology mapping updated."}), 200
-    except ValueError:
-        return jsonify({"message": "Invalid technology_id format."}), 400
-    except Exception as e:
-        if conn: conn.rollback()
-        app.logger.error(f"Error updating task technology for task {task_id}: {e}", exc_info=True)
-        return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
+    # This endpoint might be deprecated or re-purposed if tasks now have multiple skills
+    # For now, let's assume it's for adding a single skill or replacing all skills with a single one.
+    # Or, it could be used to add/remove one specific skill if the payload is adjusted.
+    # Given the new structure, it's better to use the main PUT /api/tasks/<task_id> endpoint
+    # with a list of technology_ids.
+    # For now, returning a 404 or a message indicating deprecation might be best.
+    app.logger.warning(f"Attempt to use deprecated /api/tasks/{task_id}/technology PUT endpoint.")
+    return jsonify({"message": "This endpoint is deprecated. Use PUT /api/tasks/<task_id> with a 'technology_ids' list to update task skills."}), 410 # 410 Gone
 
 @app.route('/upload', methods=['POST'])
 def upload_file_route():
@@ -772,7 +1056,7 @@ def generate_dashboard_route():
         try:
             technician_skills_map = get_all_technician_skills_by_name(conn)
             final_tasks_map = {}
-            default_technology_id = get_or_create_technology(conn, "Default Technology")
+            # default_technology_id = get_or_create_technology(conn, "Default Technology") # Default tech not used this way anymore
 
             for task_from_ui in all_processed_tasks_from_ui:
                 task_id_ui = str(task_from_ui.get('id'))
@@ -780,8 +1064,11 @@ def generate_dashboard_route():
                 task_to_add = task_from_ui.copy()
                 task_name = task_to_add.get('name', task_to_add.get('scheduler_group_task', f'Unknown Task UI {task_id_ui}'))
                 if not task_to_add.get('name'): task_to_add['name'] = task_name
-                db_task_id = get_or_create_task(conn, task_name, default_technology_id)
-                task_to_add.update({'technology_id': default_technology_id, 'db_task_id': db_task_id})
+                db_task_id = get_or_create_task(conn, task_name) # Creates task by name
+                # task_to_add.update({'technology_id': default_technology_id, 'db_task_id': db_task_id}) # Removed technology_id
+                task_to_add.update({'db_task_id': db_task_id}) # Store db_task_id
+                # Skills for these tasks from UI would need to be handled if they are new and have skills defined in UI
+                # For now, assuming skills are managed via manage_mappings UI primarily
                 final_tasks_map[task_id_ui] = task_to_add
 
             for task_from_cache in excel_data_from_cache:
@@ -792,8 +1079,11 @@ def generate_dashboard_route():
                     task_name = task_to_add.get('name', task_to_add.get('scheduler_group_task', f'Unknown Cache PM {cache_task_id_ui}'))
                     if not task_to_add.get('name'): task_to_add['name'] = task_name
                     task_to_add['isAdditionalTask'] = False
-                    db_task_id = get_or_create_task(conn, task_name, default_technology_id)
-                    task_to_add.update({'technology_id': default_technology_id, 'db_task_id': db_task_id})
+                    db_task_id = get_or_create_task(conn, task_name) # Creates task by name
+                    # task_to_add.update({'technology_id': default_technology_id, 'db_task_id': db_task_id}) # Removed technology_id
+                    task_to_add.update({'db_task_id': db_task_id})
+                    # Tasks from Excel cache initially won't have skills assigned here.
+                    # They would need to be mapped in the manage_mappings UI.
                     final_tasks_map[cache_task_id_ui] = task_to_add
             conn.commit()
         finally:
