@@ -74,15 +74,45 @@ async function initializePage() {
     // Technician action buttons
     const addNewTechnicianBtn = document.getElementById('addNewTechnicianBtn');
     if (addNewTechnicianBtn) {
-        addNewTechnicianBtn.addEventListener('click', handleAddTechnician);
+        addNewTechnicianBtn.addEventListener('click', handleAddTechnician); // handleAddTechnician is in manage_mappings_technician_data.js
     }
     const editTechnicianNameBtn = document.getElementById('editTechnicianNameBtn');
     if (editTechnicianNameBtn) {
-        editTechnicianNameBtn.addEventListener('click', handleEditTechnicianName);
+        editTechnicianNameBtn.addEventListener('click', handleEditTechnicianName); // handleEditTechnicianName is in manage_mappings_technician_data.js
     }
     const deleteTechnicianBtn = document.getElementById('deleteTechnicianBtn');
     if (deleteTechnicianBtn) {
-        deleteTechnicianBtn.addEventListener('click', handleDeleteTechnician);
+        deleteTechnicianBtn.addEventListener('click', handleDeleteTechnician); // handleDeleteTechnician is in manage_mappings_technician_data.js
+    }
+
+    // New Technician Form listeners (from manage_mappings_technician_data.js)
+    const newTechnicianNameInputElement = document.getElementById('newTechnicianNameInput');
+    if (newTechnicianNameInputElement) {
+        newTechnicianNameInputElement.addEventListener('input', handleNewTechnicianNameInputChange);
+    }
+    const saveNewTechnicianButton = document.getElementById('saveNewTechnicianBtn');
+    if (saveNewTechnicianButton) {
+        saveNewTechnicianButton.addEventListener('click', handleSaveNewTechnician);
+    }
+    const cancelNewTechnicianButton = document.getElementById('cancelNewTechnicianBtn');
+    if (cancelNewTechnicianButton) {
+        cancelNewTechnicianButton.addEventListener('click', hideNewTechnicianForm); // hideNewTechnicianForm is in manage_mappings_technician_data.js
+    }
+
+    // Existing listeners for selected technician details (ensure they are correctly scoped or managed)
+    const editTechSatellitePointButton = document.getElementById('editTechSatellitePointBtn');
+    if (editTechSatellitePointButton) {
+        editTechSatellitePointButton.addEventListener('click', handleTechSatellitePointEdit); // from manage_mappings_technician_data.js
+    }
+    const techSatellitePointSelectElement = document.getElementById('techSatellitePointSelect');
+    if (techSatellitePointSelectElement) {
+        techSatellitePointSelectElement.addEventListener('change', handleTechSatellitePointChange); // from manage_mappings_technician_data.js
+    }
+    // Ensure fetchAndPopulateSatellitePointsDropdowns is called on initialization
+    if (typeof fetchAndPopulateSatellitePointsDropdowns === 'function') {
+        fetchAndPopulateSatellitePointsDropdowns();
+    } else {
+        console.error('fetchAndPopulateSatellitePointsDropdowns is not defined. Satellite point dropdowns will not be populated.');
     }
 
     // New technology form enhancements listeners
@@ -142,6 +172,7 @@ async function initializePage() {
     document.getElementById('addLineBtn').addEventListener('click', handleAddLine); // Added event listener for Add Line button
     loadSatellitePoints(); // Also populates dropdowns for other sections
     loadLines(); // Load lines after satellite points are loaded
+    initializeNewLineForm(); // Added this call
 
     // Initialize Technologies & Groups Management
     await fetchAllInitialData();
@@ -184,7 +215,7 @@ async function fetchAllInitialData() {
     await fetchTechnologyGroups();
     await fetchAllTechnologies();
     await fetchAllTasksForMapping();
-    await fetchAndPopulateSatellitePointsDropdown(); // Added call
+    await fetchAndPopulateSatellitePointsDropdowns(); // Updated call
     await fetchMappings();
 
     handleTechnologyNameInputChange();

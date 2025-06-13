@@ -41,6 +41,7 @@
                 </select>
                 <button id="addLineBtn" style="margin-left:10px;" class="button-add">Add Line</button> <!-- Added class for styling -->
             </div>
+            <div id="newLineError" class="error-message" style="display:none; color: red; margin-top: 5px;"></div> <!-- Added this line -->
             <div id="lineListContainer" style="max-height: 200px; overflow-y: auto; margin-bottom: 10px;">
                 <!-- Lines will be listed here -->
             </div>
@@ -128,6 +129,28 @@
             <div class="form-inline-group" style="margin-bottom: 15px;"> <!-- Container for Add button -->
                  <button id="addNewTechnicianBtn" class="button-add">Add New Technician</button>
             </div>
+
+            <!-- New Technician Form - Initially Hidden -->
+            <div id="addNewTechnicianFormContainer" style="display:none; border: 1px solid #ccc; padding: 15px; margin-bottom: 15px; background-color: #f9f9f9;">
+                <h4>Add New Technician Details</h4>
+                <div class="form-group">
+                    <label for="newTechnicianNameInput">Technician Name:</label>
+                    <input type="text" id="newTechnicianNameInput" placeholder="Enter technician name" aria-label="Technician Name">
+                </div>
+                <div class="form-group">
+                    <label for="newTechnicianSatellitePointSelect">Satellite Point:</label>
+                    <select id="newTechnicianSatellitePointSelect" aria-label="Select Satellite Point" disabled>
+                        <option value="">Select Satellite Point</option>
+                        <!-- Options will be populated by JS -->
+                    </select>
+                </div>
+                <div class="form-actions" style="margin-top: 10px;">
+                    <button id="saveNewTechnicianBtn" class="button-save">Save</button>
+                    <button id="cancelNewTechnicianBtn" class="button-cancel">Cancel</button>
+                </div>
+                 <div id="newTechnicianError" class="error-message" style="display:none; color: red; margin-top: 10px;"></div>
+            </div>
+            <!-- End New Technician Form -->
 
             <div class="form-inline-group"> <!-- Container for select and its action buttons -->
                 <label for="technicianSelect" style="margin-right: 10px; white-space: nowrap;">Select Technician:</label>

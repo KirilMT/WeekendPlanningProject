@@ -118,7 +118,6 @@ function recordChange(type, entityId, field, oldValue, newValue, entityName = nu
 // Placeholder for clearUnsavedChanges function
 function clearUnsavedChanges() {
     window.unsavedChanges = [];
-    console.log('Unsaved changes cleared.');
     updateSaveChangesButtonState(); // Assumes this function exists
 }
 

@@ -364,16 +364,17 @@ async function updateTaskMapping(taskId, newName, newTechnologyIds) { // Changed
 }
 
 async function deleteTaskMapping(taskId, taskName) {
-    if (!confirm(`Are you sure you want to delete task "${escapeHtml(taskName)}"? This will also remove its assignments to technicians.`)) {
+    if (!confirm(`Are you sure you want to delete task \"${escapeHtml(taskName)}\"? This will also remove its assignments to technicians.`)) {
         return;
     }
     try {
         const response = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
-        const result = await response.json();
+        // const result = await response.json(); // result might not be used if only success/failure matters
         if (response.ok) {
             displayMessage(`Task \"${escapeHtml(taskName)}\" deleted successfully.`, 'success');
             await fetchAllTasksForMapping();
         } else {
+            const result = await response.json().catch(() => ({ message: "Failed to parse error message." })); // Try to parse error
             throw new Error(result.message || `Server error ${response.status}`);
         }
     } catch (error) {

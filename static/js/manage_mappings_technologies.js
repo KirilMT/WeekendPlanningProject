@@ -258,14 +258,24 @@ async function editTechnology(techId, currentName, currentGroupId, currentParent
 }
 
 async function deleteTechnology(techId) {
-    if (!confirm(`Are you sure you want to delete technology ID ${techId}? This may affect child technologies, task mappings, and technician skills.`)) {
+    const techToDelete = allTechnologies.find(t => t.id === techId);
+    let techName = techToDelete ? techToDelete.name : "this technology";
+
+    // Clean up techName for display: replace literal \\" with "
+    if (typeof techName === 'string') {
+        techName = techName.replace(/\\\\"/g, '"'); // techName now holds the cleaned name
+    }
+
+    // Use the cleaned techName directly in the confirm dialog, without escapeHtml
+    if (!confirm(`Are you sure you want to delete \\"${techName}\\"? This may affect child technologies, task mappings, and technician skills.`)) { // Removed ID
         return;
     }
     try {
         const response = await fetch(`/api/technologies/${techId}`, {method: 'DELETE'});
         const result = await response.json();
         if (response.ok) {
-            displayMessage(result.message || `Technology ID ${techId} deleted.`, 'success');
+            // For HTML display, use escapeHtml with the cleaned techName
+            displayMessage(result.message || `Technology \\"${escapeHtml(techName)}\\" deleted.`, 'success'); // Removed ID
             await fetchAllTechnologies();
             fetchAllTasksForMapping();
             if (selectedTechnician) {
@@ -394,14 +404,17 @@ async function editTechnologyGroup(groupId, currentName) {
 }
 
 async function deleteTechnologyGroup(groupId) {
-    if (!confirm(`Are you sure you want to delete technology group ID ${groupId}? This might affect associated technologies.`)) {
+    const groupToDelete = allTechnologyGroups.find(g => g.id === groupId);
+    const groupName = groupToDelete ? groupToDelete.name : "this group";
+
+    if (!confirm(`Are you sure you want to delete technology group \"${escapeHtml(groupName)}\"? This might affect associated technologies.`)) { // Removed ID
         return;
     }
     try {
         const response = await fetch(`/api/technology_groups/${groupId}`, {method: 'DELETE'});
         const result = await response.json();
         if (response.ok) {
-            displayMessage(result.message || `Technology group ID ${groupId} deleted.`, 'success');
+            displayMessage(result.message || `Technology group \"${escapeHtml(groupName)}\" deleted.`, 'success'); // Removed ID
             fetchTechnologyGroups();
             fetchAllTechnologies();
         } else {
@@ -412,4 +425,3 @@ async function deleteTechnologyGroup(groupId) {
         console.error(error);
     }
 }
-
