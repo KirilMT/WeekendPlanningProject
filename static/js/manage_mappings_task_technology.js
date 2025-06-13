@@ -371,7 +371,7 @@ async function deleteTaskMapping(taskId, taskName) {
         const response = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
         const result = await response.json();
         if (response.ok) {
-            displayMessage(result.message || `Task "${escapeHtml(taskName)}" deleted successfully.`, 'success');
+            displayMessage(`Task \"${escapeHtml(taskName)}\" deleted successfully.`, 'success');
             await fetchAllTasksForMapping();
         } else {
             throw new Error(result.message || `Server error ${response.status}`);
@@ -391,7 +391,7 @@ async function updateTaskTechnologyMapping(taskId, technologyId) {
         });
         const result = await response.json();
         if (response.ok) {
-            displayMessage(result.message || `Task ${taskId} technology updated.`, 'success');
+            displayMessage('Task technology updated successfully.', 'success');
         } else {
             throw new Error(result.message || `Server error ${response.status}`);
         }

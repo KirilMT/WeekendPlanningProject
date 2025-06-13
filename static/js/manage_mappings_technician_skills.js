@@ -76,31 +76,15 @@ function renderTechnicianSkills() {
         });
         container.appendChild(skillSelect);
 
-        const saveButton = document.createElement('button');
-        saveButton.textContent = 'Save';
-        saveButton.classList.add('save-skill-btn');
-        saveButton.addEventListener('click', async () => {
+        skillSelect.addEventListener('change', async () => {
             const newLevel = parseInt(skillSelect.value);
+            // selectedTechnician and currentSelectedTechnicianId are global variables
             await updateTechnicianSkill(selectedTechnician, currentSelectedTechnicianId, technology.id, newLevel);
-            // After successful save, revert to view mode.
-            // The updateTechnicianSkill function already updates currentMappings.
-            // We need to re-render this specific skill's controls or the whole list.
-            // For simplicity here, we'll replace the controls for this skill.
-            const skillItemDiv = container.closest('.skill-item-controls');
-            skillItemDiv.innerHTML = ''; // Clear edit mode
-            skillItemDiv.appendChild(createSkillViewMode(technology, newLevel));
+            // updateTechnicianSkill calls renderTechnicianSkills, which will redraw the list,
+            // automatically removing this edit-mode select and showing the updated view mode.
         });
-        container.appendChild(saveButton);
 
-        const cancelButton = document.createElement('button');
-        cancelButton.textContent = 'Cancel';
-        cancelButton.classList.add('cancel-skill-btn');
-        cancelButton.addEventListener('click', () => {
-            const skillItemDiv = container.closest('.skill-item-controls');
-            skillItemDiv.innerHTML = ''; // Clear edit mode
-            skillItemDiv.appendChild(createSkillViewMode(technology, currentLevel)); // Revert to original level
-        });
-        container.appendChild(cancelButton);
+        // Save and Cancel buttons are removed as per the new auto-save requirement.
 
         return container;
     };
@@ -124,7 +108,8 @@ function renderTechnicianSkills() {
             controlsDiv.classList.add('skill-item-controls');
 
             if (!hasChildren(childTech.id)) {
-                const currentSkillLevel = techSkills[childTech.id] || 0;
+                const skillInfo = techSkills[childTech.id];
+                const currentSkillLevel = skillInfo ? skillInfo.level : 0;
                 controlsDiv.appendChild(createSkillViewMode(childTech, currentSkillLevel));
             }
             skillDiv.appendChild(controlsDiv);
@@ -166,7 +151,8 @@ function renderTechnicianSkills() {
         controlsDiv.classList.add('skill-item-controls');
 
         if (!hasChildren(topLevelTech.id)) {
-            const currentSkillLevel = techSkills[topLevelTech.id] || 0;
+            const skillInfo = techSkills[topLevelTech.id];
+            const currentSkillLevel = skillInfo ? skillInfo.level : 0;
             controlsDiv.appendChild(createSkillViewMode(topLevelTech, currentSkillLevel));
         }
         skillDiv.appendChild(controlsDiv);
@@ -190,16 +176,30 @@ async function updateTechnicianSkill(technicianName, technicianId, technologyId,
         });
         const result = await response.json();
         if (response.ok) {
-            displayMessage(`Skill for tech ID ${technologyId} updated.`, 'success');
-            if (!currentMappings.technicians[selectedTechnician].skills) currentMappings.technicians[selectedTechnician].skills = {};
-            currentMappings.technicians[selectedTechnician].skills[technologyId] = skillLevel;
-            recordChange(`Skill for ${escapeHtml(technicianName)} on tech ID ${technologyId} changed to ${skillLevel}`);
+            const technology = allTechnologies.find(t => t.id === parseInt(technologyId));
+            const technologyName = technology ? technology.name : 'Unknown Skill';
+            const techNameForMsg = technicianName || 'Selected Technician';
+
+            displayMessage(`Skill '${escapeHtml(technologyName)}' for technician '${escapeHtml(techNameForMsg)}' updated to level ${escapeHtml(SKILL_LEVEL_TEXTS[skillLevel] || skillLevel)}.`, 'success');
+
+            if (currentMappings.technicians[selectedTechnician]) {
+                if (!currentMappings.technicians[selectedTechnician].skills) {
+                    currentMappings.technicians[selectedTechnician].skills = {};
+                }
+                currentMappings.technicians[selectedTechnician].skills[technologyId] = {
+                    name: technologyName,
+                    level: skillLevel,
+                    group_id: technology ? technology.group_id : null,
+                    parent_id: technology ? technology.parent_id : null
+                };
+            }
+            renderTechnicianSkills();
         } else {
             throw new Error(result.message || `Server error ${response.status}`);
         }
     } catch (error) {
         displayMessage(`Error updating skill: ${error.message}`, 'error');
         console.error(error);
-        await fetchTechnicianSkills(selectedTechnician); // Revert UI
+        await fetchTechnicianSkills(selectedTechnician);
     }
 }

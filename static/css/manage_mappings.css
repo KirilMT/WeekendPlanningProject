@@ -161,6 +161,72 @@ button:hover, .button-link:hover {
     background-color: #c82333;
 }
 
+/* Standardized Edit and Delete Button Styling */
+.edit-button, .delete-button, .button-add {
+    padding: 8px 12px; /* Adjusted padding */
+    font-size: 14px;   /* Standardized font size */
+    margin-left: 8px;  /* Standardized margin */
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.edit-button {
+    background-color: #ffc107; /* Yellow for edit */
+    color: #212529;
+}
+
+.edit-button:hover {
+    background-color: #e0a800;
+}
+
+.delete-button {
+    background-color: #dc3545; /* Red for delete */
+    color: white;
+}
+
+.delete-button:hover {
+    background-color: #c82333;
+}
+
+.button-add { /* Styling for Add buttons */
+    background-color: #28a745; /* Green for add */
+    color: white;
+}
+
+.button-add:hover {
+    background-color: #218838;
+}
+
+
+/* Ensure .edit-btn and .delete-btn (used in HTML) also get these styles if not already covered */
+.edit-btn {
+    /* Styles are effectively the same as .edit-button */
+    padding: 8px 12px;
+    font-size: 14px;
+    margin-left: 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    background-color: #ffc107;
+    color: #212529;
+}
+.edit-btn:hover { background-color: #e0a800; }
+
+.delete-btn {
+    /* Styles are effectively the same as .delete-button */
+    padding: 8px 12px;
+    font-size: 14px;
+    margin-left: 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    background-color: #dc3545;
+    color: white;
+}
+.delete-btn:hover { background-color: #c82333; }
+
+
 .task-item, .skill-item { /* .technology-item will use .list-item primarily */
     border: 1px solid #eee;
     padding: 10px;

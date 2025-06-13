@@ -45,3 +45,68 @@ const newTaskNameForMappingInput = document.getElementById('newTaskNameForMappin
 const newTaskTechnologySelectForMapping = document.getElementById('newTaskTechnologySelectForMapping');
 const addNewTaskForMappingBtn = document.getElementById('addNewTaskForMappingBtn');
 
+
+function updateSaveChangesButton() {
+    if (saveChangesBtn) {
+        const numChanges = changesSummary.size;
+        if (numChanges > 0) {
+            saveChangesBtn.textContent = `Save All Changes (${numChanges})`;
+            saveChangesBtn.disabled = false;
+        } else {
+            saveChangesBtn.textContent = 'Save All Changes';
+            saveChangesBtn.disabled = true; // Disable if no changes
+        }
+    }
+}
+
+function recordChange(type, entityId = null, field = null, oldValue = null, newValue = null, entityName = null, additionalInfo = {}) {
+    const timestamp = new Date().toISOString();
+    const changeDetail = {
+        type: type,
+        description: `Field '${field}' for ${entityName || `ID: ${entityId}`} changed from '${oldValue}' to '${newValue}'`, // Generic description
+        entity: entityName,
+        entityId: entityId,
+        field: field,
+        oldValue: oldValue,
+        newValue: newValue,
+        timestamp: timestamp,
+        ...additionalInfo
+    };
+
+    // More specific descriptions for certain types
+    if (type === 'Task Assignment Add') {
+        changeDetail.description = `Task '${additionalInfo.taskName}' assigned to ${entityName}`;
+    } else if (type === 'Task Assignment Remove') {
+        changeDetail.description = `Task '${additionalInfo.taskName}' unassigned from ${entityName}`;
+    } else if (type === 'Task Priority Change') {
+        changeDetail.description = `Priority of task '${additionalInfo.taskName}' for ${entityName} changed from ${oldValue} to ${newValue}`;
+    } else if (type === 'New Task for Mapping') {
+        changeDetail.description = `New task '${entityName}' added with technologies: ${additionalInfo.technologiesAssigned}`;
+    } else if (type === 'Task Technology Update') {
+        changeDetail.description = `Technologies for task '${entityName}' updated.` // oldValue/newValue for technologies can be complex, keep it simple
+    } else if (type === 'Task Name Update') {
+        changeDetail.description = `Task name for ID '${entityId}' changed from '${oldValue}' to '${newValue}'`
+    } else if (type === 'Technology Add') {
+        changeDetail.description = `New technology '${entityName}' added.`
+        if (additionalInfo.groupName) changeDetail.description += ` to group '${additionalInfo.groupName}'`;
+        if (additionalInfo.parentName) changeDetail.description += ` under parent '${additionalInfo.parentName}'`;
+    } else if (type === 'Technology Group Add') {
+        changeDetail.description = `New technology group '${entityName}' added.`
+    } else if (type === 'Satellite Point Add') {
+        changeDetail.description = `New satellite point '${entityName}' added.`
+    } else if (type === 'Line Add') {
+        changeDetail.description = `New line '${entityName}' added to satellite point '${additionalInfo.satellitePointName}'.`
+    }
+
+    changesSummary.add(JSON.stringify(changeDetail)); // Add detailed object
+    unsavedChanges = true;
+    updateSaveChangesButton();
+    console.log('Change recorded:', changeDetail);
+}
+
+function clearUnsavedChanges() {
+    unsavedChanges = false;
+    changesSummary.clear();
+    updateSaveChangesButton();
+    if (statusMessageDiv) statusMessageDiv.textContent = '';
+}

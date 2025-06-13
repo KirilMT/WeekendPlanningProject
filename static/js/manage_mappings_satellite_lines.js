@@ -38,13 +38,40 @@ function renderSatellitePoints(satellitePoints) {
     satellitePoints.forEach(point => {
         const li = document.createElement('li');
         li.className = 'item-list-item';
-        li.innerHTML = `
-            <span class="item-name">ID: ${point.id} - ${window.escapeHtml(point.name)}</span>
-            <div class="item-actions">
-                <button class="edit-button" data-id="${point.id}" data-name="${window.escapeHtml(point.name)}">Edit</button>
-                <button class="delete-button" data-id="${point.id}" data-name="${window.escapeHtml(point.name)}">Delete</button>
-            </div>
-        `;
+        li.style.display = 'flex'; // Keep flex for inline layout
+        // li.style.justifyContent = 'space-between'; // Removed to keep buttons next to name
+        li.style.alignItems = 'center'; // Keep vertical alignment
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'item-name';
+        nameSpan.textContent = window.escapeHtml(point.name);
+        nameSpan.style.marginRight = '10px'; // Add some space between name and buttons
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'item-actions';
+
+        const editButton = document.createElement('button');
+        editButton.className = 'edit-button';
+        editButton.dataset.id = point.id;
+        editButton.dataset.name = window.escapeHtml(point.name);
+        editButton.textContent = 'Edit';
+        editButton.style.padding = '2px 6px';
+        editButton.style.fontSize = '0.8em';
+        editButton.style.marginRight = '5px';
+
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'delete-button';
+        deleteButton.dataset.id = point.id;
+        deleteButton.dataset.name = window.escapeHtml(point.name);
+        deleteButton.textContent = 'Delete';
+        deleteButton.style.padding = '2px 6px';
+        deleteButton.style.fontSize = '0.8em';
+
+        actionsDiv.appendChild(editButton);
+        actionsDiv.appendChild(deleteButton);
+
+        li.appendChild(nameSpan);
+        li.appendChild(actionsDiv);
         ul.appendChild(li);
     });
     container.appendChild(ul);
@@ -128,7 +155,7 @@ async function executeUpdateSatellitePoint(pointId, newName) {
         if (!response.ok) {
             window.displayMessage(`Error updating satellite point: ${responseData.message || response.status}`, 'error');
         } else {
-            window.displayMessage(`Satellite point ID ${pointId} updated to '${window.escapeHtml(responseData.name)}'.`, 'success');
+            window.displayMessage(`Satellite point '${window.escapeHtml(responseData.name)}' updated successfully.`, 'success');
         }
     } catch (error) {
         console.error('Error updating satellite point:', error);
@@ -154,7 +181,7 @@ async function handleDeleteSatellitePoint(event) {
         if (!response.ok) {
             window.displayMessage(`Error deleting satellite point: ${responseData.message || response.status}`, 'error');
         } else {
-            window.displayMessage(responseData.message || `Satellite point ID ${pointId} deleted successfully.`, 'success');
+            window.displayMessage(`Satellite point '${window.escapeHtml(pointName)}' deleted successfully.`, 'success');
         }
     } catch (error) {
         console.error('Error deleting satellite point:', error);
@@ -330,7 +357,7 @@ async function executeUpdateLine(lineId, newName, newSatellitePointId) {
         if (!response.ok) {
             window.displayMessage(`Error updating line: ${responseData.message || response.status}`, 'error');
         } else {
-            window.displayMessage(`Line ID ${lineId} updated to '${window.escapeHtml(responseData.name)}' for SP '${window.escapeHtml(responseData.satellite_point_name)}'.`, 'success');
+            window.displayMessage(`Line '${window.escapeHtml(responseData.name)}' updated successfully for satellite point '${window.escapeHtml(responseData.satellite_point_name)}'.`, 'success');
         }
     } catch (error) {
         console.error('Error updating line:', error);
@@ -356,7 +383,7 @@ async function handleDeleteLine(event) {
         if (!response.ok) {
             window.displayMessage(`Error deleting line: ${responseData.message || response.status}`, 'error');
         } else {
-            window.displayMessage(responseData.message || `Line ID ${lineId} deleted successfully.`, 'success');
+            window.displayMessage(`Line '${window.escapeHtml(lineName)}' deleted successfully.`, 'success');
         }
     } catch (error) {
         console.error('Error deleting line:', error);

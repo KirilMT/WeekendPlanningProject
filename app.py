@@ -267,6 +267,204 @@ def save_technician_mappings_api():
         if conn:
             conn.close()
 
+@app.route('/api/technicians', methods=['POST'])
+def add_technician_api():
+    conn = None
+    name_from_payload = None  # Initialize for use in error logging
+    try:
+        data = request.get_json()
+        name_from_payload = data.get('name', '').strip()
+
+        # Explicitly get satellite_point_id, default to None if not provided or empty string.
+        # Client should send null or an integer for satellite_point_id.
+        satellite_point_id_from_payload = data.get('satellite_point_id', None)
+        if isinstance(satellite_point_id_from_payload, str) and not satellite_point_id_from_payload:
+            satellite_point_id_from_payload = None
+        elif satellite_point_id_from_payload is not None:
+            try:
+                satellite_point_id_from_payload = int(satellite_point_id_from_payload)
+            except ValueError:
+                app.logger.warning(f"Invalid satellite_point_id format received: {data.get('satellite_point_id')}. Setting to None.")
+                satellite_point_id_from_payload = None
+
+        if not name_from_payload:
+            return jsonify({"message": "Technician name is required."}), 400
+
+        conn = get_db_connection(DATABASE_PATH)
+        cursor = conn.cursor()
+
+        # Check if technician already exists
+        cursor.execute("SELECT id FROM technicians WHERE name = ?", (name_from_payload,))
+        if cursor.fetchone():
+            return jsonify({"message": f"Technician '{name_from_payload}' already exists."}), 409
+
+        app.logger.info(f"Attempting to insert technician: Name='{name_from_payload}', SatellitePointID='{satellite_point_id_from_payload}'")
+
+        # Use satellite_point_id in INSERT.
+        # This SQL query is critical and must not contain 'group_id'.
+        sql_insert = "INSERT INTO technicians (name, satellite_point_id) VALUES (?, ?)"
+        cursor.execute(sql_insert, (name_from_payload, satellite_point_id_from_payload))
+        conn.commit()
+        technician_id = cursor.lastrowid
+        app.logger.info(f"Technician inserted with ID: {technician_id}")
+
+        # Fetch the newly created technician, ensuring satellite_point_id is selected.
+        # This SQL query is also critical.
+        sql_select = "SELECT id, name, satellite_point_id FROM technicians WHERE id = ?"
+        cursor.execute(sql_select, (technician_id,))
+        new_technician_row = cursor.fetchone()
+
+        # Call load_app_config AFTER successful DB operations and BEFORE sending response
+        # to ensure the global config is up-to-date.
+        try:
+            load_app_config(DATABASE_PATH, app.logger)
+        except Exception as e_config_load:
+            app.logger.error(f"Error reloading app config after adding technician: {e_config_load}", exc_info=True)
+            # Decide if this should be a critical error response or just a warning.
+            # For now, proceed with technician addition success message.
+
+        if new_technician_row:
+            return jsonify({"message": f"Technician '{name_from_payload}' added successfully.", "technician": dict(new_technician_row)}), 201
+        else:
+            # This case should ideally not be reached if insert and lastrowid worked
+            app.logger.error(f"Technician '{name_from_payload}' was added (ID: {technician_id}) but could not be retrieved immediately after insert.")
+            return jsonify({"message": "Technician added but failed to retrieve details post-insertion."}), 500
+
+    except sqlite3.IntegrityError as ie:
+        if conn: conn.rollback()
+        error_message = f"Technician '{name_from_payload or 'Unknown'}' already exists or another integrity constraint failed. Details: {str(ie)}"
+        app.logger.error(f"IntegrityError adding technician: {error_message}")
+        return jsonify({"message": error_message}), 409
+    except sqlite3.Error as e_sqlite: # More specific variable for SQLite errors
+        if conn: conn.rollback()
+        # This is where "no column named group_id" would be caught if it's an SQLite error from THIS function's direct operations
+        db_error_message = f"Database error: {str(e_sqlite)}"
+        app.logger.error(f"SQLite error in add_technician_api for '{name_from_payload or 'Unknown'}': {db_error_message}. SQL operations in this function use 'satellite_point_id'.", exc_info=True)
+        return jsonify({"message": db_error_message}), 500
+    except Exception as e_general:
+        if conn: conn.rollback()
+        server_error_message = f"Server error: {str(e_general)}"
+        app.logger.error(f"Generic server error in add_technician_api for '{name_from_payload or 'Unknown'}': {server_error_message}", exc_info=True)
+        return jsonify({"message": server_error_message}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/technicians/<int:technician_id>', methods=['PUT'])
+def update_technician_api(technician_id):
+    conn = None
+    try:
+        data = request.get_json()
+        name = data.get('name', '').strip()
+        satellite_point_id = data.get('satellite_point_id') # Ensure this is satellite_point_id
+
+        # It's better to only update fields that are provided.
+        # The following logic will be improved in a subsequent step.
+        # For now, the main fix is to use satellite_point_id instead of group_id.
+
+        if not name and satellite_point_id is None: # Check if there is anything to update
+            return jsonify({"message": "No data provided for update."}), 400
+
+        conn = get_db_connection(DATABASE_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT id FROM technicians WHERE id = ?", (technician_id,))
+        if not cursor.fetchone():
+            return jsonify({"message": "Technician not found."}), 404
+
+        if name: # Check for name conflict only if name is being updated
+            cursor.execute("SELECT id FROM technicians WHERE name = ? AND id != ?", (name, technician_id))
+            if cursor.fetchone():
+                return jsonify({"message": f"Another technician with the name '{name}' already exists."}), 409
+
+        # Use satellite_point_id in UPDATE
+        # This will be improved to dynamically build the SET clause.
+        # For now, if name is empty, it might cause issues if name is NOT NULL.
+        # Assuming name is always provided if satellite_point_id is, or handled by client.
+        # The primary fix here is replacing group_id with satellite_point_id.
+        if name and satellite_point_id is not None:
+            cursor.execute("UPDATE technicians SET name = ?, satellite_point_id = ? WHERE id = ?", (name, satellite_point_id, technician_id))
+        elif name:
+            cursor.execute("UPDATE technicians SET name = ? WHERE id = ?", (name, technician_id))
+        elif satellite_point_id is not None:
+            cursor.execute("UPDATE technicians SET satellite_point_id = ? WHERE id = ?", (satellite_point_id, technician_id))
+        else:
+            # This case should be caught by "No data provided for update" if both are None,
+            # but as a fallback, do nothing if only one is None and it's the only one provided.
+            # Or, more simply, the initial check for `name` in the payload for `handleEditTechnicianName` means `name` will be present.
+            # The JS for `handleEditTechnicianName` only sends `name`.
+            # The JS for `handleTechSatellitePointChange` sends `satellite_point_id`.
+            # So, this simple if/elif should cover current frontend behavior.
+            pass # No actual update query if only one field was expected but not provided (e.g. name was empty string)
+
+        conn.commit()
+
+        # Fetch satellite_point_id in SELECT
+        cursor.execute("SELECT id, name, satellite_point_id FROM technicians WHERE id = ?", (technician_id,))
+        updated_technician = cursor.fetchone()
+
+        load_app_config(DATABASE_PATH, app.logger) # Reload config globals
+        # Ensure the message reflects what was actually updated if possible, or a generic success.
+        return jsonify({"message": f"Technician ID {technician_id} updated successfully.", "technician": dict(updated_technician)}), 200
+
+    except sqlite3.IntegrityError:
+        if conn: conn.rollback()
+        # This specific error for name uniqueness is caught above, but this is a general fallback.
+        return jsonify({"message": f"Technician name '{name}' may already exist for another technician or other integrity issue."}), 409
+    except sqlite3.Error as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Database error updating technician {technician_id}: {e}")
+        return jsonify({"message": f"Database error: {str(e)}"}), 500
+    except Exception as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Server error updating technician {technician_id}: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn: conn.close()
+
+@app.route('/api/technicians/<int:technician_id>', methods=['DELETE'])
+def delete_technician_api(technician_id):
+    conn = None
+    try:
+        conn = get_db_connection(DATABASE_PATH)
+        cursor = conn.cursor()
+
+        # Check if technician exists
+        cursor.execute("SELECT name FROM technicians WHERE id = ?", (technician_id,))
+        technician = cursor.fetchone()
+        if not technician:
+            return jsonify({"message": "Technician not found."}), 404
+
+        technician_name = technician['name']
+
+        # Delete related data first (adjust table and column names as per your schema)
+        # Example: technician_technology_skills, technician_task_assignments
+        cursor.execute("DELETE FROM technician_technology_skills WHERE technician_id = ?", (technician_id,))
+        cursor.execute("DELETE FROM technician_task_assignments WHERE technician_id = ?", (technician_id,))
+        # Add other related data deletions here if necessary
+
+        # Delete the technician
+        cursor.execute("DELETE FROM technicians WHERE id = ?", (technician_id,))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            load_app_config(DATABASE_PATH, app.logger) # Reload config globals
+            return jsonify({"message": f"Technician '{technician_name}' (ID: {technician_id}) and related data deleted successfully."}), 200
+        else:
+            # Should be caught by the initial check, but as a safeguard
+            return jsonify({"message": "Technician found but could not be deleted."}), 500
+
+    except sqlite3.Error as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Database error deleting technician {technician_id}: {e}", exc_info=True)
+        return jsonify({"message": f"Database error: {str(e)}"}), 500
+    except Exception as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Server error deleting technician {technician_id}: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn: conn.close()
+
 @app.route('/api/technologies', methods=['GET'])
 def get_technologies_api():
     conn = None
@@ -1105,3 +1303,4 @@ def generate_dashboard_route():
 
 # Note: The explicit /css/ and /js/ routes are removed because Flask's static_folder setting handles /static/*
 # HTML files should be updated to link to /static/css/file.css and /static/js/file.js
+

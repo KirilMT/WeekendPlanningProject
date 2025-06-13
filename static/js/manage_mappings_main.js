@@ -71,35 +71,18 @@ async function initializePage() {
         addNewTaskForMappingBtn.addEventListener('click', addNewTaskForMapping);
     }
 
-    // Tech detail input listeners
-    if (techSatellitePointSelect) { // New select dropdown
-        techSatellitePointSelect.addEventListener('change', (e) => {
-            if (selectedTechnician && currentMappings.technicians && currentMappings.technicians[selectedTechnician]) {
-                const technicianData = currentMappings.technicians[selectedTechnician];
-                const oldSatellitePointId = technicianData.satellite_point_id;
-                const newSatellitePointId = e.target.value ? parseInt(e.target.value, 10) : null;
-                const newSatellitePointName = e.target.options[e.target.selectedIndex].text;
-
-                // Record the change before updating currentMappings
-                // Ensure oldSatellitePointId is defined, could be null if not previously set
-                const technicianId = technicianData.id; // Assuming technician object has an 'id' field
-
-                recordChange(
-                    'Technician Satellite Point Update',
-                    technicianId, // entityId (actual ID of the technician)
-                    'satellite_point_id', // field
-                    oldSatellitePointId, // oldValue
-                    newSatellitePointId, // newValue
-                    selectedTechnician // entityName (name of the technician for logging)
-                );
-
-                // Update currentMappings after recording the change
-                technicianData.satellite_point_id = newSatellitePointId;
-                technicianData.satellite_point_name = newSatellitePointId ? newSatellitePointName : null;
-            } else {
-                console.warn('Cannot record satellite point change: selectedTechnician or technician data is missing.');
-            }
-        });
+    // Technician action buttons
+    const addNewTechnicianBtn = document.getElementById('addNewTechnicianBtn');
+    if (addNewTechnicianBtn) {
+        addNewTechnicianBtn.addEventListener('click', handleAddTechnician);
+    }
+    const editTechnicianNameBtn = document.getElementById('editTechnicianNameBtn');
+    if (editTechnicianNameBtn) {
+        editTechnicianNameBtn.addEventListener('click', handleEditTechnicianName);
+    }
+    const deleteTechnicianBtn = document.getElementById('deleteTechnicianBtn');
+    if (deleteTechnicianBtn) {
+        deleteTechnicianBtn.addEventListener('click', handleDeleteTechnician);
     }
 
     // New technology form enhancements listeners
@@ -128,10 +111,11 @@ async function initializePage() {
                 icon.textContent = '+';
             } else {
                 icon.textContent = '-';
-                if (header.parentElement.id === 'manageTechnicianDetailsSection' && !selectedTechnician && technicianSelect.options.length > 1) {
-                    technicianSelect.value = technicianSelect.options[1].value;
-                    loadTechnicianDetails(technicianSelect.value);
-                }
+                // Remove automatic selection of first technician when expanding section
+                // if (header.parentElement.id === 'manageTechnicianDetailsSection' && !selectedTechnician && technicianSelect.options.length > 1) {
+                //     technicianSelect.value = technicianSelect.options[1].value;
+                //     loadTechnicianDetails(technicianSelect.value);
+                // }
             }
         });
     });

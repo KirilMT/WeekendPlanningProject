@@ -1,4 +1,16 @@
-// Variables like currentMappings, selectedTechnician, currentSelectedTechnicianId, etc.,\n// are now expected to be defined in manage_mappings_globals.js\n\n// DOM Elements (assuming these are specific to this file's scope or managed carefully if also global)\n// const technicianSelect = document.getElementById(\'technicianSelect\'); // Already in globals\nconst techSatellitePointSelect = document.getElementById(\'techSatellitePointSelect\'); \n// const techSattelitePointInput = document.getElementById(\'techSattelitePoint\'); // Old input, also in globals if still used\n// const techLinesInput = document.getElementById(\'techLines\'); // Old input, also in globals if still used\n// const taskListDiv = document.getElementById(\'taskList\'); // Already in globals\n// const technicianSkillsListContainerDiv = document.getElementById(\'technicianSkillsListContainer\'); // This might be specific or global\n// const currentTechNameDisplay = document.getElementById(\'currentTechNameDisplay\'); // Already in globals\n\n// --- Satellite Points Dropdown Population ---
+// Variables like currentMappings, selectedTechnician, currentSelectedTechnicianId, etc.,
+// are now expected to be defined in manage_mappings_globals.js
+
+// DOM Elements (assuming these are specific to this file's scope or managed carefully if also global)
+// const technicianSelect = document.getElementById('technicianSelect'); // Already in globals
+const techSatellitePointSelect = document.getElementById('techSatellitePointSelect');
+// const techSattelitePointInput = document.getElementById('techSattelitePoint'); // Old input, also in globals if still used
+// const techLinesInput = document.getElementById('techLines'); // Old input, also in globals if still used
+// const taskListDiv = document.getElementById('taskList'); // Already in globals
+// const technicianSkillsListContainerDiv = document.getElementById('technicianSkillsListContainer'); // This might be specific or global
+// const currentTechNameDisplay = document.getElementById('currentTechNameDisplay'); // Already in globals
+
+// --- Satellite Points Dropdown Population ---
 async function fetchAndPopulateSatellitePointsDropdown() {
     try {
         const response = await fetch('/api/satellite_points');
@@ -32,7 +44,7 @@ async function fetchMappings(technicianNameToSelect = null) {
         technicianSelect.innerHTML = '<option value="">Select a Technician</option>';
         if (data.technicians) {
             Object.keys(data.technicians).sort().forEach(techName => {
-                const option = document.createElement('option');
+                const option = document.createElement('option'); // Corrected: Removed unnecessary backslashes
                 option.value = techName;
                 option.textContent = escapeHtml(techName);
                 technicianSelect.appendChild(option);
@@ -42,7 +54,7 @@ async function fetchMappings(technicianNameToSelect = null) {
         let finalTechnicianToLoad = null;
         if (technicianNameToSelect && data.technicians && data.technicians[technicianNameToSelect]) {
             finalTechnicianToLoad = technicianNameToSelect;
-        } else if (oldSelectedValue && data.technicians && data.technicians[oldSelectedValue]) {
+        } else if (oldSelectedValue && data.technicians && data.technicians[oldSelectedValue] && oldSelectedValue !== "") { // check oldSelectedValue is not placeholder
             finalTechnicianToLoad = oldSelectedValue;
         }
 
@@ -55,6 +67,8 @@ async function fetchMappings(technicianNameToSelect = null) {
                 displayMessage('Error: UI refresh function missing.', 'error');
             }
         } else {
+            // Explicitly set to placeholder and clear details if no technician is to be loaded
+            technicianSelect.value = ""; // Default to placeholder
             selectedTechnician = null;
             currentSelectedTechnicianId = null;
             if (document.getElementById('technicianDetails')) {
@@ -62,7 +76,12 @@ async function fetchMappings(technicianNameToSelect = null) {
             }
             if (currentTechNameDisplay) currentTechNameDisplay.textContent = '';
             if (taskListDiv) taskListDiv.innerHTML = '';
-            if (technicianSkillsListContainerDiv) technicianSkillsListContainerDiv.innerHTML = '<p>Select a technician.</p>';
+            if (technicianSkillsListContainerDiv) technicianSkillsListContainerDiv.innerHTML = '<p>Select a technician to view details.</p>';
+            // Ensure Edit/Delete buttons are hidden
+            const editBtn = document.getElementById('editTechnicianNameBtn');
+            const deleteBtn = document.getElementById('deleteTechnicianBtn');
+            if (editBtn) editBtn.style.display = 'none';
+            if (deleteBtn) deleteBtn.style.display = 'none';
         }
     } catch (error) {
         displayMessage(`Error fetching technician mappings: ${error.message}`, 'error');
@@ -79,6 +98,9 @@ async function fetchMappings(technicianNameToSelect = null) {
 
 // --- Load Technician Details ---
 async function loadTechnicianDetails(technicianName) {
+    const editBtn = document.getElementById('editTechnicianNameBtn');
+    const deleteBtn = document.getElementById('deleteTechnicianBtn');
+
     if (!technicianName) {
         selectedTechnician = null;
         currentSelectedTechnicianId = null;
@@ -86,7 +108,9 @@ async function loadTechnicianDetails(technicianName) {
         if (currentTechNameDisplay) currentTechNameDisplay.textContent = '';
         if (techSatellitePointSelect) techSatellitePointSelect.value = ''; // Reset dropdown
         if (taskListDiv) taskListDiv.innerHTML = '';
-        if (technicianSkillsListContainerDiv) technicianSkillsListContainerDiv.innerHTML = '<p>Select a technician.</p>';
+        if (technicianSkillsListContainerDiv) technicianSkillsListContainerDiv.innerHTML = '<p>Select a technician to view details.</p>';
+        if (editBtn) editBtn.style.display = 'none';
+        if (deleteBtn) deleteBtn.style.display = 'none';
         return;
     }
 
@@ -104,13 +128,26 @@ async function loadTechnicianDetails(technicianName) {
     currentSelectedTechnicianId = techData.id;
 
     if (currentTechNameDisplay) currentTechNameDisplay.textContent = `Details for: ${escapeHtml(selectedTechnician)}`;
-    // if (techSattelitePointInput) techSattelitePointInput.value = techData.sattelite_point || ''; // Old input
-    if (techSatellitePointSelect) {
+
+    // Satellite Point Display and Edit Handling
+    const techSatellitePointNameDisplay = document.getElementById('techSatellitePointNameDisplay');
+    const editTechSatellitePointBtn = document.getElementById('editTechSatellitePointBtn');
+    // techSatellitePointSelect is already a global or correctly scoped variable
+
+    if (techSatellitePointNameDisplay && techSatellitePointSelect && editTechSatellitePointBtn) {
+        // Set initial display value
+        techSatellitePointNameDisplay.textContent = techData.satellite_point_name || 'Not Set';
         techSatellitePointSelect.value = techData.satellite_point_id || '';
+
+        // Hide select, show text and edit button initially
+        techSatellitePointNameDisplay.style.display = 'inline';
+        editTechSatellitePointBtn.style.display = 'inline';
+        techSatellitePointSelect.style.display = 'none';
     }
-    // if (techLinesInput) techLinesInput.value = (techData.technician_lines || []).join(', '); // Old input, lines are now derived
 
     document.getElementById('technicianDetails').style.display = 'block';
+    if (editBtn) editBtn.style.display = 'inline-block'; // Or 'block' based on layout
+    if (deleteBtn) deleteBtn.style.display = 'inline-block'; // Or 'block' based on layout
 
     taskListDiv.innerHTML = ''; // Clear previous tasks
 
@@ -129,7 +166,7 @@ async function loadTechnicianDetails(technicianName) {
     // Add a section for tasks that are explicitly assigned but might not appear in skill-matched lists
     // (e.g. if a task has no skills defined, or if assignment logic differs)
     // This part needs careful consideration on how to integrate with the new display.
-    // For now, the `renderTaskCategory` handles adding/removing from `explicitly_assigned_tasks`.
+    // For now, the \`renderTaskCategory\` handles adding/removing from \`explicitly_assigned_tasks\`.
 
     if (!techData.skills || Object.keys(techData.skills).length === 0) {
         await fetchTechnicianSkills(selectedTechnician);
@@ -231,7 +268,7 @@ async function saveAllChanges() {
         }
     }
 
-    // If other data types (tasks, technologies) were modified and tracked in `unsavedChanges`,
+    // If other data types (tasks, technologies) were modified and tracked in \`unsavedChanges\`,
     // they would be prepared and added to the payload here.
     // For now, this function is focused on technician satellite point.
 
@@ -279,3 +316,228 @@ async function saveAllChanges() {
         console.error('Error in saveAllChanges:', error);
     }
 }
+
+// --- Function to handle editing of technician satellite point ---
+async function handleTechSatellitePointEdit() {
+    if (!selectedTechnician || !currentMappings.technicians[selectedTechnician]) {
+        displayMessage("Please select a technician first.", "info");
+        return;
+    }
+
+    const techSatellitePointNameDisplay = document.getElementById('techSatellitePointNameDisplay');
+    const editTechSatellitePointBtn = document.getElementById('editTechSatellitePointBtn');
+    // techSatellitePointSelect is already a global or correctly scoped variable
+
+    if (techSatellitePointNameDisplay && techSatellitePointSelect && editTechSatellitePointBtn) {
+        techSatellitePointNameDisplay.style.display = 'none';
+        editTechSatellitePointBtn.style.display = 'none';
+        techSatellitePointSelect.style.display = 'inline';
+        // Ensure the select shows the current value before editing
+        techSatellitePointSelect.value = currentMappings.technicians[selectedTechnician]?.satellite_point_id || '';
+        techSatellitePointSelect.focus();
+    }
+}
+
+// --- Function to handle change and auto-save of technician satellite point ---
+async function handleTechSatellitePointChange() {
+    if (!selectedTechnician || !currentSelectedTechnicianId) {
+        displayMessage("No technician selected for saving satellite point.", "error");
+        // Optionally revert UI if needed, but an error message should suffice
+        return;
+    }
+
+    const oldSatellitePointName = currentMappings.technicians[selectedTechnician]?.satellite_point_name || 'Not Set';
+    const newSatellitePointId = parseInt(techSatellitePointSelect.value, 10);
+    const newSatellitePointName = techSatellitePointSelect.options[techSatellitePointSelect.selectedIndex]?.text || 'Not Set';
+
+    const payload = {
+        technicians: {
+            [selectedTechnician]: { // selectedTechnician is the name
+                id: currentSelectedTechnicianId,
+                satellite_point_id: isNaN(newSatellitePointId) || newSatellitePointId <= 0 ? null : newSatellitePointId
+            }
+        }
+    };
+
+    try {
+        const response = await fetch('/api/save_technician_mappings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+
+        const techSatellitePointNameDisplay = document.getElementById('techSatellitePointNameDisplay');
+        const editTechSatellitePointBtn = document.getElementById('editTechSatellitePointBtn');
+
+        if (response.ok) {
+            // displayMessage(result.message || 'Satellite point updated successfully.', 'success'); // Old message
+            const successMessage = `Satellite point for ${escapeHtml(selectedTechnician)} changed from '${escapeHtml(oldSatellitePointName)}' to '${escapeHtml(newSatellitePointName)}'.`;
+            displayMessage(successMessage, 'success');
+
+            // Update local state
+            if (currentMappings.technicians[selectedTechnician]) {
+                currentMappings.technicians[selectedTechnician].satellite_point_id = isNaN(newSatellitePointId) || newSatellitePointId <= 0 ? null : newSatellitePointId;
+                currentMappings.technicians[selectedTechnician].satellite_point_name = (isNaN(newSatellitePointId) || newSatellitePointId <= 0) ? 'Not Set' : newSatellitePointName;
+            }
+
+            // Update UI
+            if (techSatellitePointNameDisplay) techSatellitePointNameDisplay.textContent = currentMappings.technicians[selectedTechnician]?.satellite_point_name || 'Not Set';
+            if (techSatellitePointSelect) techSatellitePointSelect.style.display = 'none';
+            if (techSatellitePointNameDisplay) techSatellitePointNameDisplay.style.display = 'inline';
+            if (editTechSatellitePointBtn) editTechSatellitePointBtn.style.display = 'inline';
+
+        } else {
+            throw new Error(result.message || `Server error ${response.status}`);
+        }
+    } catch (error) {
+        displayMessage(`Error updating satellite point: ${error.message}`, 'error');
+        // Keep select visible for correction
+        const techSatellitePointNameDisplay = document.getElementById('techSatellitePointNameDisplay');
+        const editTechSatellitePointBtn = document.getElementById('editTechSatellitePointBtn');
+        if (techSatellitePointSelect) techSatellitePointSelect.style.display = 'inline';
+        if (techSatellitePointNameDisplay) techSatellitePointNameDisplay.style.display = 'none';
+        if (editTechSatellitePointBtn) editTechSatellitePointBtn.style.display = 'none';
+    }
+}
+
+// --- Placeholder functions for Technician CUD operations ---
+async function handleAddTechnician() {
+    const newName = prompt("Enter the name for the new technician:");
+    if (newName && newName.trim() !== '') {
+        const name = newName.trim();
+        // Prompt for satellite point when adding a new technician
+        const satellitePointId = prompt("Enter the Satellite Point ID for the new technician (optional, press Enter to skip):");
+        const satellitePointIdInt = satellitePointId && satellitePointId.trim() !== '' ? parseInt(satellitePointId.trim(), 10) : null;
+
+        try {
+            const payload = { name: name };
+            if (satellitePointIdInt !== null && !isNaN(satellitePointIdInt)) {
+                payload.satellite_point_id = satellitePointIdInt;
+            }
+
+            const response = await fetch('/api/technicians', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload), // Send name and optional satellite_point_id
+            });
+            const result = await response.json();
+            if (response.ok) {
+                displayMessage(`Technician '${escapeHtml(name)}' added successfully.`, 'success');
+                await fetchMappings(); // Refresh the main technician list and details
+            } else {
+                throw new Error(result.message || `Server error ${response.status}`);
+            }
+        } catch (error) {
+            displayMessage(`Error adding technician: ${error.message}`, 'error');
+            console.error('Error in handleAddTechnician:', error);
+        }
+    } else if (newName !== null) { // null means cancel was hit, empty string means OK with no input
+        displayMessage("Technician name cannot be empty.", "warning");
+    } else {
+        displayMessage("Add technician cancelled.", "info");
+    }
+}
+
+async function handleEditTechnicianName() {
+    if (!selectedTechnician || !currentSelectedTechnicianId) {
+        displayMessage("Please select a technician to edit.", "warning");
+        return;
+    }
+    const oldName = selectedTechnician;
+    const newNamePrompt = prompt(`Enter new name for ${oldName}:`, oldName);
+
+    if (newNamePrompt && newNamePrompt.trim() !== '' && newNamePrompt.trim() !== oldName) {
+        const newName = newNamePrompt.trim();
+        try {
+            // When editing only the name, the current satellite_point_id is not sent.
+            // The backend should only update the name.
+            const response = await fetch(`/api/technicians/${currentSelectedTechnicianId}`,
+            {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name: newName }), // Only send name for name edit
+            });
+            const result = await response.json();
+            if (response.ok) {
+                displayMessage(`Changed name of technician from '${escapeHtml(oldName)}' to '${escapeHtml(newName)}'.`, 'success');
+                selectedTechnician = newName; // Update selectedTechnician global variable
+                await fetchMappings(newName); // Refresh with the new name selected
+            } else {
+                throw new Error(result.message || `Server error ${response.status}`);
+            }
+        } catch (error) {
+            displayMessage(`Error editing technician name: ${error.message}`, 'error');
+            console.error('Error in handleEditTechnicianName:', error);
+            // If error, refresh with old name to revert optimistic UI changes if any
+            await fetchMappings(oldName);
+        }
+    } else if (newNamePrompt === oldName) {
+        displayMessage("Name is unchanged.", "info");
+    } else if (newNamePrompt !== null) { // null means cancel was hit
+        displayMessage("Invalid or empty name entered.", "warning");
+    } else {
+        displayMessage("Edit technician name cancelled.", "info");
+    }
+}
+
+async function handleDeleteTechnician() {
+    if (!selectedTechnician || !currentSelectedTechnicianId) {
+        displayMessage("Please select a technician to delete.", "warning");
+        return;
+    }
+    const technicianNameToDelete = selectedTechnician; // Capture for success message
+    if (confirm(`Are you sure you want to delete technician ${escapeHtml(technicianNameToDelete)}? This will also remove their skills and task assignments.`)) {
+        try {
+            const response = await fetch(`/api/technicians/${currentSelectedTechnicianId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            const result = await response.json();
+            if (response.ok) {
+                displayMessage(`Technician '${escapeHtml(technicianNameToDelete)}' deleted successfully.`, 'success');
+                selectedTechnician = null;
+                currentSelectedTechnicianId = null;
+                // Clear technician details display
+                if (document.getElementById('technicianDetails')) {
+                    document.getElementById('technicianDetails').style.display = 'none';
+                }
+                if (currentTechNameDisplay) currentTechNameDisplay.textContent = '';
+                if (taskListDiv) taskListDiv.innerHTML = '';
+                if (technicianSkillsListContainerDiv) technicianSkillsListContainerDiv.innerHTML = '<p>Select a technician to view details.</p>';
+
+                await fetchMappings(); // Refresh the technician dropdown and main list
+            } else {
+                throw new Error(result.message || `Server error ${response.status}`);
+            }
+        } catch (error) {
+            displayMessage(`Error deleting technician: ${error.message}`, 'error');
+            console.error('Error in handleDeleteTechnician:', error);
+        }
+    } else {
+        displayMessage("Delete cancelled.", "info");
+    }
+}
+
+// Event Listeners (ensure this runs after DOM is loaded and elements exist)
+// It's generally better to place these in a main DOMContentLoaded listener,
+// but adding here for self-containment if this script is loaded last.
+// Ensure these elements exist before adding listeners.
+
+document.addEventListener('DOMContentLoaded', () => {
+    const editButton = document.getElementById('editTechSatellitePointBtn');
+    if (editButton) {
+        editButton.addEventListener('click', handleTechSatellitePointEdit);
+    }
+
+    const selectElement = document.getElementById('techSatellitePointSelect');
+    if (selectElement) {
+        selectElement.addEventListener('change', handleTechSatellitePointChange);
+    }
+});
