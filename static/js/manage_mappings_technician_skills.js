@@ -109,7 +109,8 @@ function renderTechnicianSkills() {
 
             if (!hasChildren(childTech.id)) {
                 const skillInfo = techSkills[childTech.id];
-                const currentSkillLevel = skillInfo ? skillInfo.level : 0;
+                // Ensure currentSkillLevel is an integer, defaulting to 0 if skillInfo is undefined
+                const currentSkillLevel = typeof skillInfo !== 'undefined' ? parseInt(skillInfo, 10) : 0;
                 controlsDiv.appendChild(createSkillViewMode(childTech, currentSkillLevel));
             }
             skillDiv.appendChild(controlsDiv);
@@ -152,7 +153,8 @@ function renderTechnicianSkills() {
 
         if (!hasChildren(topLevelTech.id)) {
             const skillInfo = techSkills[topLevelTech.id];
-            const currentSkillLevel = skillInfo ? skillInfo.level : 0;
+            // Ensure currentSkillLevel is an integer, defaulting to 0 if skillInfo is undefined
+            const currentSkillLevel = typeof skillInfo !== 'undefined' ? parseInt(skillInfo, 10) : 0;
             controlsDiv.appendChild(createSkillViewMode(topLevelTech, currentSkillLevel));
         }
         skillDiv.appendChild(controlsDiv);
