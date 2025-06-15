@@ -84,7 +84,7 @@ def init_db(db_path, logger=None):
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS technologies (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL, -- Removed UNIQUE constraint
             group_id INTEGER,
             parent_id INTEGER, -- Added for hierarchy
             FOREIGN KEY (group_id) REFERENCES technology_groups (id),

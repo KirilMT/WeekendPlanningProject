@@ -690,16 +690,35 @@ def add_technology_api():
         if not tech_name:
             return jsonify({"message": "Technology name is required."}), 400
 
-        group_id = data.get('group_id')
-        parent_id_from_payload = data.get('parent_id') # Store for cleanup
-        if group_id is not None: group_id = int(group_id)
-        if parent_id_from_payload is not None: parent_id_from_payload = int(parent_id_from_payload)
+        group_id = data.get('group_id') # Frontend ensures this is sent for new tech
+        parent_id_from_payload = data.get('parent_id')
+
+        if group_id is None: # Should ideally not happen if frontend enforces it
+             return jsonify({"message": "Technology group ID is required."}), 400
+
+        try:
+            group_id = int(group_id)
+            if parent_id_from_payload is not None:
+                parent_id_from_payload = int(parent_id_from_payload)
+        except ValueError:
+            return jsonify({"message": "Invalid group_id or parent_id format. Must be integers."}), 400
 
         conn = get_db_connection(DATABASE_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM technologies WHERE name = ?", (tech_name,))
+
+        # Check for duplicate: name, group_id, parent_id must be unique together
+        query_check_duplicate = "SELECT id FROM technologies WHERE name = ? AND group_id = ?"
+        params_check_duplicate = [tech_name, group_id]
+
+        if parent_id_from_payload is None:
+            query_check_duplicate += " AND parent_id IS NULL"
+        else:
+            query_check_duplicate += " AND parent_id = ?"
+            params_check_duplicate.append(parent_id_from_payload)
+
+        cursor.execute(query_check_duplicate, tuple(params_check_duplicate))
         if cursor.fetchone():
-            return jsonify({"message": f"Technology '{tech_name}' already exists."}), 409
+            return jsonify({"message": f"Technology '{tech_name}' with the same parent under group ID {group_id} already exists."}), 409
 
         cursor.execute("INSERT INTO technologies (name, group_id, parent_id) VALUES (?, ?, ?)", (tech_name, group_id, parent_id_from_payload))
         conn.commit()
@@ -739,19 +758,18 @@ def manage_technology_item_api(technology_id):
         if request.method == 'PUT':
             data = request.get_json()
             new_name = data.get('name', '').strip() # Assigned here
-            group_id = data.get('group_id')
-            parent_id_from_payload = data.get('parent_id') # Renamed for clarity in this block
+            group_id = data.get('group_id') # Can be None if client allows clearing it
+            parent_id_from_payload = data.get('parent_id') # Can be None
 
             if not new_name:
                 return jsonify({"message": "Technology name is required."}), 400
 
-            if group_id is not None: group_id = int(group_id)
-            # Ensure parent_id_from_payload is an int if not None, or remains None
-            if parent_id_from_payload is not None:
-                try:
-                    parent_id_from_payload = int(parent_id_from_payload)
-                except ValueError:
-                    return jsonify({"message": "Invalid parent_id format. Must be an integer or null."}), 400
+            # Validate and convert IDs if present
+            try:
+                if group_id is not None: group_id = int(group_id)
+                if parent_id_from_payload is not None: parent_id_from_payload = int(parent_id_from_payload)
+            except ValueError:
+                return jsonify({"message": "Invalid group_id or parent_id format. Must be integers or null."}), 400
 
             conn = get_db_connection(DATABASE_PATH)
             cursor = conn.cursor()
@@ -760,15 +778,34 @@ def manage_technology_item_api(technology_id):
             if not cursor.fetchone():
                 return jsonify({"message": f"Technology ID {technology_id} not found."}), 404
 
-            cursor.execute("SELECT id FROM technologies WHERE name = ? AND id != ?", (new_name, technology_id))
-            if cursor.fetchone():
-                return jsonify({"message": f"Technology name '{new_name}' already exists."}), 409
+            # Check for duplicate: name, group_id, parent_id must be unique together, excluding current tech_id
+            query_parts_check_duplicate = ["SELECT id FROM technologies WHERE name = ? AND id != ?"]
+            params_check_duplicate = [new_name, technology_id]
 
+            if group_id is None:
+                query_parts_check_duplicate.append("AND group_id IS NULL")
+            else:
+                query_parts_check_duplicate.append("AND group_id = ?")
+                params_check_duplicate.append(group_id)
+
+            if parent_id_from_payload is None:
+                query_parts_check_duplicate.append("AND parent_id IS NULL")
+            else:
+                query_parts_check_duplicate.append("AND parent_id = ?")
+                params_check_duplicate.append(parent_id_from_payload)
+
+            final_query_check_duplicate = " ".join(query_parts_check_duplicate)
+            cursor.execute(final_query_check_duplicate, tuple(params_check_duplicate))
+            if cursor.fetchone():
+                return jsonify({"message": f"Another technology with the name '{new_name}', same parent, and same group already exists."}), 409
+
+            # Validate group_id if provided
             if group_id is not None:
                 cursor.execute("SELECT id FROM technology_groups WHERE id = ?", (group_id,))
                 if not cursor.fetchone():
                     return jsonify({"message": f"Technology group ID {group_id} not found."}), 400
 
+            # Validate parent_id if provided
             if parent_id_from_payload is not None:
                 if parent_id_from_payload == technology_id:
                     return jsonify({"message": "Technology cannot be its own parent."}), 400
