@@ -34,6 +34,105 @@ function getTechnologyPath(technologyId) {
     return path;
 }
 
+// Enhanced filter function for technology select dropdowns
+function filterTechnologySelect(selectElement, searchTerm) {
+    const lowerSearchTerm = searchTerm.toLowerCase().trim();
+    const allOptions = Array.from(selectElement.options);
+    const optgroups = Array.from(selectElement.getElementsByTagName('optgroup'));
+
+    // If search term is empty, show all and reset optgroups
+    if (!lowerSearchTerm) {
+        allOptions.forEach(opt => { opt.style.display = ''; });
+        optgroups.forEach(og => { og.style.display = ''; });
+        return;
+    }
+
+    // Initially hide all relevant elements when a search term is present
+    allOptions.forEach(opt => {
+        if (opt.value !== "") { // Don't hide functional placeholders if they were to exist
+            opt.style.display = 'none';
+        }
+    });
+    optgroups.forEach(og => { og.style.display = 'none'; });
+
+    const optionsToMakeVisible = new Set();
+    const optgroupsToMakeVisible = new Set();
+
+    // Pass 1: Find direct matches and add them to our set
+    allOptions.forEach(option => {
+        if (option.value === "") return; // Skip placeholder options
+        const optionText = (option.textContent || "").toLowerCase().trim();
+        if (optionText.includes(lowerSearchTerm)) {
+            optionsToMakeVisible.add(option);
+        }
+    });
+
+    // Pass 2: For each directly matched option, ensure its ancestors and optgroup are marked for display
+    const initiallyMatchedOptions = Array.from(optionsToMakeVisible); // Iterate on a copy
+
+    initiallyMatchedOptions.forEach(matchedOption => {
+        let currentOpt = matchedOption;
+        let currentLevel = parseInt(currentOpt.dataset.level);
+
+        // Ensure the matched option itself and its optgroup are marked
+        if (currentOpt.parentElement && currentOpt.parentElement.tagName === 'OPTGROUP') {
+            optgroupsToMakeVisible.add(currentOpt.parentElement);
+        }
+
+        // Climb up to add parents
+        while (currentLevel > 0) {
+            const parentLevelToFind = currentLevel - 1;
+            let prevSibling = currentOpt.previousElementSibling;
+            let parentFoundThisStep = false;
+
+            while (prevSibling) {
+                if (prevSibling.tagName === 'OPTION' && parseInt(prevSibling.dataset.level) === parentLevelToFind) {
+                    optionsToMakeVisible.add(prevSibling); // Add parent to display set
+                    if (prevSibling.parentElement && prevSibling.parentElement.tagName === 'OPTGROUP') {
+                        optgroupsToMakeVisible.add(prevSibling.parentElement); // Ensure parent's optgroup is also marked
+                    }
+                    currentOpt = prevSibling; // Continue climbing from this parent
+                    currentLevel = parseInt(currentOpt.dataset.level);
+                    parentFoundThisStep = true;
+                    break; // Found parent for this level, continue with outer while
+                }
+                if (prevSibling.tagName === 'OPTGROUP') { // Crossed an optgroup boundary upwards
+                    currentLevel = 0; // Stop climbing this branch
+                    break;
+                }
+                prevSibling = prevSibling.previousElementSibling;
+            }
+
+            if (!parentFoundThisStep) {
+                break; // Stop climbing if a parent link is broken for this branch
+            }
+        }
+    });
+
+    // Apply display styles based on the collected sets
+    optionsToMakeVisible.forEach(opt => { opt.style.display = ''; });
+    optgroupsToMakeVisible.forEach(og => { og.style.display = ''; });
+
+    // Special handling for the "-- Select Technologies --" placeholder in multi-select if it exists and no other options are visible.
+    // Note: Current populateTechnologySelectDropdown doesn't add this for multiple=true selects.
+    // If it did, and had value="", this logic would apply:
+    if (selectElement.multiple) {
+        const placeholderOption = allOptions.find(opt => opt.value === "");
+        if (placeholderOption) {
+            const anyOtherOptionVisible = Array.from(optionsToMakeVisible).some(opt => opt.value !== "");
+            if (optionsToMakeVisible.size === 0 || !anyOtherOptionVisible) { // If only placeholder would be visible or no options at all
+                 // If search yields no results, decide if placeholder should show.
+                 // Current behavior: if search term exists and no results, placeholder also hidden by initial hide.
+                 // To show placeholder if no results: placeholderOption.style.display = '';
+            } else {
+                // If there are results, the placeholder (if it was part of allOptions and not filtered out by value!="")
+                // would have been hidden by the initial loop. If it should be hidden when results exist:
+                // placeholderOption.style.display = 'none';
+            }
+        }
+    }
+}
+
 // Function to populate a technology select dropdown (used for new task form and edit form)
 function populateTechnologySelectDropdown(selectElement, selectedTechnologyValues = null) { // Renamed for clarity, can be single ID or array
     selectElement.innerHTML = ''; // Clear existing options
@@ -82,8 +181,8 @@ function populateTechnologySelectDropdown(selectElement, selectedTechnologyValue
         children.forEach(childTech => {
             const option = document.createElement('option');
             option.value = childTech.id;
-            // Use &nbsp; for spacing and set innerHTML to ensure they are rendered
             option.innerHTML = `${'&nbsp;&nbsp;&nbsp;&nbsp;'.repeat(level)}↳ ${escapeHtml(childTech.name)}`;
+            option.dataset.level = level; // Add data-level
             if (currentSelectedValues) {
                 if (Array.isArray(currentSelectedValues) && currentSelectedValues.map(String).includes(String(childTech.id))) {
                     option.selected = true;
@@ -112,6 +211,7 @@ function populateTechnologySelectDropdown(selectElement, selectedTechnologyValue
             const option = document.createElement('option');
             option.value = tech.id;
             option.textContent = escapeHtml(tech.name);
+            option.dataset.level = 0; // Add data-level for top-level in group
             if (selectedTechnologyValues) {
                  if (Array.isArray(selectedTechnologyValues) && selectedTechnologyValues.map(String).includes(String(tech.id))) {
                     option.selected = true;
@@ -321,7 +421,11 @@ function renderTasksForTechnologyMapping(tasks) {
             if (task.technology_ids && task.technology_ids.length > 0) {
                  displayMessage(`Task \\"${escapeHtml(task.name)}\\" has issues with its skill assignments. Please review.`, 'warning');
             }
-        } else {
+        } else if (!task.technology_ids || task.technology_ids.length === 0) { // Case for "(No skills assigned)"
+            taskTechSpan.style.color = 'red';
+            taskTechSpan.style.fontWeight = 'bold';
+            taskTechSpan.title = 'No skills have been assigned to this task.';
+        } else { // Skills are assigned and valid
             taskTechSpan.style.color = '#555'; // Default color
             taskTechSpan.style.fontWeight = 'normal'; // Default font weight
             taskTechSpan.title = '';
@@ -343,20 +447,38 @@ function renderTasksForTechnologyMapping(tasks) {
         taskNameInput.type = 'text';
         taskNameInput.value = task.name;
         // ... (taskNameInput styling) ...
-        taskNameInput.style.flexGrow = '0.5'; // Adjust as needed
-        taskNameInput.style.marginRight = '5px';
+        taskNameInput.style.flexGrow = '1.5'; // Changed from 0.5 to match add form proportion
+        taskNameInput.style.marginRight = '10px'; // Changed from 5px to match add form CSS margin
+        taskNameInput.style.width = 'auto'; // Ensure consistent width behavior with add form
         editModeDiv.appendChild(taskNameInput);
+
+        const techSelectContainer = document.createElement('div');
+        techSelectContainer.style.flexGrow = '1';
+        techSelectContainer.style.display = 'flex';
+        techSelectContainer.style.flexDirection = 'column';
+
+        const techSearchInput = document.createElement('input');
+        techSearchInput.type = 'text';
+        techSearchInput.classList.add('select-search-input');
+        techSearchInput.placeholder = 'Search technologies...';
+        techSelectContainer.appendChild(techSearchInput);
 
         const techSelect = document.createElement('select');
         techSelect.multiple = true; // Make it a multi-select dropdown
         techSelect.classList.add('task-technology-select'); // Add class for styling
+        techSelect.style.width = '100%'; // Fill container
         // ... (techSelect styling) ...
-        techSelect.style.flexGrow = '1';
-        techSelect.style.marginRight = '5px';
-        // Populate with all technologies, and select current task's technologies
-        // Assuming task.technology_ids is an array of IDs.
+        // techSelect.style.flexGrow = '1'; // Not needed as container handles flex growth
+
         populateTechnologySelectDropdown(techSelect, task.technology_ids || []);
-        editModeDiv.appendChild(techSelect);
+        techSelectContainer.appendChild(techSelect);
+        editModeDiv.appendChild(techSelectContainer);
+
+        // Event listener for the search input
+        techSearchInput.addEventListener('input', () => {
+            filterTechnologySelect(techSelect, techSearchInput.value);
+        });
+
         itemDiv.appendChild(editModeDiv);
 
 
@@ -428,6 +550,14 @@ function renderTasksForTechnologyMapping(tasks) {
         itemDiv.appendChild(actionsDiv);
         taskTechnologyMappingListContainerDiv.appendChild(itemDiv);
     });
+
+    // Event listener for the new task technology search input
+    const newTaskTechnologySearchInput = document.getElementById('newTaskTechnologySearch');
+    if (newTaskTechnologySearchInput) {
+        newTaskTechnologySearchInput.addEventListener('input', () => {
+            filterTechnologySelect(newTaskTechnologySelectForMapping, newTaskTechnologySearchInput.value);
+        });
+    }
 }
 
 async function updateTaskMapping(taskId, newName, newTechnologyIds) { // Changed to newTechnologyIds (array)

@@ -113,6 +113,7 @@ button, .button-link {
     cursor: pointer;
     font-size: 16px;
     margin-right: 10px;
+    margin-left: 10px;
     text-decoration: none;
     display: inline-block;
     vertical-align: middle;
@@ -399,4 +400,13 @@ button:hover, .button-link:hover {
 .task-technology-select {
     min-height: 180px; /* Doubled from 60px */
     /* Add any other shared styles for these selects here if needed */
+}
+
+.select-search-input {
+    width: 100%; /* Take full width of its container */
+    padding: 8px;
+    margin-bottom: 5px; /* Space between search and select */
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box; /* Include padding and border in the element's total width and height */
 }
