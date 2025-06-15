@@ -6,7 +6,7 @@ from .config_manager import TASK_NAME_MAPPING, TECHNICIAN_TASKS, TECHNICIAN_LINE
 
 # Maximum number of high-priority tasks to consider for permutation-based optimization.
 # 7! = 5040, 8! = 40320. Keep this value mindful of performance.
-MAX_PERMUTATION_TASKS = 7
+MAX_PERMUTATION_TASKS = 1
 
 def _log(logger, level, message, *args):
     """Helper function to log or print."""
@@ -104,11 +104,28 @@ def _assign_task_definition_to_schedule(
         # _log(logger, "warning", f"Task {task_name_excel} (ID: {task_id}) skipped due to invalid quantity: {quantity}")
         return
 
-    if num_technicians_needed <= 0 and base_duration > 0 :
-        reason = f"Skipped ({task_type}): Invalid 'Mitarbeiter pro Aufgabe' ({num_technicians_needed}) for non-zero duration task."
-        for i in range(1, quantity + 1): unassigned_tasks_reasons_dict[f"{task_id}_{i}"] = reason
-        # _log(logger, "warning", f"Task {task_name_excel} (ID: {task_id}) skipped, techs needed {num_technicians_needed} for duration {base_duration}")
+    # Handle tasks requiring zero technicians
+    if num_technicians_needed == 0:
+        if base_duration == 0:
+            reason = f"Skipped ({task_type}): Task requires 0 technicians and has 0 duration. Cannot be scheduled."
+        else: # base_duration > 0 (Excel validation should ensure base_duration is not negative if not zero)
+            reason = f"Skipped ({task_type}): Invalid 'Mitarbeiter pro Aufgabe' (0) for non-zero duration task."
+
+        for i in range(1, quantity + 1):
+            unassigned_tasks_reasons_dict[f"{task_id}_{i}"] = reason
+        _log(logger, "warning", f"Task definition {task_name_excel} (ID: {task_id}) unassigned for all {quantity} instances: {reason}")
         return
+
+    # Handle tasks requiring negative technicians (should be caught by extract_data.py, but here for robustness)
+    if num_technicians_needed < 0:
+        reason = f"Skipped ({task_type}): Invalid 'Mitarbeiter pro Aufgabe' ({num_technicians_needed}) - value must be positive."
+        for i in range(1, quantity + 1):
+            unassigned_tasks_reasons_dict[f"{task_id}_{i}"] = reason
+        _log(logger, "warning", f"Task definition {task_name_excel} (ID: {task_id}) unassigned for all {quantity} instances: {reason}")
+        return
+
+    # At this point, num_technicians_needed should be > 0.
+    # The previous check `if num_technicians_needed <= 0 and base_duration > 0:` is now covered by the specific checks above.
 
     task_lines_str = str(task_to_assign.get('lines', ''))
     task_lines_list = []
@@ -158,7 +175,8 @@ def _assign_task_definition_to_schedule(
                 all_task_assignments_details.append({
                     'technician': None, 'task_name': instance_task_display_name, 'start': 0, 'duration': 0,
                     'is_incomplete': False, 'original_duration': 0, 'instance_id': instance_id_str,
-                    'technician_task_priority': 'N/A_AddPM', 'resource_mismatch_info': "0-duration/0-tech Add.PM task"
+                    'technician_task_priority': 'N/A_AddPM',
+                    'resource_mismatch_info': "0-duration/0-tech Add.PM task"
                 })
                 assigned_this_instance_flag = True
                 if instance_id_str in unassigned_tasks_reasons_dict: del unassigned_tasks_reasons_dict[instance_id_str]
@@ -294,89 +312,127 @@ def _assign_task_definition_to_schedule(
 
             eligible_technicians_details_pm = []
             for tech_cand_pm in present_technicians:
-                tech_lines_pm = TECHNICIAN_LINES.get(tech_cand_pm, [])
                 tech_skills_map = technician_technology_skills.get(tech_cand_pm, {})
 
-                # 1. Check if technician possesses AT LEAST ONE of the task\'s required skills
-                possesses_at_least_one_required_skill = any(skill_id in tech_skills_map for skill_id in task_technology_ids)
+                # 1. Check if technician possesses AT LEAST ONE of the task's required skills (with level > 0)
+                possesses_at_least_one_required_skill = any(
+                    skill_id in tech_skills_map and tech_skills_map[skill_id] > 0
+                    for skill_id in task_technology_ids
+                )
                 if not possesses_at_least_one_required_skill:
-                    # _log(logger, "debug", f"      Technician {tech_cand_pm} does not possess any of the required skills {task_technology_ids} for task {task_name_excel}.")
+                    # _log(logger, "debug", f"      Technician {tech_cand_pm} does not possess any of the required skills {task_technology_ids} with level > 0 for task {task_name_excel}.")
                     continue
 
                 # 2. Check line compatibility
+                tech_lines_pm = TECHNICIAN_LINES.get(tech_cand_pm, [])
                 line_match = not task_lines_list or any(line in tech_lines_pm for line in task_lines_list)
                 if not line_match:
                     # _log(logger, "debug", f"      Technician {tech_cand_pm} failed line match for task {task_name_excel}.")
                     continue
 
-                # 3. Check if technician is mapped to this task name
-                tech_task_defs_pm = TECHNICIAN_TASKS.get(tech_cand_pm, [])
-                can_do_pm_task_name = False
-                for tech_task_obj_pm in tech_task_defs_pm:
-                    norm_tech_task_str_pm = normalize_string(tech_task_obj_pm['task_name'])
-                    task_name_match = normalized_current_excel_task_name_pm in norm_tech_task_str_pm or norm_tech_task_str_pm in normalized_current_excel_task_name_pm
-                    if task_name_match:
-                        can_do_pm_task_name = True
-                        break
-                if not can_do_pm_task_name:
-                    # _log(logger, "debug", f"      Technician {tech_cand_pm} not mapped to task name {task_name_excel} for assignment.")
+                # 3. Check if technician is mapped to this task name (REMOVING THIS CHECK FOR STANDARD PMs as per skill-based logic)
+                # tech_task_defs_pm = TECHNICIAN_TASKS.get(tech_cand_pm, [])
+                # can_do_pm_task_name = False
+                # for tech_task_obj_pm in tech_task_defs_pm:
+                #     norm_tech_task_str_pm = normalize_string(tech_task_obj_pm['task_name'])
+                #     task_name_match = normalized_current_excel_task_name_pm in norm_tech_task_str_pm or norm_tech_task_str_pm in normalized_current_excel_task_name_pm
+                #     if task_name_match:
+                #         can_do_pm_task_name = True
+                #         break
+                # if not can_do_pm_task_name:
+                #     # _log(logger, "debug", f"      Technician {tech_cand_pm} not mapped to task name {task_name_excel} for assignment.")
+                #     continue
+
+                # Store all skills the technician has that are relevant to this task (and level > 0)
+                relevant_skills_for_tech = {
+                    skill_id: tech_skills_map[skill_id]
+                    for skill_id in task_technology_ids
+                    if skill_id in tech_skills_map and tech_skills_map[skill_id] > 0
+                }
+                if not relevant_skills_for_tech: # Should be caught by possesses_at_least_one_required_skill, but double check
                     continue
 
-                # Store all skills the technician has that are relevant to this task
-                relevant_skills_for_tech = {skill_id: tech_skills_map[skill_id] for skill_id in task_technology_ids if skill_id in tech_skills_map}
                 eligible_technicians_details_pm.append({
                     'name': tech_cand_pm,
                     'relevant_skills': relevant_skills_for_tech # Dict of {skill_id: level}
                 })
 
             if not eligible_technicians_details_pm:
-                last_known_failure_reason_for_instance = "No technicians eligible for this PM task (possess at least one skill, meet line/task mapping)."
+                last_known_failure_reason_for_instance = "No technicians eligible for this PM task (possess at least one skill > 0, meet line/task mapping)."
                 unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
                 _log(logger, "warning", f"      {last_known_failure_reason_for_instance} for {instance_task_display_name}")
                 continue
 
-            # Sort eligible technicians by the highest skill level they possess for any of the task\'s required skills (desc), then by name (asc)
-            # This is a preliminary sort for forming combinations; group scoring will be more detailed.
-            eligible_technicians_details_pm.sort(key=lambda x: (
-                -max(x['relevant_skills'].values() or [0]), # Max skill level for relevant skills
-                x['name']
-            ))
+            # Preliminary sort of eligible technicians (not strictly necessary for combinations, but can help in debugging/logging)
+            # eligible_technicians_details_pm.sort(key=lambda x: (-max(x['relevant_skills'].values() or [0]), x['name']))
+
             sorted_eligible_tech_names_pm = [d['name'] for d in eligible_technicians_details_pm]
             tech_details_map_pm = {d['name']: d for d in eligible_technicians_details_pm}
 
             viable_groups_with_scores_pm = []
-            if num_technicians_needed > 0 and len(sorted_eligible_tech_names_pm) >= num_technicians_needed:
-                for group_tuple in combinations(sorted_eligible_tech_names_pm, num_technicians_needed):
+            # Iterate through possible group sizes, prioritizing closeness to num_technicians_needed
+            possible_sizes_to_try = []
+            if num_technicians_needed > 0 and len(sorted_eligible_tech_names_pm) > 0:
+                # Generate a list of sizes to try: num_technicians_needed first, then others by closeness.
+                # Max possible size is len(sorted_eligible_tech_names_pm).
+                # Min possible size is 1.
+                unique_sizes = set()
+                # Add planned size first if possible
+                if num_technicians_needed <= len(sorted_eligible_tech_names_pm):
+                    unique_sizes.add(num_technicians_needed)
+
+                # Add other sizes, from 1 up to number of eligible techs
+                for i in range(1, len(sorted_eligible_tech_names_pm) + 1):
+                    unique_sizes.add(i)
+
+                # Sort these unique sizes: first by absolute difference to num_technicians_needed, then by the size itself (smaller preferred if diff is same)
+                possible_sizes_to_try = sorted(list(unique_sizes), key=lambda s: (abs(s - num_technicians_needed), s))
+
+            # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Possible group sizes to try (sorted by preference): {possible_sizes_to_try} for num_needed={num_technicians_needed} from {len(sorted_eligible_tech_names_pm)} eligible techs.")
+
+            for r_actual_group_size in possible_sizes_to_try:
+                # This check is implicitly handled by combinations if r_actual_group_size > len(sorted_eligible_tech_names_pm)
+                # as combinations will yield no results. But an explicit check might be clearer if needed.
+                # if len(sorted_eligible_tech_names_pm) < r_actual_group_size: continue
+
+                for group_tuple in combinations(sorted_eligible_tech_names_pm, r_actual_group_size):
                     group_tech_names = list(group_tuple)
-                    if not group_tech_names: continue
+                    if not group_tech_names: continue # Should not happen with r_actual_group_size >= 1
 
                     # Check if the group collectively covers all required skills for the task
-                    group_skills_possessed = set()
+                    group_skills_possessed_by_id = set()
                     for tech_name_in_group in group_tech_names:
-                        group_skills_possessed.update(tech_details_map_pm[tech_name_in_group]['relevant_skills'].keys())
+                        group_skills_possessed_by_id.update(tech_details_map_pm[tech_name_in_group]['relevant_skills'].keys())
 
-                    if not set(task_technology_ids).issubset(group_skills_possessed):
-                        # _log(logger, "debug", f"      Group {group_tech_names} does not collectively cover all required skills {task_technology_ids}. Missing: {set(task_technology_ids) - group_skills_possessed}")
+                    if not set(task_technology_ids).issubset(group_skills_possessed_by_id):
+                        # _log(logger, "debug", f"      Group {group_tech_names} does not collectively cover all required skills {task_technology_ids}. Missing: {set(task_technology_ids) - group_skills_possessed_by_id}")
                         continue # This group cannot perform the task
 
                     # Calculate per-skill average levels for the group
                     per_skill_avg_levels = {}
                     for req_skill_id in task_technology_ids:
-                        techs_with_this_skill_in_group = [tech_name for tech_name in group_tech_names if req_skill_id in tech_details_map_pm[tech_name]['relevant_skills']]
+                        techs_with_this_skill_in_group = [
+                            tech_name for tech_name in group_tech_names
+                            if req_skill_id in tech_details_map_pm[tech_name]['relevant_skills']
+                        ]
                         if techs_with_this_skill_in_group:
-                            avg_level_for_skill = sum(tech_details_map_pm[tech_name]['relevant_skills'][req_skill_id] for tech_name in techs_with_this_skill_in_group) / len(techs_with_this_skill_in_group)
+                            avg_level_for_skill = sum(
+                                tech_details_map_pm[tech_name]['relevant_skills'][req_skill_id]
+                                for tech_name in techs_with_this_skill_in_group
+                            ) / len(techs_with_this_skill_in_group)
                             per_skill_avg_levels[req_skill_id] = avg_level_for_skill
                         else:
-                            # This should not happen if the group covers all skills, but as a safeguard:
-                            per_skill_avg_levels[req_skill_id] = 0
+                            # This case should ideally not be hit if the group covers all skills,
+                            # but if a skill is required and no one has it (even level 0 was filtered out earlier),
+                            # this group is invalid or the skill avg is effectively 0.
+                            # Given the check above (issubset), this means at least one tech has it.
+                            per_skill_avg_levels[req_skill_id] = 0 # Should not happen if logic is correct
 
                     # Tie-breaker: Combined average skill level for the group
-                    # (sum of all relevant skill levels of all techs in group) / (num_skills_covered_by_group_for_this_task)
-                    # More precisely: sum of (skill_level for each tech for each *required* skill they possess) / sum of (count of required skills possessed by each tech)
                     total_skill_points_in_group_for_required_skills = 0
                     count_of_possessed_required_skills_in_group = 0
                     for tech_name_in_group in group_tech_names:
-                        for req_skill_id in task_technology_ids:
+                        for req_skill_id in task_technology_ids: # Iterate over task's required skills
                             if req_skill_id in tech_details_map_pm[tech_name_in_group]['relevant_skills']:
                                 total_skill_points_in_group_for_required_skills += tech_details_map_pm[tech_name_in_group]['relevant_skills'][req_skill_id]
                                 count_of_possessed_required_skills_in_group += 1
@@ -385,159 +441,162 @@ def _assign_task_definition_to_schedule(
                     if count_of_possessed_required_skills_in_group > 0:
                         combined_avg_skill_level_group = total_skill_points_in_group_for_required_skills / count_of_possessed_required_skills_in_group
 
-
                     workload = sum(sum(end - start for start, end, _ in technician_schedules[tn]) for tn in group_tech_names)
 
                     viable_groups_with_scores_pm.append({
                         'group': group_tech_names,
-                        'len': len(group_tech_names),
+                        'len': r_actual_group_size, # Actual size of this candidate group
                         'per_skill_avg': per_skill_avg_levels, # Dict {skill_id: avg_level}
-                        'combined_avg_skill': combined_avg_skill_level_group, # Tie-breaker 1
-                        'workload': workload # Tie-breaker 2
+                        'combined_avg_skill': combined_avg_skill_level_group,
+                        'workload': workload,
+                        'size_diff': abs(r_actual_group_size - num_technicians_needed) # Store difference for primary sort
                     })
 
-            # Sort groups:
-            # Primary: Compare per_skill_avg_levels. Higher is better for each skill.
-            #   Need a custom comparison for this. For now, sort by combined_avg_skill, then workload, then names.
-            #   A more precise sort would iterate through sorted skill_ids and compare averages one by one.
-            #   For simplicity, we\'ll use combined_avg_skill as the main skill-based sorter after ensuring all skills are covered.
-            #   Then, if per_skill_avg is tied (which combined_avg_skill might approximate), use workload.
+            # Ensure 0-tech, 0-duration PM tasks still get a dummy group if no other groups were formed
+            # This handles cases where num_technicians_needed might have been >0 but no eligible techs were found, or num_technicians_needed was 0 initially.
+            if num_technicians_needed == 0 and base_duration == 0 and not viable_groups_with_scores_pm:
+                 viable_groups_with_scores_pm.append({ # Add a dummy group for 0-tech tasks
+                    'group': [], 'len': 0, 'per_skill_avg': {},
+                    'combined_avg_skill': 0, 'workload': 0,
+                    'size_diff': 0 # No difference for 0-tech tasks
+                })
 
-            # Create a sortable tuple for per_skill_avg for comparison
-            # Sort skill IDs to ensure consistent comparison order
-            sorted_req_skill_ids = sorted(list(task_technology_ids))
+
+            # Sort viable groups:
+            # 1. Closeness to num_technicians_needed (ascending, using 'size_diff').
+            # 2. Per-skill averages (higher is better for each skill, compared in a consistent order of skill IDs).
+            # 3. Combined average skill level (higher is better).
+            # 4. Workload (lower is better).
+            # 5. Technician names (alphabetical, for determinism).
+            sorted_req_skill_ids_for_sorting = sorted(list(task_technology_ids))
 
             viable_groups_with_scores_pm.sort(key=lambda x: (
-                # Sort by per-skill averages in a defined order (descending for each skill)
-                tuple(-x['per_skill_avg'].get(skill_id, 0) for skill_id in sorted_req_skill_ids),
-                -x['combined_avg_skill'], # Higher combined average is better (tie-breaker)
-                x['workload'],             # Lower workload is better (tie-breaker)
-                ''.join(sorted(x['group'])) # Deterministic tie-breaker
+                x['size_diff'], # Primary sort: closeness to planned size
+                tuple(-x['per_skill_avg'].get(skill_id, 0) for skill_id in sorted_req_skill_ids_for_sorting),
+                -x['combined_avg_skill'],
+                x['workload'],
+                ''.join(sorted(x['group']))
             ))
 
-            # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Sorted Viable Groups (Target size {num_technicians_needed}, Multi-Skill): {viable_groups_with_scores_pm[:3]}")
+            # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Sorted Viable Groups (Target size {num_technicians_needed}, Multi-Skill): {[(g['group'], g['len'], g['per_skill_avg'], g['combined_avg_skill'], g['workload']) for g in viable_groups_with_scores_pm[:5]]}")
 
-            if not viable_groups_with_scores_pm and num_technicians_needed > 0:
-                last_known_failure_reason_for_instance = f"No viable technician groups of size {num_technicians_needed} found that collectively cover all required skills: {task_technology_ids}."
+            if not viable_groups_with_scores_pm:
+                if num_technicians_needed > 0:
+                    last_known_failure_reason_for_instance = f"No viable technician groups found that collectively cover all required skills: {task_technology_ids}. Eligible techs: {len(sorted_eligible_tech_names_pm)} (Target size: {num_technicians_needed})."
+                elif num_technicians_needed == 0 and base_duration == 0: # Should have formed a dummy group
+                    last_known_failure_reason_for_instance = "Failed to process 0-tech, 0-duration PM task (no dummy group)."
+                else: # Other num_technicians_needed == 0 cases (e.g. positive duration)
+                    last_known_failure_reason_for_instance = f"No eligible technicians for 0-tech PM task {task_name_excel} (or other issue)."
+
                 unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
                 _log(logger, "warning", f"      {last_known_failure_reason_for_instance} for {instance_task_display_name}")
                 continue
 
-            assignment_successful_and_full = False
+            assignment_successful_this_instance = False # Renamed from assignment_successful_and_full
             final_chosen_group_for_instance = None
             final_start_time_for_instance = 0
             final_assigned_duration_for_instance = 0
-            final_actual_num_assigned_for_instance = 0
-            # final_original_stated_priority_for_instance = 'N/A_PM_0Tech' # This was based on old prio, now skill based
-            final_technician_task_info = 'Skill_Based' # Placeholder for removed priority info
-            final_current_effective_duration_for_chosen_group = 0
+            # final_actual_num_assigned_for_instance = 0 # Will be num_technicians_needed or 0
+            final_technician_task_info = 'Skill_Based' # Generic info
 
             for group_candidate_data in viable_groups_with_scores_pm:
                 current_candidate_group = group_candidate_data['group']
-                current_actual_num_assigned = len(current_candidate_group)
-                # Get stated priority of the first tech in group (or an average, if meaningful)
-                # For now, we'll use the group's avg_task_prio for logging/info if needed,
-                # but the actual technician_task_priority stored per assignment will be the individual's.
-                # The 'technician_task_priority' field in all_task_assignments_details should reflect the individual tech's prio for that task.
-                # current_original_stated_priority = tech_details_map_pm.get(current_candidate_group[0], {}).get('stated_task_prio', 'N/A')
+                current_actual_num_assigned = len(current_candidate_group) # This is now the actual size of the chosen group candidate
 
-                current_effective_duration_for_this_group = 0
-                valid_duration_calc_for_this_group = False
+                current_effective_duration = base_duration
+                # Duration adjustment based on actual assigned vs. needed (if task has duration and needs techs)
                 if base_duration > 0 and num_technicians_needed > 0 and current_actual_num_assigned > 0:
-                    current_effective_duration_for_this_group = (base_duration * num_technicians_needed) / current_actual_num_assigned
-                    valid_duration_calc_for_this_group = True
-                elif base_duration == 0: # 0-duration task
-                    current_effective_duration_for_this_group = 0
-                    valid_duration_calc_for_this_group = True
+                    current_effective_duration = (base_duration * num_technicians_needed) / current_actual_num_assigned
+                elif base_duration == 0: # 0-duration tasks always have 0 effective duration
+                    current_effective_duration = 0
+                # If num_technicians_needed is 0 but base_duration > 0, it's an invalid task config, handled by initial checks.
+                # If current_actual_num_assigned is 0 for a task needing techs and duration, it won't be chosen or this calc won't matter.
 
-                if not valid_duration_calc_for_this_group:
-                    # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Invalid duration calculation for group {current_candidate_group}. Skipping group.")
-                    continue # Try next group
-
-                if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                    # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Attempting to schedule FULLY with group: {current_candidate_group}, effective_duration: {current_effective_duration_for_this_group}")
-                    pass
-
-                # --- Start of slot search logic for current_candidate_group ---
                 search_start_time = 0
                 slot_found_for_this_group = False
+                assigned_duration_for_slot = 0
+                is_incomplete_for_slot = False
+
                 while search_start_time <= total_work_minutes:
-                    # For 0-duration tasks, if start time is beyond shift (and it needs a slot), break.
-                    # A 0-duration task at total_work_minutes is fine if it doesn't extend.
-                    if current_effective_duration_for_this_group == 0 and search_start_time > total_work_minutes:
-                        break
+                    if current_effective_duration == 0 and search_start_time > total_work_minutes: break # 0-duration task can be at total_work_minutes
+                    if current_effective_duration > 0 and search_start_time >= total_work_minutes: break # Positive duration task cannot start at end of shift
 
-                    # For positive duration tasks, if start time itself is at or beyond shift end, break
-                    if current_effective_duration_for_this_group > 0 and search_start_time >= total_work_minutes:
-                        break
+                    # Try to fit full duration first
+                    duration_to_check = 1 if current_effective_duration == 0 else current_effective_duration
 
-                    # Check if the task *fully* fits within the shift
-                    if current_effective_duration_for_this_group > 0 and (search_start_time + current_effective_duration_for_this_group > total_work_minutes):
-                        search_start_time += 15 # Try next slot
-                        continue
+                    # Check if full duration fits within shift
+                    if current_effective_duration > 0 and (search_start_time + current_effective_duration > total_work_minutes):
+                        # Full duration does not fit. Check for partial (75% rule)
+                        remaining_time_in_shift = max(0, total_work_minutes - search_start_time)
+                        min_acceptable_partial_duration = current_effective_duration * 0.75
 
-                    duration_to_check_for_slot = 1 if current_effective_duration_for_this_group == 0 else current_effective_duration_for_this_group
+                        if remaining_time_in_shift >= min_acceptable_partial_duration and remaining_time_in_shift > 0:
+                            duration_to_check = remaining_time_in_shift
+                            is_incomplete_for_slot = True
+                        else: # Not enough time for a meaningful partial assignment in this slot
+                            search_start_time += 15
+                            continue # Try next slot
+                    else: # Full duration fits or it's a 0-duration task
+                        duration_to_check = duration_to_check # Keep as is (full or 1 for 0-duration)
+                        is_incomplete_for_slot = False
+
 
                     all_techs_in_group_available_at_slot = True
-                    if not current_candidate_group and num_technicians_needed > 0 : # Should not happen if viable_groups exist
+                    if not current_candidate_group and num_technicians_needed > 0 : # Should not happen if viable_groups exist and num_technicians_needed > 0
                          all_techs_in_group_available_at_slot = False
 
                     for tech_in_group_name in current_candidate_group:
-                        # Check against the main technician_schedules (reflecting prior committed tasks)
-                        if not all(sch_end <= search_start_time or sch_start >= search_start_time + duration_to_check_for_slot
+                        if not all(sch_end <= search_start_time or sch_start >= search_start_time + duration_to_check
                                    for sch_start, sch_end, _ in technician_schedules[tech_in_group_name]):
                             all_techs_in_group_available_at_slot = False
                             break
 
                     if all_techs_in_group_available_at_slot:
-                        # Full slot found for this group at this time
                         final_chosen_group_for_instance = current_candidate_group
                         final_start_time_for_instance = search_start_time
-                        final_assigned_duration_for_instance = current_effective_duration_for_this_group # Assign full duration
-                        final_actual_num_assigned_for_instance = current_actual_num_assigned
-                        # final_original_stated_priority_for_instance = current_original_stated_priority
+                        final_assigned_duration_for_instance = duration_to_check if current_effective_duration > 0 else 0 # Actual assigned duration
 
-                        assignment_successful_and_full = True
+                        assignment_successful_this_instance = True
                         slot_found_for_this_group = True
-                        if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                            # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Found valid FULL slot for group {current_candidate_group} at {search_start_time} for {current_effective_duration_for_this_group} min.")
-                            pass
-                        break # Break from search_start_time loop
-
-                    search_start_time += 15 # Try next 15-min slot
+                        if is_incomplete_for_slot:
+                            if instance_id_str not in incomplete_tasks_instance_ids:
+                                incomplete_tasks_instance_ids.append(instance_id_str)
+                        break # Break from search_start_time loop (slot found for this group)
+                    else:
+                        # If the slot was not available for all techs in the group, increment search_start_time
+                        # This ensures the loop progresses if the `break` above was not hit.
+                        # The partial assignment logic's `continue` handles its own increment.
+                        search_start_time += 15
                 # --- End of slot search logic for current_candidate_group ---
 
-                if assignment_successful_and_full: # If a full assignment was made with this group
-                    if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                        # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Full assignment confirmed with group {final_chosen_group_for_instance}. Breaking from group search.")
-                        pass
-                    break # Break from the for group_candidate_data loop (we've found our group)
-                else:
-                    if task_name_excel == "BIW_PM_FANUC_Roboter R-2000iC_Fettwechsel":
-                         # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Group {current_candidate_group} could not be scheduled fully. Trying next group.")
-                         pass
+                if assignment_successful_this_instance:
+                    break # Break from the for group_candidate_data loop (we've found our group and slot)
             # --- End of loop over viable_groups_with_scores_pm ---
 
-            if assignment_successful_and_full:
+            if assignment_successful_this_instance:
                 assigned_this_instance_flag = True
                 if instance_id_str in unassigned_tasks_reasons_dict:
                     del unassigned_tasks_reasons_dict[instance_id_str]
 
-                # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Proceeding with fully assigned group: {final_chosen_group_for_instance} at {final_start_time_for_instance}")
-
                 resource_mismatch_note_pm = None
-                if num_technicians_needed > 0 and final_actual_num_assigned_for_instance != num_technicians_needed:
-                    resource_mismatch_note_pm = f"Task requires {num_technicians_needed} techs; assigned to {final_actual_num_assigned_for_instance}."
-                elif num_technicians_needed == 0 and final_actual_num_assigned_for_instance > 0:
-                    resource_mismatch_note_pm = f"Task planned for 0 techs; assigned to {final_actual_num_assigned_for_instance}."
+                if num_technicians_needed > 0: # Only note mismatch if techs were planned
+                    if len(final_chosen_group_for_instance) != num_technicians_needed:
+                        resource_mismatch_note_pm = f"Task planned for {num_technicians_needed} techs; assigned to {len(final_chosen_group_for_instance)}."
+                    else:
+                        resource_mismatch_note_pm = f"Assigned {len(final_chosen_group_for_instance)} as planned."
+                elif num_technicians_needed == 0 and len(final_chosen_group_for_instance) > 0:
+                     resource_mismatch_note_pm = f"Task planned for 0 techs; assigned to {len(final_chosen_group_for_instance)}."
+                # If num_technicians_needed == 0 and len(final_chosen_group_for_instance) == 0, no note needed or handled by "0-tech PM task"
 
-                if not final_chosen_group_for_instance: # Handles 0-tech PM task
+
+                if not final_chosen_group_for_instance: # Handles 0-tech PM task (group is [])
                     all_task_assignments_details.append({
                         'technician': None, 'task_name': instance_task_display_name,
-                        'start': final_start_time_for_instance, 'duration': 0, 'is_incomplete': False,
-                        'original_duration': 0, 'instance_id': instance_id_str,
-                        'technician_task_info\\': final_technician_task_info,
-                        'resource_mismatch_info': resource_mismatch_note_pm or "0-duration/0-tech PM task"
+                        'start': final_start_time_for_instance, 'duration': final_assigned_duration_for_instance, # Should be 0
+                        'is_incomplete': instance_id_str in incomplete_tasks_instance_ids, # Should be False
+                        'original_duration': base_duration, 'instance_id': instance_id_str,
+                        'technician_task_info': final_technician_task_info, # Corrected key
+                        'resource_mismatch_info': resource_mismatch_note_pm or "0-tech PM task"
                     })
                 else:
                     for tech_assigned_name in final_chosen_group_for_instance:
@@ -548,16 +607,16 @@ def _assign_task_definition_to_schedule(
                         all_task_assignments_details.append({
                             'technician': tech_assigned_name, 'task_name': instance_task_display_name,
                             'start': final_start_time_for_instance, 'duration': final_assigned_duration_for_instance,
-                            'is_incomplete': False,
-                            'original_duration': base_duration, # Store base_duration, effective duration is per group
+                            'is_incomplete': instance_id_str in incomplete_tasks_instance_ids,
+                            'original_duration': base_duration,
                             'instance_id': instance_id_str,
-                            'technician_task_info\\': final_technician_task_info,
+                            'technician_task_info': final_technician_task_info, # Corrected key
                             'resource_mismatch_info': resource_mismatch_note_pm
                         })
-                _log(logger, "info", f"    (Helper) Successfully scheduled (fully) {instance_task_display_name} for group {final_chosen_group_for_instance} at {final_start_time_for_instance} for {final_assigned_duration_for_instance} min. Required skills: {task_technology_ids}")
-            else:
-                if not last_known_failure_reason_for_instance or "No technician group could be fully assigned" in last_known_failure_reason_for_instance:
-                    last_known_failure_reason_for_instance = f"No suitable time slot found for any group covering all skills for PM task {instance_task_display_name}. Required skills: {task_technology_ids}"
+                _log(logger, "info", f"    (Helper) Successfully scheduled PM {instance_task_display_name} for group {final_chosen_group_for_instance} at {final_start_time_for_instance} for {final_assigned_duration_for_instance} min. Incomplete: {instance_id_str in incomplete_tasks_instance_ids}. Required skills: {task_technology_ids}")
+            else: # No suitable group or slot found
+                if not last_known_failure_reason_for_instance or "Could not find a suitable time slot" in last_known_failure_reason_for_instance or "No viable technician groups" in last_known_failure_reason_for_instance:
+                    last_known_failure_reason_for_instance = f"No suitable group/slot for PM task {instance_task_display_name}. Required skills: {task_technology_ids}"
                 unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
                 _log(logger, "warning", f"      Failed to assign PM instance {instance_task_display_name}. Reason: {last_known_failure_reason_for_instance}")
 
@@ -585,7 +644,8 @@ def _assign_task_definition_to_schedule(
                 all_task_assignments_details.append({
                     'technician': None, 'task_name': instance_task_display_name, 'start': 0, 'duration': 0,
                     'is_incomplete': False, 'original_duration': 0, 'instance_id': instance_id_str,
-                    'technician_task_priority': 'N/A_REP', 'resource_mismatch_info': "0-duration/0-tech task"
+                    'technician_task_priority': 'N/A_REP',
+                    'resource_mismatch_info': "0-duration/0-tech task"
                 })
                 assigned_this_instance_flag = True
                 if instance_id_str in unassigned_tasks_reasons_dict: del unassigned_tasks_reasons_dict[instance_id_str]
@@ -682,7 +742,8 @@ def _assign_task_definition_to_schedule(
                         'start': final_start_time_for_rep_instance, 'duration': final_assigned_duration_for_rep_instance,
                         'is_incomplete': instance_id_str in incomplete_tasks_instance_ids,
                         'original_duration': base_duration, # Original planned duration of one instance
-                        'instance_id': instance_id_str, 'technician_task_priority': 'N/A_REP',
+                        'instance_id': instance_id_str,
+                        'technician_task_info': 'N/A_REP', # Corrected key
                         'resource_mismatch_info': final_resource_mismatch_note_rep
                     })
                 # _log(logger, "info", f"    (Helper) Successfully scheduled (REP) {instance_task_display_name} for group {final_chosen_group_for_rep_instance}...")

@@ -383,21 +383,4 @@ async function deleteTaskMapping(taskId, taskName) {
     }
 }
 
-async function updateTaskTechnologyMapping(taskId, technologyId) {
-    try {
-        const response = await fetch(`/api/tasks/${taskId}/technology`, {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({technology_id: technologyId}),
-        });
-        const result = await response.json();
-        if (response.ok) {
-            displayMessage('Task technology updated successfully.', 'success');
-        } else {
-            throw new Error(result.message || `Server error ${response.status}`);
-        }
-    } catch (error) {
-        displayMessage(`Error updating task technology: ${error.message}`, 'error');
-        console.error('Error in updateTaskTechnologyMapping:', error);
-    }
-}
+// Removed deprecated function updateTaskTechnologyMapping

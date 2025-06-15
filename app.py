@@ -1269,10 +1269,13 @@ def generate_dashboard_route():
                 task_name = task_to_add.get('name', task_to_add.get('scheduler_group_task', f'Unknown Task UI {task_id_ui}'))
                 if not task_to_add.get('name'): task_to_add['name'] = task_name
                 db_task_id = get_or_create_task(conn, task_name) # Creates task by name
-                # task_to_add.update({'technology_id': default_technology_id, 'db_task_id': db_task_id}) # Removed technology_id
                 task_to_add.update({'db_task_id': db_task_id}) # Store db_task_id
-                # Skills for these tasks from UI would need to be handled if they are new and have skills defined in UI
-                # For now, assuming skills are managed via manage_mappings UI primarily
+
+                # Fetch and add technology_ids for the task
+                required_skills_objects = get_required_skills_for_task(conn, db_task_id)
+                technology_ids_for_task = [skill['technology_id'] for skill in required_skills_objects]
+                task_to_add['technology_ids'] = technology_ids_for_task
+
                 final_tasks_map[task_id_ui] = task_to_add
 
             for task_from_cache in excel_data_from_cache:
@@ -1284,10 +1287,13 @@ def generate_dashboard_route():
                     if not task_to_add.get('name'): task_to_add['name'] = task_name
                     task_to_add['isAdditionalTask'] = False
                     db_task_id = get_or_create_task(conn, task_name) # Creates task by name
-                    # task_to_add.update({'technology_id': default_technology_id, 'db_task_id': db_task_id}) # Removed technology_id
                     task_to_add.update({'db_task_id': db_task_id})
-                    # Tasks from Excel cache initially won't have skills assigned here.
-                    # They would need to be mapped in the manage_mappings UI.
+
+                    # Fetch and add technology_ids for the task
+                    required_skills_objects = get_required_skills_for_task(conn, db_task_id)
+                    technology_ids_for_task = [skill['technology_id'] for skill in required_skills_objects]
+                    task_to_add['technology_ids'] = technology_ids_for_task
+
                     final_tasks_map[cache_task_id_ui] = task_to_add
             conn.commit()
         finally:
