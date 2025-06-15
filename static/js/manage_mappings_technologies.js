@@ -213,7 +213,10 @@ async function addNewTechnology() {
             // Trigger input event on name input to reset disabled states and dependent dropdowns
             newTechnologyNameInput.dispatchEvent(new Event('input'));
             await fetchAllTechnologies();
-            fetchAllTasksForMapping(); // Refresh task mappings
+            await fetchAllTasksForMapping(); // Refresh task mappings
+            if (selectedTechnician) { // If a technician is selected, refresh their details
+                await fetchMappings(selectedTechnician);
+            }
         } else {
             throw new Error(result.message || `Server error ${response.status}`);
         }
@@ -236,6 +239,43 @@ async function editTechnology(techId, currentName, currentGroupId, currentParent
         parent_id: currentParentId
     };
 
+    // Prompt for new group
+    const newGroupIdPrompt = prompt("Enter new Group ID (or leave blank to keep current):", currentGroupId || "");
+    if (newGroupIdPrompt !== null) { // If user didn't cancel
+        if (newGroupIdPrompt.trim() === "") {
+            payload.group_id = null; // Set to null if cleared
+        } else {
+            const newGroupId = parseInt(newGroupIdPrompt);
+            if (!isNaN(newGroupId) && allTechnologyGroups.some(g => g.id === newGroupId)) {
+                payload.group_id = newGroupId;
+            } else if (newGroupIdPrompt.trim() !== (currentGroupId ? currentGroupId.toString() : "")) {
+                displayMessage("Invalid Group ID or group does not exist. Group not changed.", "warning");
+            }
+        }
+    }
+
+
+    // Prompt for new parent
+    const newParentIdPrompt = prompt("Enter new Parent Technology ID (or leave blank for no parent/top-level within group):", currentParentId || "");
+    if (newParentIdPrompt !== null) { // If user didn't cancel
+         if (newParentIdPrompt.trim() === "") {
+            payload.parent_id = null; // Set to null if cleared
+        } else {
+            const newParentId = parseInt(newParentIdPrompt);
+            if (!isNaN(newParentId) && newParentId !== techId && allTechnologies.some(t => t.id === newParentId && t.group_id === payload.group_id)) {
+                // Check if the new parent is in the same group as the technology
+                 if (allTechnologies.some(t => t.id === newParentId && t.group_id === payload.group_id)) {
+                    payload.parent_id = newParentId;
+                } else {
+                     displayMessage("Invalid Parent ID: Parent must be in the same group. Parent not changed.", "warning");
+                }
+            } else if (newParentIdPrompt.trim() !== (currentParentId ? currentParentId.toString() : "")) {
+                 displayMessage("Invalid Parent ID (e.g., cannot be self, must exist, must be in same group). Parent not changed.", "warning");
+            }
+        }
+    }
+
+
     try {
         const response = await fetch(`/api/technologies/${techId}`, {
             method: 'PUT',
@@ -246,8 +286,10 @@ async function editTechnology(techId, currentName, currentGroupId, currentParent
         if (response.ok) {
             displayMessage(`Technology '${escapeHtml(result.name)}' updated.`, 'success');
             await fetchAllTechnologies();
-            fetchAllTasksForMapping();
-            if (selectedTechnician) renderTechnicianSkills();
+            await fetchAllTasksForMapping();
+            if (selectedTechnician) { // If a technician is selected, refresh their details
+                await fetchMappings(selectedTechnician);
+            }
         } else {
             throw new Error(result.message || `Server error ${response.status}`);
         }
@@ -261,7 +303,7 @@ async function deleteTechnology(techId) {
     const techToDelete = allTechnologies.find(t => t.id === techId);
     let techName = techToDelete ? techToDelete.name : "this technology";
 
-    // Clean up techName for display: replace literal \\" with "
+    // Clean up techName for display: replace literal \\\\" with "
     if (typeof techName === 'string') {
         techName = techName.replace(/\\\\"/g, '"'); // techName now holds the cleaned name
     }
@@ -277,9 +319,9 @@ async function deleteTechnology(techId) {
             // For HTML display, use escapeHtml with the cleaned techName
             displayMessage(result.message || `Technology \\"${escapeHtml(techName)}\\" deleted.`, 'success'); // Removed ID
             await fetchAllTechnologies();
-            fetchAllTasksForMapping();
-            if (selectedTechnician) {
-                await fetchTechnicianSkills(selectedTechnician);
+            await fetchAllTasksForMapping();
+            if (selectedTechnician) { // If a technician is selected, refresh their details
+                await fetchMappings(selectedTechnician);
             }
         } else {
             throw new Error(result.message || `Server error ${response.status}`);

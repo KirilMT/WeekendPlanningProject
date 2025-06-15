@@ -1,5 +1,15 @@
 // --- Task-Technology Mapping Functions ---
 
+// Helper function to check if a technology has children
+const hasChildren = (technologyId) => {
+    // Ensure allTechnologies is available and is an array
+    if (!Array.isArray(allTechnologies)) {
+        console.error("hasChildren: allTechnologies is not an array or not available.");
+        return false; // Or throw an error, depending on desired strictness
+    }
+    return allTechnologies.some(t => t.parent_id === technologyId);
+};
+
 // Function to populate a technology select dropdown (used for new task form and edit form)
 function populateTechnologySelectDropdown(selectElement, selectedTechnologyValues = null) { // Renamed for clarity, can be single ID or array
     selectElement.innerHTML = ''; // Clear existing options
@@ -42,8 +52,6 @@ function populateTechnologySelectDropdown(selectElement, selectedTechnologyValue
     for (const parentId in childrenByParentId) {
         childrenByParentId[parentId].sort((a, b) => a.name.localeCompare(b.name));
     }
-
-    const hasChildren = (technologyId) => allTechnologies.some(t => t.parent_id === technologyId);
 
     function appendOptionsRecursive(parentElement, technologyId, level, currentSelectedValues) {
         const children = childrenByParentId[technologyId] || [];
@@ -135,6 +143,12 @@ async function addNewTaskForMapping() {
                  newTaskTechnologySelectForMapping.value = ''; // Reset for single select if it was one
             }
             await fetchAllTasksForMapping(); // Refresh the list
+
+            // If a technician is selected, refresh their details to reflect new task availability
+            if (selectedTechnician && typeof fetchMappings === 'function') {
+                await fetchMappings(selectedTechnician);
+            }
+
         } else {
             throw new Error(result.message || `Server error ${response.status}`);
         }
@@ -220,18 +234,39 @@ function renderTasksForTechnologyMapping(tasks) {
         viewModeDiv.appendChild(taskNameSpan);
 
         const taskTechSpan = document.createElement('span');
-        // Assuming task.technology_ids is an array of IDs and allTechnologies is available
-        // Or task.technologies is an array of {id, name} objects
         let techNames = 'No skills assigned';
+        let allAssignedSkillsValid = true;
         if (task.technology_ids && task.technology_ids.length > 0 && allTechnologies.length > 0) {
-            techNames = task.technology_ids.map(id => {
-                const tech = allTechnologies.find(t => String(t.id) === String(id)); // Ensure string comparison for IDs
-                return tech ? escapeHtml(tech.name) : 'Unknown Skill';
-            }).join(', ');
-        } else if (task.technologies && task.technologies.length > 0) { // Alternative if API sends full tech objects
-             techNames = task.technologies.map(t => escapeHtml(t.name)).join(', ');
+            const assignedTechObjects = task.technology_ids.map(id => {
+                const tech = allTechnologies.find(t => String(t.id) === String(id));
+                if (!tech || hasChildren(tech.id)) { // Check if tech exists and is not a parent
+                    allAssignedSkillsValid = false;
+                    return null; // Invalid or parent skill
+                }
+                return tech;
+            }).filter(t => t !== null); // Filter out invalid ones
+
+            if (assignedTechObjects.length > 0) {
+                techNames = assignedTechObjects.map(t => escapeHtml(t.name)).join(', ');
+            } else {
+                allAssignedSkillsValid = false; // No valid skills left
+            }
+        } else if (task.technology_ids && task.technology_ids.length > 0 && allTechnologies.length === 0) {
+            // This case implies technologies were loaded, then became empty, or an API issue.
+            allAssignedSkillsValid = false;
+            techNames = 'Error: Technologies not loaded';
+        } else if (!task.technology_ids || task.technology_ids.length === 0) {
+            // No skills assigned is a valid state, not an error in itself.
+            techNames = 'No skills assigned';
         }
+
         taskTechSpan.textContent = `(${techNames})`;
+        if (!allAssignedSkillsValid && techNames !== 'No skills assigned') {
+            taskTechSpan.style.color = 'red';
+            taskTechSpan.style.fontWeight = 'bold';
+            taskTechSpan.title = 'One or more assigned skills are invalid (e.g., parent technology or deleted). Please edit.';
+            displayMessage(`Task "${escapeHtml(task.name)}" has invalid skill assignments. Please review.`, 'warning');
+        }
         // ... (taskTechSpan styling) ...
         taskTechSpan.style.fontSize = '0.9em';
         taskTechSpan.style.color = '#555';
@@ -354,6 +389,12 @@ async function updateTaskMapping(taskId, newName, newTechnologyIds) { // Changed
         if (response.ok) {
             displayMessage(`Task '${escapeHtml(result.name)}' updated successfully.`, 'success');
             await fetchAllTasksForMapping();
+
+            // If a technician is selected, refresh their details to reflect updated task skills
+            if (selectedTechnician && typeof fetchMappings === 'function') {
+                await fetchMappings(selectedTechnician);
+            }
+
         } else {
             throw new Error(result.message || `Server error ${response.status}`);
         }
@@ -373,6 +414,12 @@ async function deleteTaskMapping(taskId, taskName) {
         if (response.ok) {
             displayMessage(`Task \"${escapeHtml(taskName)}\" deleted successfully.`, 'success');
             await fetchAllTasksForMapping();
+
+            // If a technician is selected, refresh their details as the deleted task might affect them
+            if (selectedTechnician && typeof fetchMappings === 'function') {
+                await fetchMappings(selectedTechnician);
+            }
+
         } else {
             const result = await response.json().catch(() => ({ message: "Failed to parse error message." })); // Try to parse error
             throw new Error(result.message || `Server error ${response.status}`);

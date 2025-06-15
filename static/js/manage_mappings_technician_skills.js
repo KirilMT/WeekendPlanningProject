@@ -45,18 +45,38 @@ function renderTechnicianSkills() {
 
         const levelTextSpan = document.createElement('span');
         levelTextSpan.classList.add('skill-level-text');
-        levelTextSpan.textContent = `Level: ${SKILL_LEVEL_TEXTS[currentLevel]}`;
+
+        // Check if the technology is a parent or has become one
+        if (hasChildren(technology.id)) {
+            levelTextSpan.textContent = 'Level: N/A (Parent Skill)';
+            levelTextSpan.style.color = 'orange';
+            levelTextSpan.title = 'This technology is a parent and cannot have a skill level directly assigned.';
+            // Optionally, do not show an edit button for parent skills
+            // container.appendChild(levelTextSpan);
+            // return container;
+        } else {
+            levelTextSpan.textContent = `Level: ${SKILL_LEVEL_TEXTS[currentLevel]}`;
+        }
         container.appendChild(levelTextSpan);
 
-        const editButton = document.createElement('button');
-        editButton.classList.add('edit-skill-btn');
-        editButton.textContent = 'Edit';
-        editButton.addEventListener('click', () => {
-            const skillItemDiv = container.closest('.skill-item-controls');
-            skillItemDiv.innerHTML = ''; // Clear view mode
-            skillItemDiv.appendChild(createSkillEditMode(technology, currentLevel));
-        });
-        container.appendChild(editButton);
+        // Only show edit button if it's not a parent skill
+        if (!hasChildren(technology.id)) {
+            const editButton = document.createElement('button');
+            editButton.classList.add('edit-skill-btn');
+            editButton.textContent = 'Edit';
+            editButton.addEventListener('click', () => {
+                const skillItemDiv = container.closest('.skill-item-controls');
+                skillItemDiv.innerHTML = ''; // Clear view mode
+                skillItemDiv.appendChild(createSkillEditMode(technology, currentLevel));
+            });
+            container.appendChild(editButton);
+        } else {
+            // If it is a parent, and a skill level was previously defined (e.g. techSkills[technology.id] exists)
+            // we might want to inform the user that this skill is now invalid.
+            if (typeof techSkills[technology.id] !== 'undefined') {
+                 displayMessage(`Skill '${escapeHtml(technology.name)}' for ${escapeHtml(selectedTechnician)} is now a parent skill and its level is no longer applicable.`, 'warning');
+            }
+        }
         return container;
     };
 
@@ -184,24 +204,28 @@ async function updateTechnicianSkill(technicianName, technicianId, technologyId,
 
             displayMessage(`Skill '${escapeHtml(technologyName)}' for technician '${escapeHtml(techNameForMsg)}' updated to level ${escapeHtml(SKILL_LEVEL_TEXTS[skillLevel] || skillLevel)}.`, 'success');
 
-            if (currentMappings.technicians[selectedTechnician]) {
-                if (!currentMappings.technicians[selectedTechnician].skills) {
-                    currentMappings.technicians[selectedTechnician].skills = {};
-                }
-                currentMappings.technicians[selectedTechnician].skills[technologyId] = {
-                    name: technologyName,
-                    level: skillLevel,
-                    group_id: technology ? technology.group_id : null,
-                    parent_id: technology ? technology.parent_id : null
-                };
+            // No need to manually update currentMappings.technicians[selectedTechnician].skills here,
+            // as fetchMappings will get the latest data from the server.
+
+            // Call fetchMappings to refresh all technician data and re-render relevant UI parts
+            if (typeof fetchMappings === 'function' && technicianName) {
+                await fetchMappings(technicianName);
+            } else {
+                console.error('fetchMappings function is not available or technicianName is missing. Cannot refresh full technician details.');
+                // Fallback to just re-rendering skills if full refresh is not possible
+                renderTechnicianSkills();
             }
-            renderTechnicianSkills();
         } else {
             throw new Error(result.message || `Server error ${response.status}`);
         }
     } catch (error) {
         displayMessage(`Error updating skill: ${error.message}`, 'error');
         console.error(error);
-        await fetchTechnicianSkills(selectedTechnician);
+        // On error, also try to refresh to get consistent state from server
+        if (typeof fetchMappings === 'function' && selectedTechnician) { // selectedTechnician is global
+            await fetchMappings(selectedTechnician);
+        } else {
+            await fetchTechnicianSkills(selectedTechnician); // Fallback if fetchMappings isn't available
+        }
     }
 }

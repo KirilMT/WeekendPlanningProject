@@ -90,8 +90,23 @@ def get_technician_mappings_api():
     cursor = conn.cursor()
     technicians_output = {}
     try:
+        # Get all technology details to identify parents
+        cursor.execute("SELECT id, name, parent_id FROM technologies")
+        all_technologies_list = cursor.fetchall()
+        # Create a set of IDs for technologies that are parents
+        parent_technology_ids = {tech['parent_id'] for tech in all_technologies_list if tech['parent_id'] is not None}
+
         # Get all tasks and their required skills first
-        cursor.execute("SELECT t.id as task_id, t.name as task_name, GROUP_CONCAT(trs.technology_id) as required_skill_ids, GROUP_CONCAT(tech.name) as required_skill_names FROM tasks t LEFT JOIN task_required_skills trs ON t.id = trs.task_id LEFT JOIN technologies tech ON trs.technology_id = tech.id GROUP BY t.id, t.name ORDER BY t.name")
+        cursor.execute("""
+            SELECT t.id as task_id, t.name as task_name, 
+                   GROUP_CONCAT(trs.technology_id) as required_skill_ids, 
+                   GROUP_CONCAT(tech.name) as required_skill_names 
+            FROM tasks t 
+            LEFT JOIN task_required_skills trs ON t.id = trs.task_id 
+            LEFT JOIN technologies tech ON trs.technology_id = tech.id 
+            GROUP BY t.id, t.name 
+            ORDER BY t.name
+        """)
         all_tasks_raw = cursor.fetchall()
 
         all_tasks_with_parsed_skills = []
@@ -133,74 +148,82 @@ def get_technician_mappings_api():
                     "full_match": [],
                     "partial_match": []
                 },
-                "explicitly_assigned_tasks": [] # For tasks from technician_task_assignments
+                "explicitly_assigned_tasks": []
             }
 
-            # Get technician's skills
             cursor.execute("SELECT technology_id, skill_level FROM technician_technology_skills WHERE technician_id = ?", (tech_id,))
             tech_skills = {row['technology_id']: row['skill_level'] for row in cursor.fetchall()}
 
             for task_info in all_tasks_with_parsed_skills:
                 task_id = task_info['task_id']
                 task_name = task_info['task_name']
-                task_required_skills_list = task_info['required_skills_list']
 
-                if not task_required_skills_list: # Skip tasks with no defined required skills for this view
-                    continue
+                display_required_skills_info = []
+                matchable_required_skills = []
 
-                possessed_skill_details_for_task = []
-                missing_skill_details_for_task = []
-                highest_possessed_level_for_task = 0
-
-                num_required = len(task_required_skills_list)
-                num_possessed = 0
-
-                for req_skill in task_required_skills_list:
+                for req_skill in task_info['required_skills_list']:
                     skill_id = req_skill['id']
                     skill_name = req_skill['name']
-                    if skill_id in tech_skills and tech_skills[skill_id] > 0:
-                        num_possessed += 1
-                        level = tech_skills[skill_id]
-                        possessed_skill_details_for_task.append({'skill_id': skill_id, 'skill_name': skill_name, 'possessed': True, 'level': level})
-                        if level > highest_possessed_level_for_task:
-                            highest_possessed_level_for_task = level
-                    else:
-                        missing_skill_details_for_task.append({'skill_id': skill_id, 'skill_name': skill_name, 'possessed': False, 'level': None})
+                    is_parent = skill_id in parent_technology_ids
+                    possessed = skill_id in tech_skills and tech_skills[skill_id] > 0
+                    level = tech_skills.get(skill_id) if possessed else None
 
-                if num_possessed == 0: # Technician does not possess any of the required skills
+                    skill_detail_for_display = {
+                        'skill_id': skill_id,
+                        'skill_name': skill_name,
+                        'possessed': possessed if not is_parent else False, # Parent skills are not "possessed" for matching
+                        'level': level if not is_parent else None,
+                        'is_parent': is_parent,
+                        'status_note': 'Parent Skill (not directly assignable)' if is_parent else None
+                    }
+                    display_required_skills_info.append(skill_detail_for_display)
+
+                    if not is_parent:
+                        matchable_required_skills.append(req_skill)
+
+                if not matchable_required_skills: # If task only has parent skills or no skills for matching
                     continue
 
-                is_full_match = (num_possessed == num_required)
-                missing_skill_count = num_required - num_possessed
+                num_required_matchable = len(matchable_required_skills)
+                num_possessed_matchable = 0
+                highest_possessed_level_for_task = 0
+
+                for m_skill in matchable_required_skills:
+                    m_skill_id = m_skill['id']
+                    if m_skill_id in tech_skills and tech_skills[m_skill_id] > 0:
+                        num_possessed_matchable += 1
+                        current_level = tech_skills[m_skill_id]
+                        if current_level > highest_possessed_level_for_task:
+                            highest_possessed_level_for_task = current_level
+
+                if num_possessed_matchable == 0: # Technician possesses none of the *matchable* skills
+                    continue
+
+                is_full_match = (num_possessed_matchable == num_required_matchable)
+                missing_skill_count = num_required_matchable - num_possessed_matchable
 
                 task_display_data = {
                     'task_id': task_id,
                     'task_name': task_name,
-                    'all_required_skills_info': possessed_skill_details_for_task + missing_skill_details_for_task,
+                    'all_required_skills_info': display_required_skills_info, # Use the comprehensive list for display
                     'highest_possessed_skill_level': highest_possessed_level_for_task,
-                    'missing_skill_count': missing_skill_count
+                    'missing_skill_count': missing_skill_count # Based on matchable skills
                 }
 
                 if is_full_match:
                     tech_data["skill_matched_tasks"]["full_match"].append(task_display_data)
-                else:
+                else: # Partial match (num_possessed_matchable > 0 but < num_required_matchable)
                     tech_data["skill_matched_tasks"]["partial_match"].append(task_display_data)
 
-            # Sort tasks
             tech_data["skill_matched_tasks"]["full_match"].sort(key=lambda x: -x['highest_possessed_skill_level'])
             tech_data["skill_matched_tasks"]["partial_match"].sort(key=lambda x: (-x['highest_possessed_skill_level'], x['missing_skill_count']))
 
-            # Fetch explicitly assigned tasks (from technician_task_assignments)
-            # This part remains to show what tasks are *currently selected* for the technician to do,
-            # which might be a subset of what they are skilled for.
-            # The UI will need to handle how to "Remove Assignment" from this list.
             cursor.execute("SELECT t.id as task_id, t.name as task_name FROM technician_task_assignments tta JOIN tasks t ON tta.task_id = t.id WHERE tta.technician_id = ? ORDER BY t.name", (tech_id,))
             for assign_row in cursor.fetchall():
                 tech_data["explicitly_assigned_tasks"].append({
                     'task_id': assign_row['task_id'],
                     'task_name': assign_row['task_name']
                 })
-
             technicians_output[tech_name] = tech_data
         return jsonify({"technicians": technicians_output})
     except sqlite3.Error as e:
@@ -660,6 +683,7 @@ def manage_satellite_point_item_api(point_id):
 def add_technology_api():
     conn = None
     tech_name = None  # Initialize tech_name
+    parent_id_from_payload = None # Initialize for cleanup logic
     try:
         data = request.get_json()
         tech_name = data.get('name', '').strip()
@@ -667,9 +691,9 @@ def add_technology_api():
             return jsonify({"message": "Technology name is required."}), 400
 
         group_id = data.get('group_id')
-        parent_id = data.get('parent_id')
+        parent_id_from_payload = data.get('parent_id') # Store for cleanup
         if group_id is not None: group_id = int(group_id)
-        if parent_id is not None: parent_id = int(parent_id)
+        if parent_id_from_payload is not None: parent_id_from_payload = int(parent_id_from_payload)
 
         conn = get_db_connection(DATABASE_PATH)
         cursor = conn.cursor()
@@ -677,11 +701,18 @@ def add_technology_api():
         if cursor.fetchone():
             return jsonify({"message": f"Technology '{tech_name}' already exists."}), 409
 
-        cursor.execute("INSERT INTO technologies (name, group_id, parent_id) VALUES (?, ?, ?)", (tech_name, group_id, parent_id))
+        cursor.execute("INSERT INTO technologies (name, group_id, parent_id) VALUES (?, ?, ?)", (tech_name, group_id, parent_id_from_payload))
         conn.commit()
-        technology_id = cursor.lastrowid
+        created_technology_id = cursor.lastrowid
 
-        cursor.execute("SELECT t.id, t.name, t.group_id, t.parent_id, tg.name as group_name FROM technologies t LEFT JOIN technology_groups tg ON t.group_id = tg.id WHERE t.id = ?", (technology_id,))
+        # Cleanup: If the new technology was assigned a parent, that parent technology's skills should be cleared.
+        if parent_id_from_payload is not None:
+            cursor.execute("DELETE FROM technician_technology_skills WHERE technology_id = ?", (parent_id_from_payload,))
+            if cursor.rowcount > 0:
+                app.logger.info(f"Cleaned skills for technology {parent_id_from_payload} as it's now parent to new tech {created_technology_id}.")
+                conn.commit() # Commit the deletion
+
+        cursor.execute("SELECT t.id, t.name, t.group_id, t.parent_id, tg.name as group_name FROM technologies t LEFT JOIN technology_groups tg ON t.group_id = tg.id WHERE t.id = ?", (created_technology_id,))
         technology = cursor.fetchone()
         return jsonify(dict(technology)), 201
     except ValueError:
@@ -709,13 +740,18 @@ def manage_technology_item_api(technology_id):
             data = request.get_json()
             new_name = data.get('name', '').strip() # Assigned here
             group_id = data.get('group_id')
-            parent_id = data.get('parent_id')
+            parent_id_from_payload = data.get('parent_id') # Renamed for clarity in this block
 
             if not new_name:
                 return jsonify({"message": "Technology name is required."}), 400
 
             if group_id is not None: group_id = int(group_id)
-            if parent_id is not None: parent_id = int(parent_id)
+            # Ensure parent_id_from_payload is an int if not None, or remains None
+            if parent_id_from_payload is not None:
+                try:
+                    parent_id_from_payload = int(parent_id_from_payload)
+                except ValueError:
+                    return jsonify({"message": "Invalid parent_id format. Must be an integer or null."}), 400
 
             conn = get_db_connection(DATABASE_PATH)
             cursor = conn.cursor()
@@ -733,16 +769,36 @@ def manage_technology_item_api(technology_id):
                 if not cursor.fetchone():
                     return jsonify({"message": f"Technology group ID {group_id} not found."}), 400
 
-            if parent_id is not None:
-                if parent_id == technology_id:
+            if parent_id_from_payload is not None:
+                if parent_id_from_payload == technology_id:
                     return jsonify({"message": "Technology cannot be its own parent."}), 400
-                cursor.execute("SELECT id FROM technologies WHERE id = ?", (parent_id,))
+                cursor.execute("SELECT id FROM technologies WHERE id = ?", (parent_id_from_payload,))
                 if not cursor.fetchone():
-                    return jsonify({"message": f"Parent technology ID {parent_id} not found."}), 400
+                    return jsonify({"message": f"Parent technology ID {parent_id_from_payload} not found."}), 400
 
             cursor.execute("UPDATE technologies SET name = ?, group_id = ?, parent_id = ? WHERE id = ?",
-                           (new_name, group_id, parent_id, technology_id))
+                           (new_name, group_id, parent_id_from_payload, technology_id))
             conn.commit()
+
+            # --- Start of skill cleanup logic ---
+            skills_cleaned_for_new_parent = False
+            if parent_id_from_payload is not None:
+                cursor.execute("DELETE FROM technician_technology_skills WHERE technology_id = ?", (parent_id_from_payload,))
+                if cursor.rowcount > 0:
+                    app.logger.info(f"Cleaned skills for technology {parent_id_from_payload} as it is parent to {technology_id}.")
+                    skills_cleaned_for_new_parent = True
+
+            skills_cleaned_for_edited_tech = False
+            cursor.execute("SELECT 1 FROM technologies WHERE parent_id = ? LIMIT 1", (technology_id,))
+            if cursor.fetchone() is not None: # True if technology_id has children
+                cursor.execute("DELETE FROM technician_technology_skills WHERE technology_id = ?", (technology_id,))
+                if cursor.rowcount > 0:
+                    app.logger.info(f"Cleaned skills for technology {technology_id} as it has children.")
+                    skills_cleaned_for_edited_tech = True
+
+            if skills_cleaned_for_new_parent or skills_cleaned_for_edited_tech:
+                conn.commit()
+            # --- End of skill cleanup logic ---
 
             cursor.execute("SELECT t.id, t.name, t.group_id, t.parent_id, tg.name as group_name FROM technologies t LEFT JOIN technology_groups tg ON t.group_id = tg.id WHERE t.id = ?", (technology_id,))
             updated_technology = cursor.fetchone()
