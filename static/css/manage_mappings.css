@@ -395,3 +395,8 @@ button:hover, .button-link:hover {
     color: #333;
     font-size: 1.05em;
 }
+
+.task-technology-select {
+    min-height: 180px; /* Doubled from 60px */
+    /* Add any other shared styles for these selects here if needed */
+}

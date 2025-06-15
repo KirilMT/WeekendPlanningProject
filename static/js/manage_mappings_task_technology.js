@@ -10,6 +10,30 @@ const hasChildren = (technologyId) => {
     return allTechnologies.some(t => t.parent_id === technologyId);
 };
 
+// Helper function to get the full hierarchical path of a technology
+function getTechnologyPath(technologyId) {
+    const tech = allTechnologies.find(t => String(t.id) === String(technologyId));
+    if (!tech) {
+        return "Unknown Technology";
+    }
+
+    let path = escapeHtml(tech.name);
+    let current = tech;
+    while (current.parent_id) {
+        const parentTech = allTechnologies.find(t => String(t.id) === String(current.parent_id));
+        if (!parentTech) {
+            break; // Parent not found, stop building path
+        }
+        path = `${escapeHtml(parentTech.name)} / ${path}`;
+        current = parentTech;
+    }
+
+    if (tech.group_name) {
+        path = `${escapeHtml(tech.group_name)} / ${path}`;
+    }
+    return path;
+}
+
 // Function to populate a technology select dropdown (used for new task form and edit form)
 function populateTechnologySelectDropdown(selectElement, selectedTechnologyValues = null) { // Renamed for clarity, can be single ID or array
     selectElement.innerHTML = ''; // Clear existing options
@@ -58,7 +82,8 @@ function populateTechnologySelectDropdown(selectElement, selectedTechnologyValue
         children.forEach(childTech => {
             const option = document.createElement('option');
             option.value = childTech.id;
-            option.textContent = `${'  '.repeat(level)}↳ ${escapeHtml(childTech.name)}`;
+            // Use &nbsp; for spacing and set innerHTML to ensure they are rendered
+            option.innerHTML = `${'&nbsp;&nbsp;&nbsp;&nbsp;'.repeat(level)}↳ ${escapeHtml(childTech.name)}`;
             if (currentSelectedValues) {
                 if (Array.isArray(currentSelectedValues) && currentSelectedValues.map(String).includes(String(childTech.id))) {
                     option.selected = true;
@@ -234,48 +259,74 @@ function renderTasksForTechnologyMapping(tasks) {
         viewModeDiv.appendChild(taskNameSpan);
 
         const taskTechSpan = document.createElement('span');
-        let techNames = 'No skills assigned';
-        let allAssignedSkillsValid = true;
-        if (task.technology_ids && task.technology_ids.length > 0 && allTechnologies.length > 0) {
-            const assignedTechObjects = task.technology_ids.map(id => {
-                const tech = allTechnologies.find(t => String(t.id) === String(id));
-                if (!tech || hasChildren(tech.id)) { // Check if tech exists and is not a parent
-                    allAssignedSkillsValid = false;
-                    return null; // Invalid or parent skill
-                }
-                return tech;
-            }).filter(t => t !== null); // Filter out invalid ones
-
-            if (assignedTechObjects.length > 0) {
-                techNames = assignedTechObjects.map(t => escapeHtml(t.name)).join(', ');
-            } else {
-                allAssignedSkillsValid = false; // No valid skills left
-            }
-        } else if (task.technology_ids && task.technology_ids.length > 0 && allTechnologies.length === 0) {
-            // This case implies technologies were loaded, then became empty, or an API issue.
-            allAssignedSkillsValid = false;
-            techNames = 'Error: Technologies not loaded';
-        } else if (!task.technology_ids || task.technology_ids.length === 0) {
-            // No skills assigned is a valid state, not an error in itself.
-            techNames = 'No skills assigned';
-        }
-
-        taskTechSpan.textContent = `(${techNames})`;
-        if (!allAssignedSkillsValid && techNames !== 'No skills assigned') {
-            taskTechSpan.style.color = 'red';
-            taskTechSpan.style.fontWeight = 'bold';
-            taskTechSpan.title = 'One or more assigned skills are invalid (e.g., parent technology or deleted). Please edit.';
-            displayMessage(`Task "${escapeHtml(task.name)}" has invalid skill assignments. Please review.`, 'warning');
-        }
-        // ... (taskTechSpan styling) ...
+        // Base styles that are always applied
         taskTechSpan.style.fontSize = '0.9em';
-        taskTechSpan.style.color = '#555';
         taskTechSpan.style.flexGrow = '1';
         taskTechSpan.style.textAlign = 'right';
         taskTechSpan.style.marginLeft = '10px';
-        taskTechSpan.style.whiteSpace = 'nowrap';
-        taskTechSpan.style.overflow = 'hidden';
-        taskTechSpan.style.textOverflow = 'ellipsis';
+
+        let currentTechDisplayPaths = []; // To store paths of successfully found and valid (non-parent) technologies
+        let hasAnyInvalidAssignments = false; // True if any assigned tech ID is not found, or is a parent, or if tech data failed to load
+        let finalDisplayMessageForTechSpan = '(No skills assigned)'; // Default message
+
+        if (task.technology_ids && task.technology_ids.length > 0) {
+            if (allTechnologies.length > 0) {
+                task.technology_ids.forEach(id => {
+                    const tech = allTechnologies.find(t => String(t.id) === String(id));
+                    if (!tech || hasChildren(tech.id)) {
+                        hasAnyInvalidAssignments = true;
+                        // We don't add invalid paths to the display list, but flag the issue.
+                    } else {
+                        currentTechDisplayPaths.push(getTechnologyPath(id));
+                    }
+                });
+
+                if (currentTechDisplayPaths.length > 0) {
+                    finalDisplayMessageForTechSpan = `(${currentTechDisplayPaths.join('<br />')})`;
+                    taskTechSpan.innerHTML = finalDisplayMessageForTechSpan;
+                    taskTechSpan.style.whiteSpace = 'normal'; // Allow multi-line
+                    taskTechSpan.style.overflow = 'visible';  // Ensure content isn't clipped
+                    taskTechSpan.style.textOverflow = 'clip';   // No ellipsis for multi-line
+                } else {
+                    // This means task.technology_ids had items, but none were valid to display
+                    hasAnyInvalidAssignments = true;
+                    finalDisplayMessageForTechSpan = '(All assigned skills are invalid)';
+                    taskTechSpan.textContent = finalDisplayMessageForTechSpan;
+                    taskTechSpan.style.whiteSpace = 'nowrap';
+                    taskTechSpan.style.overflow = 'hidden';
+                    taskTechSpan.style.textOverflow = 'ellipsis';
+                }
+            } else { // Technologies not loaded, but task has technology_ids
+                hasAnyInvalidAssignments = true;
+                finalDisplayMessageForTechSpan = '(Error: Technologies not loaded)';
+                taskTechSpan.textContent = finalDisplayMessageForTechSpan;
+                taskTechSpan.style.whiteSpace = 'nowrap';
+                taskTechSpan.style.overflow = 'hidden';
+                taskTechSpan.style.textOverflow = 'ellipsis';
+            }
+        } else { // No technology_ids for the task
+            // finalDisplayMessageForTechSpan remains '(No skills assigned)'
+            taskTechSpan.textContent = finalDisplayMessageForTechSpan;
+            taskTechSpan.style.whiteSpace = 'nowrap';
+            taskTechSpan.style.overflow = 'hidden';
+            taskTechSpan.style.textOverflow = 'ellipsis';
+        }
+
+        // Styling and warning message based on hasAnyInvalidAssignments
+        if (hasAnyInvalidAssignments) {
+            taskTechSpan.style.color = 'red';
+            taskTechSpan.style.fontWeight = 'bold';
+            taskTechSpan.title = 'One or more assigned skills are invalid, non-existent, or technologies failed to load. Please edit.';
+            // Show warning message only if there was an attempt to assign skills or tech failed to load
+            if (task.technology_ids && task.technology_ids.length > 0) {
+                 displayMessage(`Task \\"${escapeHtml(task.name)}\\" has issues with its skill assignments. Please review.`, 'warning');
+            }
+        } else {
+            taskTechSpan.style.color = '#555'; // Default color
+            taskTechSpan.style.fontWeight = 'normal'; // Default font weight
+            taskTechSpan.title = '';
+        }
+
         viewModeDiv.appendChild(taskTechSpan);
         itemDiv.appendChild(viewModeDiv);
 
@@ -298,6 +349,7 @@ function renderTasksForTechnologyMapping(tasks) {
 
         const techSelect = document.createElement('select');
         techSelect.multiple = true; // Make it a multi-select dropdown
+        techSelect.classList.add('task-technology-select'); // Add class for styling
         // ... (techSelect styling) ...
         techSelect.style.flexGrow = '1';
         techSelect.style.marginRight = '5px';
