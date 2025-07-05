@@ -6,7 +6,7 @@ from .config_manager import TASK_NAME_MAPPING, TECHNICIAN_TASKS, TECHNICIAN_LINE
 
 # Maximum number of high-priority tasks to consider for permutation-based optimization.
 # 7! = 5040, 8! = 40320. Keep this value mindful of performance.
-MAX_PERMUTATION_TASKS = 1
+MAX_PERMUTATION_TASKS = 7
 
 def _log(logger, level, message, *args):
     """Helper function to log or print."""
