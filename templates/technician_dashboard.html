@@ -786,83 +786,81 @@
 
 <!-- Gantt Chart -->
 <h2>Gantt Chart: {{ total_work_minutes | default(0) }} min of work</h2>
-<div class="gantt-container" data-shift-start-time="{{ shift_start_time_str }}" data-day="{{ week_date_day_shift.day | lower }}" data-total-work-minutes="{{ total_work_minutes }}">
+<div class="gantt-container"
+     data-total-work-minutes="{{ total_work_minutes | default(0) }}"
+     data-shift-start-time="{{ shift_start_time_str | default('06:00') }}"
+     data-day="{{ week_date_day_shift.day|lower }}"
+     data-shift-total-minutes="{{ shift_total_minutes | default(720) }}"
+     data-shift-pm-start="{{ shift_pm_start_min | default(0) }}"
+     data-shift-pm-end="{{ shift_pm_end_min | default(0) }}">
 {% if technicians | length == 0 %}
     <p>No technicians available to display in the Gantt chart.</p>
 {% else %}
-    <div class="gantt-container"
-         data-total-work-minutes="{{ total_work_minutes | default(0) }}"
-         data-shift-start-time="{{ shift_start_time_str | default('06:00') }}"
-         data-day="{{ week_date_day_shift.day|lower }}"
-         data-shift-total-minutes="{{ shift_total_minutes | default(720) }}"
-         data-shift-pm-start="{{ shift_pm_start_min | default(0) }}"
-         data-shift-pm-end="{{ shift_pm_end_min | default(0) }}">
+    <div class="gantt-chart">
 
-        <div class="gantt-chart">
-
-            <!-- Fixed Left Pane -->
-            <div class="gantt-fixed-left-pane">
-                <div class="clock-time-axis-spacer-wrapper axis-container">
-                    <!-- JS will populate ONLY the spacer tick for the clock axis here -->
-                </div>
-                <div class="work-interval-axis-spacer-wrapper axis-container">
-                    <!-- JS will populate ONLY the spacer tick for the work interval axis here -->
-                </div>
-                <div class="technician-labels-wrapper">
-                    {% for technician in technicians %}
-                        <div class="technician-label">{{ technician }}</div>
-                    {% endfor %}
-                </div>
+        <!-- Fixed Left Pane -->
+        <div class="gantt-fixed-left-pane">
+            <div class="clock-time-axis-spacer-wrapper axis-container">
+                <!-- JS will populate ONLY the spacer tick for the clock axis here -->
             </div>
+            <div class="work-interval-axis-spacer-wrapper axis-container">
+                <!-- JS will populate ONLY the spacer tick for the work interval axis here -->
+            </div>
+            <div class="technician-labels-wrapper">
+                {% for technician in technicians %}
+                    <div class="technician-label">{{ technician }}</div>
+                {% endfor %}
+            </div>
+        </div>
 
-            <!-- Scrollable Right Pane -->
-            <div class=" gantt-scrollable-right-pane">
-                <div class="clock-time-axis-ticks-wrapper axis-container">
-                    <!-- JS will populate the actual time ticks (no spacer) for the clock axis here -->
-                </div>
-                <div class="work-interval-axis-ticks-wrapper axis-container">
-                    <!-- JS will populate the actual time ticks (no spacer) for the work interval axis here -->
-                </div>
-                <div class="time-grids-wrapper">
-                    {% for technician in technicians %}
-                        <div class="time-grid">
-                            {% for assignment in assignments %}
-                                {% if assignment.technician == technician %}
-                                    {% set original_task_id_for_gantt = assignment.instance_id %}
-                                    {% if assignment.instance_id and '_' in assignment.instance_id %}
-                                        {% if assignment.instance_id.startswith('additional_') %}
-                                            {% set original_task_id_for_gantt = assignment.instance_id.split('_instance_')[0] if 'instance_' in assignment.instance_id else assignment.instance_id.split('_')[0] ~ '_' ~ assignment.instance_id.split('_')[1] %}
-                                        {% else %}
-                                            {% set original_task_id_for_gantt = assignment.instance_id.split('_')[0] %}
-                                        {% endif %}
+        <!-- Scrollable Right Pane -->
+        <div class=" gantt-scrollable-right-pane">
+            <div class="clock-time-axis-ticks-wrapper axis-container">
+                <!-- JS will populate the actual time ticks (no spacer) for the clock axis here -->
+            </div>
+            <div class="work-interval-axis-ticks-wrapper axis-container">
+                <!-- JS will populate the actual time ticks (no spacer) for the work interval axis here -->
+            </div>
+            <div class="time-grids-wrapper">
+                {% for technician in technicians %}
+                    <div class="time-grid">
+                        {% for assignment in assignments %}
+                            {% if assignment.technician == technician %}
+                                {% set original_task_id_for_gantt = assignment.instance_id %}
+                                {% if assignment.instance_id and '_' in assignment.instance_id %}
+                                    {% if assignment.instance_id.startswith('additional_') %}
+                                        {% set original_task_id_for_gantt = assignment.instance_id.split('_instance_')[0] if 'instance_' in assignment.instance_id else assignment.instance_id.split('_')[0] ~ '_' ~ assignment.instance_id.split('_')[1] %}
                                     {% else %}
-                                        {% set original_task_id_for_gantt = '0' %}
+                                        {% set original_task_id_for_gantt = assignment.instance_id.split('_')[0] %}
                                     {% endif %}
-                                    {% set display_id_for_gantt = original_task_id_to_display_id_map[original_task_id_for_gantt] if original_task_id_for_gantt in original_task_id_to_display_id_map else original_task_id_for_gantt %}
-                                    {% set color_r = ((display_id_for_gantt | int | default(1)) * 97 % 200 + 55) %}
-                                    {% set color_g = ((display_id_for_gantt | int | default(1)) * 53 % 200 + 55) %}
-                                    {% set color_b = ((display_id_for_gantt | int | default(1)) * 37 % 200 + 55) %}
-                                    <div class="task-bar"
-                                         data-assignment-start="{{ assignment.start | default(0) }}"
-                                         data-assignment-duration="{{ assignment.duration | default(0) }}"
-                                         data-task-id="{{ display_id_for_gantt | default('0') }}"
-                                         style="
-                                                 background-color: #{{ '%02x%02x%02x' % (color_r, color_g, color_b) }};
-                                                 {% if assignment.is_incomplete %}border: 2px solid red;{% endif %}
-                                                 display: none;
-                                                 "
-                                         title="{{ assignment.task_name | default('Unknown') }} (Work Time: {{ assignment.start | default(0) }}-{{ (assignment.start | default(0)) + (assignment.duration | default(0)) }} min{% if assignment.is_incomplete %} - Partially assigned, full ideal duration for group: {{ assignment.original_duration | default(0) }} min{% endif %}{% if assignment.resource_mismatch_info %} - {{ assignment.resource_mismatch_info }}{% endif %})">
-                                        <span>{{ display_id_for_gantt | default('0') }}</span>
-                                    </div>
+                                {% else %}
+                                    {% set original_task_id_for_gantt = '0' %}
                                 {% endif %}
-                            {% endfor %}
-                        </div>
-                    {% endfor %}
-                </div>
+                                {% set display_id_for_gantt = original_task_id_to_display_id_map[original_task_id_for_gantt] if original_task_id_for_gantt in original_task_id_to_display_id_map else original_task_id_for_gantt %}
+                                {% set color_r = ((display_id_for_gantt | int | default(1)) * 97 % 200 + 55) %}
+                                {% set color_g = ((display_id_for_gantt | int | default(1)) * 53 % 200 + 55) %}
+                                {% set color_b = ((display_id_for_gantt | int | default(1)) * 37 % 200 + 55) %}
+                                <div class="task-bar"
+                                     data-assignment-start="{{ assignment.start | default(0) }}"
+                                     data-assignment-duration="{{ assignment.duration | default(0) }}"
+                                     data-task-id="{{ display_id_for_gantt | default('0') }}"
+                                     style="
+                                             background-color: #{{ '%02x%02x%02x' % (color_r, color_g, color_b) }};
+                                             {% if assignment.is_incomplete %}border: 2px solid red;{% endif %}
+                                             display: none;
+                                             "
+                                     title="{{ assignment.task_name | default('Unknown') }} (Work Time: {{ assignment.start | default(0) }}-{{ (assignment.start | default(0)) + (assignment.duration | default(0)) }} min{% if assignment.is_incomplete %} - Partially assigned, full ideal duration for group: {{ assignment.original_duration | default(0) }} min{% endif %}{% if assignment.resource_mismatch_info %} - {{ assignment.resource_mismatch_info }}{% endif %})">
+                                    <span>{{ display_id_for_gantt | default('0') }}</span>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endfor %}
             </div>
         </div>
     </div>
 {% endif %}
+</div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
