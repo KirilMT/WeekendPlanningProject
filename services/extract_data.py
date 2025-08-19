@@ -30,7 +30,7 @@ def get_current_day():
 # Step 2: Determine the current shift
 def get_current_shift():
     current_time = datetime.now().hour
-    current_time = 20  # Hardcoded for testing (3 PM)
+    # current_time = 20  # Hardcoded for testing (3 PM)
     if 6 <= current_time < 18:  # 6 AM to 6 PM
         return "early"
     else:  # 6 PM to 6 AM
