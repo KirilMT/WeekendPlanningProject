@@ -1,6 +1,9 @@
 import os
 import sys
 from flask import Flask, g
+from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from jinja2 import Environment, FileSystemLoader
 import logging
 
@@ -14,6 +17,7 @@ from config import Config
 # Import from local services package (relative to wkndPlanning)
 from .services.db_utils import get_db_connection, init_db
 from .services.config_manager import load_app_config
+from .services.security import SecurityMiddleware
 
 # Import Blueprints
 from .routes.main import main_bp
@@ -25,6 +29,19 @@ def create_app():
                 static_folder='static')
     app.config.from_object(Config)
 
+    # Validate configuration
+    Config.validate_config()
+
+    # Initialize security extensions
+    csrf = CSRFProtect(app)
+
+    limiter = Limiter(
+        key_func=get_remote_address,
+        app=app,
+        default_limits=["200 per day", "50 per hour"],
+        storage_uri="memory://"
+    )
+
     DATABASE_PATH = app.config['DATABASE_PATH']
 
     app.logger.setLevel(logging.DEBUG)
@@ -35,6 +52,14 @@ def create_app():
     # Register Blueprints
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp)
+
+    # Configure CSRF exemptions after blueprint registration
+    csrf.exempt(main_bp)
+
+    # Security middleware
+    @app.after_request
+    def after_request(response):
+        return SecurityMiddleware.add_security_headers(response)
 
     # Database connection management using Flask's application context
     @app.before_request

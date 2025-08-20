@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, send_from_directory, current_app, request, jsonify, url_for, g
+from flask_wtf.csrf import CSRFProtect
 from io import BytesIO
 import json
 import pandas as pd
@@ -9,6 +10,7 @@ from ..services.data_processing import sanitize_data, calculate_work_time
 from ..services.dashboard import generate_html_files
 from ..services.config_manager import TECHNICIANS, TECHNICIAN_GROUPS, TECHNICIAN_LINES
 from ..services.db_utils import get_db_connection, TaskManager, get_all_technician_skills_by_name
+from ..services.security import InputValidator
 
 main_bp = Blueprint('main', __name__)
 
@@ -28,118 +30,139 @@ def output_file_route(filename):
 
 @main_bp.route('/upload', methods=['POST'])
 def upload_file_route():
-    session_id = request.form.get('session_id')
-    if not session_id:
-        return jsonify({"message": "Session ID is missing."}), 400
+    """Handle file upload with proper validation and error handling."""
+    current_app.logger.info(f"Upload request received - Content-Type: {request.content_type}")
+    current_app.logger.info(f"Upload request form keys: {list(request.form.keys())}")
+    current_app.logger.info(f"Upload request files keys: {list(request.files.keys())}")
 
-    if 'excelFile' in request.files and request.files['excelFile'].filename != '':
-        excel_file_stream = request.files['excelFile']
+    try:
+        session_id = request.form.get('session_id')
+        current_app.logger.info(f"Session ID received: {session_id}")
+
+        if not session_id:
+            current_app.logger.warning("Upload attempt without session ID")
+            return jsonify({"error": "Session ID is missing."}), 400
+
+        # Validate session_id format
         try:
-            current_week_number = get_current_week_number()
-            excel_file_copy = excel_file_stream.read()
-            excel_file_stream.seek(0)
-            original_filename = getattr(excel_file_stream, 'filename', '').lower()
-            engine_to_use = 'pyxlsb' if original_filename.endswith('.xlsb') else 'openpyxl'
+            session_id = InputValidator.validate_string(session_id, max_length=100, pattern=r'^[a-zA-Z0-9\-_]+$')
+            current_app.logger.info(f"Session ID validated: {session_id}")
+        except ValueError as e:
+            current_app.logger.warning(f"Invalid session ID format: {e}")
+            return jsonify({"error": "Invalid session ID format."}), 400
 
-            with pd.ExcelFile(BytesIO(excel_file_copy), engine=engine_to_use) as xls:
-                expected_sheet_name = f"Summary KW{current_week_number}"
-                if expected_sheet_name not in xls.sheet_names:
-                    available_weeks = [s.replace('Summary KW', '') for s in xls.sheet_names if s.startswith('Summary KW')]
-                    available_weeks.sort()
-                    error_msg = f"Week mismatch: File is not for current week ({current_week_number}). Available: {', '.join(available_weeks) if available_weeks else 'None'}."
-                    return jsonify({"message": error_msg}), 400
+        if 'excelFile' in request.files and request.files['excelFile'].filename != '':
+            excel_file_stream = request.files['excelFile']
+            try:
+                current_week_number = get_current_week_number()
+                excel_file_copy = excel_file_stream.read()
+                excel_file_stream.seek(0)
+                original_filename = getattr(excel_file_stream, 'filename', '').lower()
+                engine_to_use = 'pyxlsb' if original_filename.endswith('.xlsb') else 'openpyxl'
 
-            excel_file_stream.seek(0)
-            excel_data_list, extraction_errors = extract_data(excel_file_stream)
+                with pd.ExcelFile(BytesIO(excel_file_copy), engine=engine_to_use) as xls:
+                    expected_sheet_name = f"Summary KW{current_week_number}"
+                    if expected_sheet_name not in xls.sheet_names:
+                        available_weeks = [s.replace('Summary KW', '') for s in xls.sheet_names if s.startswith('Summary KW')]
+                        available_weeks.sort()
+                        error_msg = f"Week mismatch: File is not for current week ({current_week_number}). Available: {', '.join(available_weeks) if available_weeks else 'None'}."
+                        return jsonify({"message": error_msg}), 400
 
-            excel_data_list_with_ids = []
-            for idx, item in enumerate(excel_data_list):
-                item_with_id = item.copy()
-                item_with_id['id'] = str(idx + 1)
-                if 'name' not in item_with_id or not item_with_id['name']:
-                    item_with_id['name'] = item_with_id.get('scheduler_group_task', f'Unnamed Task {idx+1}')
-                excel_data_list_with_ids.append(item_with_id)
+                excel_file_stream.seek(0)
+                excel_data_list, extraction_errors = extract_data(excel_file_stream)
 
-            session_excel_data_cache[session_id] = excel_data_list_with_ids
+                excel_data_list_with_ids = []
+                for idx, item in enumerate(excel_data_list):
+                    item_with_id = item.copy()
+                    item_with_id['id'] = str(idx + 1)
+                    if 'name' not in item_with_id or not item_with_id['name']:
+                        item_with_id['name'] = item_with_id.get('scheduler_group_task', f'Unnamed Task {idx+1}')
+                    excel_data_list_with_ids.append(item_with_id)
 
-            sanitized_data_for_pm_ui = sanitize_data(excel_data_list, current_app.logger)
-            pm_tasks_for_ui = [
-                {
-                    "id": str(i + 1), "name": task.get("scheduler_group_task", "Unknown PM"),
-                    "lines": task.get("lines", ""), "mitarbeiter_pro_aufgabe": int(task.get("mitarbeiter_pro_aufgabe", 1)),
-                    "planned_worktime_min": int(task.get("planned_worktime_min", 0)), "priority": task.get("priority", "C"),
-                    "quantity": int(task.get("quantity", 1)), "task_type": "PM",
-                    "ticket_mo": task.get("ticket_mo", ""), "ticket_url": task.get("ticket_url", "")
-                } for i, task in enumerate(s_data for s_data in sanitized_data_for_pm_ui if s_data.get('task_type', '').upper() == 'PM')
-            ]
+                session_excel_data_cache[session_id] = excel_data_list_with_ids
 
-            response_message = "File processed."
-            if extraction_errors: response_message += f" {len(extraction_errors)} issues found."
-            elif not excel_data_list: response_message += " No data extracted."
-            else: response_message += " PM tasks extracted."
+                sanitized_data_for_pm_ui = sanitize_data(excel_data_list, current_app.logger)
+                pm_tasks_for_ui = [
+                    {
+                        "id": str(i + 1), "name": task.get("scheduler_group_task", "Unknown PM"),
+                        "lines": task.get("lines", ""), "mitarbeiter_pro_aufgabe": int(task.get("mitarbeiter_pro_aufgabe", 1)),
+                        "planned_worktime_min": int(task.get("planned_worktime_min", 0)), "priority": task.get("priority", "C"),
+                        "quantity": int(task.get("quantity", 1)), "task_type": "PM",
+                        "ticket_mo": task.get("ticket_mo", ""), "ticket_url": task.get("ticket_url", "")
+                    } for i, task in enumerate(s_data for s_data in sanitized_data_for_pm_ui if s_data.get('task_type', '').upper() == 'PM')
+                ]
 
-            return jsonify({
-                "message": response_message, "pm_tasks": pm_tasks_for_ui,
-                "technicians": TECHNICIANS, "technician_groups": TECHNICIAN_GROUPS,
-                "session_id": session_id, "extraction_errors": extraction_errors
-            })
-        except Exception as e:
-            current_app.logger.error(f"Error during initial file upload: {e}", exc_info=True)
-            return jsonify({"message": f"Error processing file: {str(e)}"}), 500
+                response_message = "File processed."
+                if extraction_errors: response_message += f" {len(extraction_errors)} issues found."
+                elif not excel_data_list: response_message += " No data extracted."
+                else: response_message += " PM tasks extracted."
 
-    elif 'absentTechnicians' in request.form:
-        if session_id not in session_excel_data_cache:
-            return jsonify({"message": "Session expired. Re-upload."}), 400
+                return jsonify({
+                    "message": response_message, "pm_tasks": pm_tasks_for_ui,
+                    "technicians": TECHNICIANS, "technician_groups": TECHNICIAN_GROUPS,
+                    "session_id": session_id, "extraction_errors": extraction_errors
+                })
+            except Exception as e:
+                current_app.logger.error(f"Error during initial file upload: {e}", exc_info=True)
+                return jsonify({"message": f"Error processing file: {str(e)}"}), 500
 
-        excel_data_list_cached = session_excel_data_cache[session_id]
-        try:
-            absent_technicians = json.loads(request.form.get('absentTechnicians', '[]'))
-            all_technicians_flat = [tech for group in TECHNICIAN_GROUPS.values() for tech in group]
-            present_technicians = [tech for tech in all_technicians_flat if tech not in absent_technicians]
+        elif 'absentTechnicians' in request.form:
+            if session_id not in session_excel_data_cache:
+                return jsonify({"message": "Session expired. Re-upload."}), 400
 
-            total_work_minutes = calculate_work_time(get_current_day())
-            sanitized_data = sanitize_data(excel_data_list_cached, current_app.logger)
+            excel_data_list_cached = session_excel_data_cache[session_id]
+            try:
+                absent_technicians = json.loads(request.form.get('absentTechnicians', '[]'))
+                all_technicians_flat = [tech for group in TECHNICIAN_GROUPS.values() for tech in group]
+                present_technicians = [tech for tech in all_technicians_flat if tech not in absent_technicians]
 
-            all_tasks_for_processing = [
-                {
-                    "id": str(idx + 1), "name": row.get("scheduler_group_task", "Unknown"),
-                    "lines": row.get("lines", ""), "mitarbeiter_pro_aufgabe": int(row.get("mitarbeiter_pro_aufgabe", 1)),
-                    "planned_worktime_min": int(row.get("planned_worktime_min", 0)), "priority": row.get("priority", "C"),
-                    "quantity": int(row.get("quantity", 1)), "task_type": row.get("task_type", ""),
-                    "ticket_mo": row.get("ticket_mo", ""), "ticket_url": row.get("ticket_url", "")
-                } for idx, row in enumerate(sanitized_data)
-            ]
+                total_work_minutes = calculate_work_time(get_current_day())
+                sanitized_data = sanitize_data(excel_data_list_cached, current_app.logger)
 
-            rep_tasks_for_ui = []
-            eligible_technicians_for_rep_modal = {}
-            raw_rep_tasks = [t for t in all_tasks_for_processing if t['task_type'].upper() == 'REP']
+                all_tasks_for_processing = [
+                    {
+                        "id": str(idx + 1), "name": row.get("scheduler_group_task", "Unknown"),
+                        "lines": row.get("lines", ""), "mitarbeiter_pro_aufgabe": int(row.get("mitarbeiter_pro_aufgabe", 1)),
+                        "planned_worktime_min": int(row.get("planned_worktime_min", 0)), "priority": row.get("priority", "C"),
+                        "quantity": int(row.get("quantity", 1)), "task_type": row.get("task_type", ""),
+                        "ticket_mo": row.get("ticket_mo", ""), "ticket_url": row.get("ticket_url", "")
+                    } for idx, row in enumerate(sanitized_data)
+                ]
 
-            for task_rep in raw_rep_tasks:
-                task_id_rep = task_rep['id']
-                rep_tasks_for_ui.append(task_rep)
-                eligible_technicians_for_rep_modal[task_id_rep] = []
-                task_duration_rep = int(task_rep.get('planned_worktime_min', 0))
-                min_acceptable_time = task_duration_rep * 0.75
-                task_lines_rep_str = str(task_rep.get('lines', ''))
-                task_lines_rep_list = [int(l.strip()) for l in task_lines_rep_str.split(',') if l.strip().isdigit()] if task_lines_rep_str and task_lines_rep_str.lower() not in ['nan', ''] else []
+                rep_tasks_for_ui = []
+                eligible_technicians_for_rep_modal = {}
+                raw_rep_tasks = [t for t in all_tasks_for_processing if t['task_type'].upper() == 'REP']
 
-                for tech_name in present_technicians:
-                    tech_available_time = total_work_minutes
-                    tech_config_lines = TECHNICIAN_LINES.get(tech_name, [])
-                    line_eligible = not task_lines_rep_list or any(line in tech_config_lines for line in task_lines_rep_list)
-                    if line_eligible and (task_duration_rep == 0 or tech_available_time >= min_acceptable_time):
-                        eligible_technicians_for_rep_modal[task_id_rep].append({
-                            'name': tech_name, 'available_time': tech_available_time,
-                            'task_full_duration': task_duration_rep
-                        })
-            return jsonify({
-                "message": "REP task data prepared.", "repTasks": rep_tasks_for_ui,
-                "eligibleTechnicians": eligible_technicians_for_rep_modal, "session_id": session_id
-            })
-        except Exception as e:
-            current_app.logger.error(f"Error processing absent technicians: {e}", exc_info=True)
-            return jsonify({"message": f"Error processing absent technicians: {str(e)}"}), 500
-    return jsonify({"message": "Invalid request."}), 400
+                for task_rep in raw_rep_tasks:
+                    task_id_rep = task_rep['id']
+                    rep_tasks_for_ui.append(task_rep)
+                    eligible_technicians_for_rep_modal[task_id_rep] = []
+                    task_duration_rep = int(task_rep.get('planned_worktime_min', 0))
+                    min_acceptable_time = task_duration_rep * 0.75
+                    task_lines_rep_str = str(task_rep.get('lines', ''))
+                    task_lines_rep_list = [int(l.strip()) for l in task_lines_rep_str.split(',') if l.strip().isdigit()] if task_lines_rep_str and task_lines_rep_str.lower() not in ['nan', ''] else []
+
+                    for tech_name in present_technicians:
+                        tech_available_time = total_work_minutes
+                        tech_config_lines = TECHNICIAN_LINES.get(tech_name, [])
+                        line_eligible = not task_lines_rep_list or any(line in tech_config_lines for line in task_lines_rep_list)
+                        if line_eligible and (task_duration_rep == 0 or tech_available_time >= min_acceptable_time):
+                            eligible_technicians_for_rep_modal[task_id_rep].append({
+                                'name': tech_name, 'available_time': tech_available_time,
+                                'task_full_duration': task_duration_rep
+                            })
+                return jsonify({
+                    "message": "REP task data prepared.", "repTasks": rep_tasks_for_ui,
+                    "eligibleTechnicians": eligible_technicians_for_rep_modal, "session_id": session_id
+                })
+            except Exception as e:
+                current_app.logger.error(f"Error processing absent technicians: {e}", exc_info=True)
+                return jsonify({"message": f"Error processing absent technicians: {str(e)}"}), 500
+        return jsonify({"message": "Invalid request."}), 400
+
+    except Exception as e:
+        current_app.logger.error(f"Unexpected error in upload_file_route: {e}", exc_info=True)
+        return jsonify({"message": "An unexpected error occurred."}), 500
 
 @main_bp.route('/generate_dashboard', methods=['POST'])
 def generate_dashboard_route():

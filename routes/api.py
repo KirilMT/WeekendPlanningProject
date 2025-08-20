@@ -1,4 +1,6 @@
 from flask import Blueprint, g, request, jsonify, current_app
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from ..services.db_utils import (
     TechnologyManager,
     TaskManager,
@@ -13,12 +15,14 @@ from ..services.db_utils import (
     delete_line
 )
 from ..services.config_manager import load_app_config, TECHNICIAN_GROUPS
+from ..services.security import InputValidator, validate_request, require_json_fields
 import sqlite3
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 @api_bp.route('/technicians', methods=['GET'])
 def get_technicians_route():
+    """Get all technician groups with basic rate limiting."""
     try:
         if TECHNICIAN_GROUPS is not None and isinstance(TECHNICIAN_GROUPS, dict) and TECHNICIAN_GROUPS:
             return jsonify(TECHNICIAN_GROUPS), 200
@@ -34,6 +38,7 @@ def get_technicians_route():
 
 @api_bp.route('/get_technician_mappings', methods=['GET'])
 def get_technician_mappings_api():
+    """Get technician mappings with proper error handling."""
     cursor = g.db.cursor()
     technicians_output = {}
     try:
@@ -179,6 +184,7 @@ def get_technician_mappings_api():
 
 @api_bp.route('/save_technician_mappings', methods=['POST'])
 def save_technician_mappings_api():
+    """Save technician mappings with validation and error handling."""
     try:
         cursor = g.db.cursor()
         updated_data = request.get_json()
@@ -231,6 +237,7 @@ def save_technician_mappings_api():
 
 @api_bp.route('/technicians', methods=['POST'])
 def add_technician_api():
+    """Add a new technician with validation and error handling."""
     name_from_payload = None  # Initialize for use in error logging
     try:
         data = request.get_json()
@@ -309,6 +316,7 @@ def add_technician_api():
 
 @api_bp.route('/technicians/<int:technician_id>', methods=['PUT'])
 def update_technician_api(technician_id):
+    """Update technician information with validation and error handling."""
     name = None  # Initialize name to avoid UnboundLocalError
     try:
         data = request.get_json()
@@ -378,6 +386,7 @@ def update_technician_api(technician_id):
 
 @api_bp.route('/technicians/<int:technician_id>', methods=['DELETE'])
 def delete_technician_api(technician_id):
+    """Delete a technician and their related data with error handling."""
     try:
         cursor = g.db.cursor()
 
@@ -417,6 +426,7 @@ def delete_technician_api(technician_id):
 
 @api_bp.route('/technologies', methods=['GET'])
 def get_technologies_api():
+    """Get all technologies with their groups and parents."""
     try:
         cursor = g.db.cursor()
         cursor.execute("SELECT t.id, t.name, t.group_id, t.parent_id, tg.name as group_name FROM technologies t LEFT JOIN technology_groups tg ON t.group_id = tg.id ORDER BY tg.name, t.name")
@@ -428,6 +438,7 @@ def get_technologies_api():
 
 @api_bp.route('/lines', methods=['GET', 'POST']) # Added 'POST'
 def get_lines_api():
+    """Get or create lines associated with satellite points."""
     try:
         cursor = g.db.cursor()
         if request.method == 'POST':
@@ -466,6 +477,7 @@ def get_lines_api():
 
 @api_bp.route('/lines/<int:line_id>', methods=['PUT', 'DELETE'])
 def manage_line_item_api(line_id):
+    """Update or delete a specific line item."""
     try:
         cursor = g.db.cursor()
         if request.method == 'PUT':
@@ -513,6 +525,7 @@ def manage_line_item_api(line_id):
 
 @api_bp.route('/satellite_points', methods=['GET', 'POST']) # Added 'POST'
 def get_satellite_points_api():
+    """Get or create satellite points."""
     try:
         cursor = g.db.cursor()
         if request.method == 'POST':
@@ -546,6 +559,7 @@ def get_satellite_points_api():
 
 @api_bp.route('/satellite_points/<int:point_id>', methods=['PUT', 'DELETE'])
 def manage_satellite_point_item_api(point_id):
+    """Update or delete a specific satellite point."""
     try:
         cursor = g.db.cursor()
         if request.method == 'PUT':
@@ -584,6 +598,7 @@ def manage_satellite_point_item_api(point_id):
 
 @api_bp.route('/technologies', methods=['POST'])
 def add_technology_api():
+    """Add a new technology with validation and error handling."""
     tech_name = None  # Initialize tech_name
     parent_id_from_payload = None # Initialize for cleanup logic
     try:
@@ -651,6 +666,7 @@ def add_technology_api():
 
 @api_bp.route('/technologies/<int:technology_id>', methods=['PUT', 'DELETE'])
 def manage_technology_item_api(technology_id):
+    """Update or delete a specific technology."""
     new_name = None # Initialize new_name here
     try:
         technology_manager = TechnologyManager(g.db)
@@ -769,6 +785,7 @@ def manage_technology_item_api(technology_id):
 
 @api_bp.route('/technology_groups', methods=['GET'])
 def get_technology_groups_api():
+    """Get all technology groups."""
     try:
         technology_manager = TechnologyManager(g.db)
         groups = technology_manager.get_all_groups()
@@ -779,6 +796,7 @@ def get_technology_groups_api():
 
 @api_bp.route('/technology_groups', methods=['POST'])
 def add_technology_group_api():
+    """Add a new technology group with validation and error handling."""
     group_name = None  # Initialize group_name
     try:
         data = request.get_json()
@@ -802,6 +820,7 @@ def add_technology_group_api():
 
 @api_bp.route('/technology_groups/<int:group_id>', methods=['PUT'])
 def update_technology_group_api(group_id):
+    """Update a technology group by ID with validation and error handling."""
     new_name = None # Initialize to avoid UnboundLocalError
     try:
         data = request.get_json()
@@ -834,6 +853,7 @@ def update_technology_group_api(group_id):
 
 @api_bp.route('/technology_groups/<int:group_id>', methods=['DELETE'])
 def delete_technology_group_api(group_id):
+    """Delete a technology group by ID with error handling."""
     try:
         cursor = g.db.cursor()
 
@@ -867,6 +887,7 @@ def delete_technology_group_api(group_id):
 
 @api_bp.route('/technician_skills/<int:technician_id>', methods=['GET'])
 def get_technician_skills_api(technician_id):
+    """Get all skills for a technician by their ID."""
     try:
         skills = get_technician_skills_by_id(g.db, technician_id)
         return jsonify({"technician_id": technician_id, "skills": skills})
@@ -876,6 +897,7 @@ def get_technician_skills_api(technician_id):
 
 @api_bp.route('/technician_skill', methods=['POST'])
 def update_technician_skill_api():
+    """Update a technician's skill for a specific technology."""
     try:
         data = request.get_json()
         technician_id = data.get('technician_id')
@@ -903,6 +925,7 @@ def update_technician_skill_api():
 
 @api_bp.route('/tasks', methods=['POST'])
 def add_task_api():
+    """Add a new task with its required technologies."""
     try:
         data = request.get_json()
         task_name = data.get('name', '').strip()
@@ -958,6 +981,7 @@ def add_task_api():
 
 @api_bp.route('/tasks/<int:task_id>', methods=['PUT'])
 def update_task_api(task_id):
+    """Update an existing task's details and required technologies."""
     try:
         data = request.get_json()
         new_name = data.get('name', '').strip()
@@ -1012,6 +1036,7 @@ def update_task_api(task_id):
 
 @api_bp.route('/tasks/<int:task_id>', methods=['DELETE'])
 def delete_task_api(task_id):
+    """Delete a task by ID and its associated data."""
     try:
         cursor = g.db.cursor()
 
@@ -1049,6 +1074,7 @@ def delete_task_api(task_id):
 
 @api_bp.route('/tasks_for_mapping', methods=['GET'])
 def get_tasks_for_mapping_api():
+    """Get all tasks with their required technologies for mapping purposes."""
     try:
         task_manager = TaskManager(g.db)
         cursor = g.db.cursor()
@@ -1078,4 +1104,3 @@ def update_task_technology_api(task_id):
     # For now, returning a 404 or a message indicating deprecation might be best.
     current_app.logger.warning(f"Attempt to use deprecated /api/tasks/{task_id}/technology PUT endpoint.")
     return jsonify({"message": "This endpoint is deprecated. Use PUT /api/tasks/<task_id> with a 'technology_ids' list to update task skills."}), 410 # 410 Gone
-
