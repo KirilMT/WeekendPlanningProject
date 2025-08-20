@@ -5,7 +5,6 @@ from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from jinja2 import Environment, FileSystemLoader
-import logging
 
 # Add project root to sys.path to allow importing config
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))

@@ -4,7 +4,7 @@ Security utilities for input validation and sanitization.
 from functools import wraps
 from flask import request, jsonify, current_app
 import re
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List
 
 
 class InputValidator:
@@ -52,8 +52,8 @@ class InputValidator:
 
     @staticmethod
     def validate_skill_level(level: Any) -> int:
-        """Validate skill level (1-5)."""
-        return InputValidator.validate_integer(level, min_val=1, max_val=5)
+        """Validate skill level (0-4 as per database schema)."""
+        return InputValidator.validate_integer(level, min_val=0, max_val=4)
 
     @staticmethod
     def validate_json_request(required_fields: List[str] = None) -> Dict:

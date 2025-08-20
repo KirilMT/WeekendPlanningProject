@@ -24,7 +24,7 @@ def init_db(db_path, logger=None):
     cursor.execute("SELECT COUNT(*) FROM satellite_points")
     if cursor.fetchone()[0] == 0:
         cursor.execute("INSERT INTO satellite_points (name) VALUES (?)", ("Default Satellite Point",))
-        # conn.commit() # Commit will be handled later in the function or should be done immediately if critical path
+        conn.commit()  # Commit immediately for critical default data
         if logger: logger.info("Added 'Default Satellite Point' as no satellite points were found.")
 
     # Create lines table
