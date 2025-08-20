@@ -18,6 +18,7 @@ from config import Config
 from .services.db_utils import get_db_connection, init_db
 from .services.config_manager import load_app_config
 from .services.security import SecurityMiddleware
+from .services.logging_config import LoggingConfig
 
 # Import Blueprints
 from .routes.main import main_bp
@@ -29,8 +30,16 @@ def create_app():
                 static_folder='static')
     app.config.from_object(Config)
 
-    # Validate configuration
-    Config.validate_config()
+    # Validate configuration before proceeding
+    try:
+        Config.validate_config()
+    except ValueError as e:
+        print(f"Configuration Error: {e}")
+        raise
+
+    # Setup logging first
+    logger = LoggingConfig.setup_logging(app)
+    app.logger = logger
 
     # Initialize security extensions
     csrf = CSRFProtect(app)
@@ -43,8 +52,6 @@ def create_app():
     )
 
     DATABASE_PATH = app.config['DATABASE_PATH']
-
-    app.logger.setLevel(logging.DEBUG)
 
     # Jinja environment for generate_html_files
     env = Environment(loader=FileSystemLoader(app.config['TEMPLATES_FOLDER']))
@@ -75,12 +82,32 @@ def create_app():
         if db is not None:
             db.close()
 
+        # Log any exceptions that occurred during request processing
+        if exception is not None:
+            app.logger.error(f"Request exception: {str(exception)}", exc_info=True)
+
+    # Error handlers
+    @app.errorhandler(404)
+    def not_found(error):
+        app.logger.warning(f"404 error: {error}")
+        return "Page not found", 404
+
+    @app.errorhandler(500)
+    def internal_error(error):
+        app.logger.error(f"500 error: {error}", exc_info=True)
+        return "Internal server error", 500
+
     # Only initialize database and config if we're in the main reloader process
     # This prevents double initialization when Flask's auto-reloader is enabled
     if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
         with app.app_context():
-            init_db(DATABASE_PATH, app.logger)
-            load_app_config(DATABASE_PATH, app.logger)
+            try:
+                init_db(DATABASE_PATH, app.logger)
+                load_app_config(DATABASE_PATH, app.logger)
+                app.logger.info("Application initialized successfully")
+            except Exception as e:
+                app.logger.error(f"Failed to initialize application: {e}", exc_info=True)
+                raise
 
     return app
 

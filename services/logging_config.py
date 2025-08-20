@@ -2,60 +2,70 @@
 Enhanced logging configuration for the Weekend Planning Project.
 """
 import logging
-import logging.handlers
 import os
 from datetime import datetime
+from config import Config
 
 
-class ApplicationLogger:
-    """Centralized logging configuration with rotation and structured formatting."""
+class LoggingConfig:
+    """Centralized logging configuration for the application."""
 
-    def __init__(self, app_name: str = "wkndPlanning", log_dir: str = None):
-        self.app_name = app_name
-        self.log_dir = log_dir or os.path.join(os.path.dirname(__file__), '..', 'logs')
-        os.makedirs(self.log_dir, exist_ok=True)
+    @staticmethod
+    def setup_logging(app=None):
+        """Configure application logging with appropriate levels and formatting."""
 
-    def setup_logging(self, log_level: str = "INFO", enable_file_logging: bool = True):
-        """Configure application logging with both console and file handlers."""
+        # Create logs directory if it doesn't exist
+        log_dir = os.path.join(os.path.dirname(Config.DATABASE_PATH), 'logs')
+        os.makedirs(log_dir, exist_ok=True)
 
-        # Create logger
-        logger = logging.getLogger(self.app_name)
-        logger.setLevel(getattr(logging, log_level.upper()))
-
-        # Clear existing handlers
-        logger.handlers.clear()
+        # Set log level based on debug mode
+        log_level = logging.DEBUG if Config.DEBUG_MODE else logging.INFO
 
         # Create formatter
         formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s'
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
         )
+
+        # Configure root logger
+        root_logger = logging.getLogger()
+        root_logger.setLevel(log_level)
+
+        # Remove existing handlers to avoid duplicates
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
 
         # Console handler
         console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(log_level)
         console_handler.setFormatter(formatter)
-        logger.addHandler(console_handler)
+        root_logger.addHandler(console_handler)
 
-        if enable_file_logging:
-            # File handler with rotation
-            log_file = os.path.join(self.log_dir, f'{self.app_name}.log')
-            file_handler = logging.handlers.RotatingFileHandler(
-                log_file, maxBytes=10*1024*1024, backupCount=5  # 10MB files, keep 5 backups
-            )
-            file_handler.setLevel(logging.DEBUG)
+        # File handler for application logs
+        if not Config.DEBUG_MODE:  # Only log to file in production
+            log_file = os.path.join(log_dir, 'application.log')
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setLevel(logging.INFO)
             file_handler.setFormatter(formatter)
-            logger.addHandler(file_handler)
+            root_logger.addHandler(file_handler)
 
             # Error file handler
-            error_file = os.path.join(self.log_dir, f'{self.app_name}_errors.log')
-            error_handler = logging.handlers.RotatingFileHandler(
-                error_file, maxBytes=10*1024*1024, backupCount=5
-            )
+            error_log_file = os.path.join(log_dir, 'errors.log')
+            error_handler = logging.FileHandler(error_log_file)
             error_handler.setLevel(logging.ERROR)
             error_handler.setFormatter(formatter)
-            logger.addHandler(error_handler)
+            root_logger.addHandler(error_handler)
 
-        return logger
+        # Configure Flask app logger if provided
+        if app:
+            app.logger.setLevel(log_level)
+
+        return logging.getLogger(__name__)
+
+    @staticmethod
+    def get_logger(name):
+        """Get a logger instance with the given name."""
+        return logging.getLogger(name)
 
 
 class DatabaseOperationLogger:
@@ -85,7 +95,7 @@ class DatabaseOperationLogger:
 
 def setup_app_logging(app, config):
     """Setup logging for Flask application."""
-    app_logger = ApplicationLogger("wkndPlanning")
+    app_logger = LoggingConfig("wkndPlanning")
 
     # Determine log level from config
     log_level = "DEBUG" if config.DEBUG_MODE else "INFO"
