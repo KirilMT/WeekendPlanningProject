@@ -321,129 +321,100 @@ def delete_line(conn, line_id):
     return True, "Line deleted successfully."
 
 
-# --- Technology Management ---
-def get_or_create_technology(conn, technology_name, group_id=None):
-    """Gets the ID of an existing technology or creates it if it doesn't exist. Optionally assigns to a group."""
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM technologies WHERE name = ?", (technology_name,))
-    row = cursor.fetchone()
-    if row:
-        # Optionally update group_id if it's provided and different (or was NULL)
-        # For now, if tech exists, we don't auto-update its group here. This can be a separate management action.
-        # if group_id is not None:
-        #     cursor.execute("UPDATE technologies SET group_id = ? WHERE id = ?", (group_id, row['id']))
-        #     conn.commit()
-        # We also don't update parent_id here automatically if technology exists.
-        # This should be a specific action in the UI if a technology needs to be moved.
-        return row['id']
-    else:
-        # When creating, parent_id is not handled by this specific function yet.
-        # It might be better to have a dedicated function or update this one carefully.
-        # For now, keeping it simple and not setting parent_id on creation via this function.
-        # The POST /api/technologies endpoint in app.py will handle parent_id.
-        cursor.execute("INSERT INTO technologies (name, group_id, parent_id) VALUES (?, ?, NULL)", (technology_name, group_id)) # Ensure parent_id is explicitly NULL or handled
-        conn.commit()
-        return cursor.lastrowid
+class TechnologyManager:
+    """Manages technologies and technology groups in the database."""
+    def __init__(self, conn):
+        self.conn = conn
+        self.cursor = conn.cursor()
 
-def delete_technology(conn, technology_id):
-    """Deletes a technology by its ID."""
-    cursor = conn.cursor()
-    # Before deleting, consider implications:
-    # 1. Child technologies: SQLite by default does not cascade deletes unless specified with ON DELETE CASCADE
-    #    in the FOREIGN KEY constraint. The current schema does not specify this.
-    #    So, child technologies will have their parent_id become NULL (or remain if the FK is not enforced strictly,
-    #    but it should be). Or, you might want to prevent deletion if children exist, or delete them recursively.
-    #    For now, we'll just delete the specified technology.
-    # 2. Technician skills: Similar to above, skills linked to this technology might need to be handled.
-    #    The technician_technology_skills table has a FOREIGN KEY. Deleting a technology
-    #    could violate this if not handled (e.g., ON DELETE CASCADE or setting to NULL if allowed).
-    #    Assuming for now that related skills should also be removed or handled by the database schema (e.g. CASCADE).
-    #    Let's ensure related skills are deleted first to avoid FK constraint issues if not cascaded.
+    def get_or_create(self, technology_name, group_id=None, parent_id=None):
+        """Gets the ID of an existing technology or creates it."""
+        self.cursor.execute("SELECT id FROM technologies WHERE name = ?", (technology_name,))
+        row = self.cursor.fetchone()
+        if row:
+            return row['id']
+        else:
+            self.cursor.execute("INSERT INTO technologies (name, group_id, parent_id) VALUES (?, ?, ?)",
+                                (technology_name, group_id, parent_id))
+            self.conn.commit()
+            return self.cursor.lastrowid
 
-    # First, delete from task_required_skills where technology_id = technology_id
-    cursor.execute("DELETE FROM task_required_skills WHERE technology_id = ?", (technology_id,))
+    def delete(self, technology_id):
+        """Deletes a technology by its ID after removing related skills."""
+        self.cursor.execute("DELETE FROM task_required_skills WHERE technology_id = ?", (technology_id,))
+        self.cursor.execute("DELETE FROM technician_technology_skills WHERE technology_id = ?", (technology_id,))
+        self.cursor.execute("DELETE FROM technologies WHERE id = ?", (technology_id,))
+        self.conn.commit()
+        return self.cursor.rowcount
 
-    cursor.execute("DELETE FROM technician_technology_skills WHERE technology_id = ?", (technology_id,))
-    # No direct action needed on tasks table here due to schema change.
-    # task_required_skills entries will be cascaded by DB if technology is deleted.
+    def get_or_create_group(self, group_name):
+        """Gets the ID of an existing technology group or creates it."""
+        self.cursor.execute("SELECT id FROM technology_groups WHERE name = ?", (group_name,))
+        row = self.cursor.fetchone()
+        if row:
+            return row['id']
+        else:
+            self.cursor.execute("INSERT INTO technology_groups (name) VALUES (?)", (group_name,))
+            self.conn.commit()
+            return self.cursor.lastrowid
 
-    # Now, attempt to delete the technology itself
-    cursor.execute("DELETE FROM technologies WHERE id = ?", (technology_id,))
-    conn.commit()
-    return cursor.rowcount # Returns the number of rows deleted (0 or 1)
+    def get_all_groups(self):
+        """Fetches all technology groups."""
+        self.cursor.execute("SELECT id, name FROM technology_groups ORDER BY name")
+        return [{"id": row['id'], "name": row['name']} for row in self.cursor.fetchall()]
 
-# --- Technology Group Management ---
-def get_or_create_technology_group(conn, group_name):
-    """Gets the ID of an existing technology group or creates it if it doesn't exist."""
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM technology_groups WHERE name = ?", (group_name,))
-    row = cursor.fetchone()
-    if row:
-        return row['id']
-    else:
-        cursor.execute("INSERT INTO technology_groups (name) VALUES (?)", (group_name,))
-        conn.commit()
-        return cursor.lastrowid
 
-def get_all_technology_groups(conn):
-    """Fetches all technology groups."""
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, name FROM technology_groups ORDER BY name")
-    return [{"id": row['id'], "name": row['name']} for row in cursor.fetchall()]
+class TaskManager:
+    """Manages tasks and their required skills in the database."""
+    def __init__(self, conn):
+        self.conn = conn
+        self.cursor = conn.cursor()
 
-# --- Task Management (with Technology) ---
-def get_or_create_task(conn, task_name): # Removed technology_id parameter
-    """Gets the ID of an existing task or creates it."""
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM tasks WHERE name = ?", (task_name,)) # Removed technology_id from query
-    row = cursor.fetchone()
-    if row:
-        task_id = row['id']
-        # No technology_id to update directly on the task anymore
-        return task_id
-    else:
-        cursor.execute("INSERT INTO tasks (name) VALUES (?)", (task_name,)) # Removed technology_id
-        conn.commit()
-        return cursor.lastrowid
+    def get_or_create(self, task_name):
+        """Gets the ID of an existing task or creates it."""
+        self.cursor.execute("SELECT id FROM tasks WHERE name = ?", (task_name,))
+        row = self.cursor.fetchone()
+        if row:
+            return row['id']
+        else:
+            self.cursor.execute("INSERT INTO tasks (name) VALUES (?)", (task_name,))
+            self.conn.commit()
+            return self.cursor.lastrowid
 
-# --- Task Required Skills Management ---
-def add_required_skill_to_task(conn, task_id, technology_id):
-    """Adds a required technology/skill to a task. Ignores if already present."""
-    cursor = conn.cursor()
-    try:
-        cursor.execute("INSERT OR IGNORE INTO task_required_skills (task_id, technology_id) VALUES (?, ?)",
-                       (task_id, technology_id))
-        conn.commit()
-    except sqlite3.IntegrityError as e:
-        # This might happen if task_id or technology_id does not exist,
-        # though INSERT OR IGNORE should handle UNIQUE constraint violations silently.
-        print(f"Error adding required skill to task: {e}") # Or log this
+    def add_required_skill(self, task_id, technology_id):
+        """Adds a required technology/skill to a task."""
+        try:
+            self.cursor.execute("INSERT OR IGNORE INTO task_required_skills (task_id, technology_id) VALUES (?, ?)",
+                                (task_id, technology_id))
+            self.conn.commit()
+        except sqlite3.IntegrityError as e:
+            # Log this error appropriately
+            print(f"Error adding required skill to task: {e}")
 
-def remove_required_skill_from_task(conn, task_id, technology_id):
-    """Removes a required technology/skill from a task."""
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM task_required_skills WHERE task_id = ? AND technology_id = ?",
-                   (task_id, technology_id))
-    conn.commit()
+    def remove_required_skill(self, task_id, technology_id):
+        """Removes a required technology/skill from a task."""
+        self.cursor.execute("DELETE FROM task_required_skills WHERE task_id = ? AND technology_id = ?",
+                            (task_id, technology_id))
+        self.conn.commit()
 
-def get_required_skills_for_task(conn, task_id):
-    """Fetches all required technology/skill details for a given task."""
-    cursor = conn.cursor()
-    query = """
-        SELECT trs.technology_id, t.name as technology_name
-        FROM task_required_skills trs
-        JOIN technologies t ON trs.technology_id = t.id
-        WHERE trs.task_id = ?
-        ORDER BY t.name
-    """
-    cursor.execute(query, (task_id,))
-    return [{"technology_id": row["technology_id"], "technology_name": row["technology_name"]} for row in cursor.fetchall()]
+    def get_required_skills(self, task_id):
+        """Fetches all required technology/skill details for a given task."""
+        query = """
+            SELECT trs.technology_id, t.name as technology_name
+            FROM task_required_skills trs
+            JOIN technologies t ON trs.technology_id = t.id
+            WHERE trs.task_id = ?
+            ORDER BY t.name
+        """
+        self.cursor.execute(query, (task_id,))
+        return [{"technology_id": row["technology_id"], "technology_name": row["technology_name"]} for row in self.cursor.fetchall()]
 
-def remove_all_required_skills_for_task(conn, task_id):
-    """Removes all technology/skill requirements for a given task."""
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM task_required_skills WHERE task_id = ?", (task_id,))
-    conn.commit()
+    def remove_all_required_skills(self, task_id):
+        """Removes all technology/skill requirements for a given task."""
+        self.cursor.execute("DELETE FROM task_required_skills WHERE task_id = ?", (task_id,))
+        self.conn.commit()
+
+
 
 # --- Technician Skill Management ---
 def get_all_technician_skills_by_name(conn):

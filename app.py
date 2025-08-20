@@ -21,12 +21,11 @@ from config import Config
 from .services.extract_data import extract_data, get_current_day, get_current_week_number
 from .services.db_utils import (
     get_db_connection, init_db,
-    get_or_create_technology, get_or_create_task,
     get_all_technician_skills_by_name, update_technician_skill, get_technician_skills_by_id,
-    get_or_create_technology_group, get_all_technology_groups, delete_technology,
-    add_required_skill_to_task, remove_all_required_skills_for_task, get_required_skills_for_task, remove_required_skill_from_task, # Added new functions
-    get_or_create_satellite_point, update_satellite_point, delete_satellite_point, get_all_satellite_points, # Added satellite point functions
-    add_line, get_all_lines, update_line, delete_line, get_lines_for_satellite_point # Added line functions
+    TechnologyManager,  # Import the new class
+    TaskManager, # Import the new class
+    get_or_create_satellite_point, update_satellite_point, delete_satellite_point, # Added satellite point functions
+    add_line, get_all_lines, update_line, delete_line # Added line functions
 )
 from .services.config_manager import load_app_config, TECHNICIAN_LINES, TECHNICIANS, TECHNICIAN_GROUPS
 from .services.data_processing import sanitize_data, calculate_work_time
@@ -378,6 +377,7 @@ def add_technician_api():
 
 @app.route('/api/technicians/<int:technician_id>', methods=['PUT'])
 def update_technician_api(technician_id):
+    name = None  # Initialize name to avoid UnboundLocalError
     try:
         data = request.get_json()
         name = data.get('name', '').strip()
@@ -681,6 +681,7 @@ def add_technology_api():
             return jsonify({"message": "Invalid group_id or parent_id format. Must be integers."}), 400
 
         cursor = g.db.cursor()
+        technology_manager = TechnologyManager(g.db)
 
         # Check for duplicate: name, group_id, parent_id must be unique together
         query_check_duplicate = "SELECT id FROM technologies WHERE name = ? AND group_id = ?"
@@ -696,9 +697,8 @@ def add_technology_api():
         if cursor.fetchone():
             return jsonify({"message": f"Technology '{tech_name}' with the same parent under group ID {group_id} already exists."}), 409
 
-        cursor.execute("INSERT INTO technologies (name, group_id, parent_id) VALUES (?, ?, ?)", (tech_name, group_id, parent_id_from_payload))
-        g.db.commit()
-        created_technology_id = cursor.lastrowid
+        # Use the new manager to create the technology
+        created_technology_id = technology_manager.get_or_create(tech_name, group_id, parent_id_from_payload)
 
         # Cleanup: If the new technology was assigned a parent, that parent technology's skills should be cleared.
         if parent_id_from_payload is not None:
@@ -729,6 +729,7 @@ def add_technology_api():
 def manage_technology_item_api(technology_id):
     new_name = None # Initialize new_name here
     try:
+        technology_manager = TechnologyManager(g.db)
         if request.method == 'PUT':
             data = request.get_json()
             new_name = data.get('name', '').strip() # Assigned here
@@ -824,7 +825,7 @@ def manage_technology_item_api(technology_id):
             cursor.execute("UPDATE technologies SET parent_id = NULL WHERE parent_id = ?", (technology_id,))
             g.db.commit()
 
-            rows_deleted = delete_technology(g.db, technology_id)
+            rows_deleted = technology_manager.delete(technology_id)
 
             if rows_deleted > 0:
                 return jsonify({"message": f"Technology ID {technology_id} deleted. Child references updated."}), 200
@@ -846,7 +847,8 @@ def manage_technology_item_api(technology_id):
 @app.route('/api/technology_groups', methods=['GET'])
 def get_technology_groups_api():
     try:
-        groups = get_all_technology_groups(g.db)
+        technology_manager = TechnologyManager(g.db)
+        groups = technology_manager.get_all_groups()
         return jsonify(groups)
     except Exception as e:
         app.logger.error(f"Error fetching technology groups: {e}", exc_info=True)
@@ -862,7 +864,8 @@ def add_technology_group_api():
         if not group_name:
             return jsonify({"message": "Technology group name is required."}), 400
 
-        group_id = get_or_create_technology_group(g.db, group_name)
+        technology_manager = TechnologyManager(g.db)
+        group_id = technology_manager.get_or_create_group(group_name)
         cursor = g.db.cursor()
         cursor.execute("SELECT id, name FROM technology_groups WHERE id = ?", (group_id,))
         group = cursor.fetchone()
@@ -878,6 +881,7 @@ def add_technology_group_api():
 
 @app.route('/api/technology_groups/<int:group_id>', methods=['PUT'])
 def update_technology_group_api(group_id):
+    new_name = None # Initialize to avoid UnboundLocalError
     try:
         data = request.get_json()
         new_name = data.get('name', '').strip()
@@ -992,6 +996,7 @@ def add_task_api():
         if not isinstance(technology_ids, list) or not technology_ids: # Ensure it's a non-empty list
             return jsonify({"message": "At least one Technology ID is required for the task."}), 400
 
+        task_manager = TaskManager(g.db)
         cursor = g.db.cursor()
 
         # Validate all technology IDs
@@ -1004,13 +1009,11 @@ def add_task_api():
             except ValueError:
                 return jsonify({"message": f"Invalid Technology ID format: {tech_id}."}), 400
 
-        task_id = get_or_create_task(g.db, task_name) # Creates task if not exists, no technology_id here
+        task_id = task_manager.get_or_create(task_name)
 
         # Add required skills
         for tech_id in technology_ids:
-            add_required_skill_to_task(g.db, task_id, int(tech_id))
-
-        g.db.commit()
+            task_manager.add_required_skill(task_id, int(tech_id))
 
         # Fetch the newly created task and its skills to return it
         cursor.execute("SELECT id, name FROM tasks WHERE id = ?", (task_id,))
@@ -1019,7 +1022,7 @@ def add_task_api():
              app.logger.error(f"Failed to fetch newly created task with ID {task_id}")
              return jsonify({"message": "Error retrieving created task."}), 500
 
-        required_skills_objects = get_required_skills_for_task(g.db, task_id)
+        required_skills_objects = task_manager.get_required_skills(task_id)
 
         response_data = dict(new_task_data)
         response_data['required_skills'] = required_skills_objects # Keep for detailed info
@@ -1049,6 +1052,7 @@ def update_task_api(task_id):
         if not isinstance(new_technology_ids, list) or not new_technology_ids: # Ensure it's a non-empty list
             return jsonify({"message": "At least one Technology ID is required for the task."}), 400
 
+        task_manager = TaskManager(g.db)
         cursor = g.db.cursor()
 
         # Check if task exists
@@ -1070,15 +1074,15 @@ def update_task_api(task_id):
         cursor.execute("UPDATE tasks SET name = ? WHERE id = ?", (new_name, task_id))
 
         # Update required skills
-        remove_all_required_skills_for_task(g.db, task_id) # Remove old skills
+        task_manager.remove_all_required_skills(task_id) # Remove old skills
         for tech_id in new_technology_ids:
-            add_required_skill_to_task(g.db, task_id, int(tech_id)) # Add new skills
+            task_manager.add_required_skill(task_id, int(tech_id)) # Add new skills
 
         g.db.commit()
 
         cursor.execute("SELECT id, name FROM tasks WHERE id = ?", (task_id,))
         updated_task_data = cursor.fetchone()
-        required_skills_objects = get_required_skills_for_task(g.db, task_id)
+        required_skills_objects = task_manager.get_required_skills(task_id)
 
         response_data = dict(updated_task_data)
         response_data['required_skills'] = required_skills_objects # Keep for detailed info
@@ -1132,6 +1136,7 @@ def delete_task_api(task_id):
 @app.route('/api/tasks_for_mapping', methods=['GET'])
 def get_tasks_for_mapping_api():
     try:
+        task_manager = TaskManager(g.db)
         cursor = g.db.cursor()
         cursor.execute("SELECT id, name FROM tasks ORDER BY name") # Removed technology_id and technology_name from direct task query
         tasks_raw = cursor.fetchall()
@@ -1139,12 +1144,12 @@ def get_tasks_for_mapping_api():
         tasks_with_skills = []
         for task_row in tasks_raw:
             task_data = dict(task_row)
-            required_skills_objects = get_required_skills_for_task(g.db, task_row['id'])
+            required_skills_objects = task_manager.get_required_skills(task_row['id'])
             task_data['required_skills'] = required_skills_objects # Keep for detailed info
             task_data['technology_ids'] = [skill['technology_id'] for skill in required_skills_objects] # Add for frontend compatibility
             tasks_with_skills.append(task_data)
 
-        return jsonify(tasks_with_skills)
+        return jsonify({"tasks": tasks_with_skills})
     except Exception as e:
         app.logger.error(f"Error fetching tasks for mapping: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
@@ -1290,6 +1295,7 @@ def generate_dashboard_route():
         all_processed_tasks_from_ui = json.loads(form_data.get('all_processed_tasks', '[]'))
 
         conn = get_db_connection(DATABASE_PATH)
+        task_manager = TaskManager(conn)
         try:
             technician_skills_map = get_all_technician_skills_by_name(conn)
             final_tasks_map = {}
@@ -1301,11 +1307,11 @@ def generate_dashboard_route():
                 task_to_add = task_from_ui.copy()
                 task_name = task_to_add.get('name', task_to_add.get('scheduler_group_task', f'Unknown Task UI {task_id_ui}'))
                 if not task_to_add.get('name'): task_to_add['name'] = task_name
-                db_task_id = get_or_create_task(conn, task_name) # Creates task by name
+                db_task_id = task_manager.get_or_create(task_name)
                 task_to_add.update({'db_task_id': db_task_id}) # Store db_task_id
 
                 # Fetch and add technology_ids for the task
-                required_skills_objects = get_required_skills_for_task(conn, db_task_id)
+                required_skills_objects = task_manager.get_required_skills(db_task_id)
                 technology_ids_for_task = [skill['technology_id'] for skill in required_skills_objects]
                 task_to_add['technology_ids'] = technology_ids_for_task
 
@@ -1319,11 +1325,11 @@ def generate_dashboard_route():
                     task_name = task_to_add.get('name', task_to_add.get('scheduler_group_task', f'Unknown Cache PM {cache_task_id_ui}'))
                     if not task_to_add.get('name'): task_to_add['name'] = task_name
                     task_to_add['isAdditionalTask'] = False
-                    db_task_id = get_or_create_task(conn, task_name) # Creates task by name
+                    db_task_id = task_manager.get_or_create(task_name)
                     task_to_add.update({'db_task_id': db_task_id})
 
                     # Fetch and add technology_ids for the task
-                    required_skills_objects = get_required_skills_for_task(conn, db_task_id)
+                    required_skills_objects = task_manager.get_required_skills(db_task_id)
                     technology_ids_for_task = [skill['technology_id'] for skill in required_skills_objects]
                     task_to_add['technology_ids'] = technology_ids_for_task
 
