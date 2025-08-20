@@ -1,25 +1,35 @@
 import pandas as pd
 from datetime import datetime, timedelta
 import re
+try:
+    from config import Config
+except ImportError:  # Fallback if direct import path differs
+    Config = None
+
+
+def _now():
+    """Return debug fixed datetime if configured, else real current datetime."""
+    if Config is not None:
+        fixed = Config.get_fixed_datetime()
+        if fixed:
+            return fixed
+    return datetime.now()
 
 # Step 0: Determine the current week (KW)
 def get_current_week():
-    current_date = datetime.now()
-    # current_date = datetime(2025, 6, 7)  # Hardcoded for testing
+    current_date = _now()
     week_number = current_date.isocalendar().week
     return f"Summary KW{week_number:02d}", current_date
 
 # Helper function to get the current week number (e.g., "17")
 def get_current_week_number():
-    current_date = datetime.now()
-    # current_date = datetime(2025, 6, 7)  # Hardcoded for testing
+    current_date = _now()
     week_number = current_date.isocalendar().week
     return f"{week_number:02d}"
 
 # Step 1: Determine the current day
 def get_current_day():
-    current_date = datetime.now()
-    # current_date = datetime(2025, 6, 7, 20, 00)  # Hardcoded for testing Saturday 00:45
+    current_date = _now()
     # If current time is before 6 AM, it's part of the previous day's night shift
     if current_date.hour < 6:
         effective_date = current_date - timedelta(days=1)
@@ -29,7 +39,7 @@ def get_current_day():
 
 # Step 2: Determine the current shift
 def get_current_shift():
-    current_time = datetime.now().hour
+    current_time = _now().hour
     # current_time = 20  # Hardcoded for testing (3 PM)
     if 6 <= current_time < 18:  # 6 AM to 6 PM
         return "early"
@@ -297,7 +307,7 @@ def extract_data(excel_file_object):  # MODIFIED: Changed argument name
 
     except ValueError as ve: # Catch specific ValueErrors from find_and_filter or others
         # These are often configuration/file structure issues
-        # Ensure error_messages is initialized if it wasn't (e.g., error in find_and_filter_data before error_messages = [])
+        # Ensure error_messages is initialized if it wasn't (e.g., error in find_and_filter data before error_messages = [])
         if 'error_messages' not in locals() and 'error_messages' not in globals():
             error_messages = []
         error_messages.append(f"Configuration or File Error: {str(ve)}")
