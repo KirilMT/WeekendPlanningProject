@@ -16,7 +16,7 @@ function generateSessionId() {
 
 // Fetch the grouped technicians from the server
 console.log('INDEX.HTML: Fetching technician groups...');
-fetch('/technicians')
+fetch('/api/technicians') // Corrected URL
     .then(response => {
         console.log('INDEX.HTML: Technicians response status:', response.status);
         return response.json();
@@ -779,4 +779,3 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 });
-
