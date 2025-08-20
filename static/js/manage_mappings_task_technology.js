@@ -298,7 +298,8 @@ async function fetchAllTasksForMapping() {
             console.error(`Error fetching tasks for mapping. Status: ${response.status}, StatusText: ${response.statusText}, ServerResponse: ${errorText}`);
             throw new Error(`HTTP error! status: ${response.status}. Server said: ${response.statusText}`);
         }
-        const tasks = await response.json();
+        const responseData = await response.json();
+        const tasks = responseData.tasks || []; // Extract tasks array from response object
         renderTasksForTechnologyMapping(tasks);
     } catch (error) {
         displayMessage(`Error fetching tasks for mapping: ${error.message}`, 'error');
