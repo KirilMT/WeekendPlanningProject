@@ -90,6 +90,15 @@ def load_app_config(database_path, logger=None): # Added logger argument
 
             TECHNICIANS.append(tech_name)
 
+            # Add technician to the correct group (satellite point)
+            if tech_satellite_point_name in TECHNICIAN_GROUPS:
+                TECHNICIAN_GROUPS[tech_satellite_point_name].append(tech_name)
+            else:
+                # This case handles technicians assigned to a satellite point that might have been missed
+                # during initialization, or if the satellite point name is valid but wasn't in the initial list.
+                _log(f"      Technician '{tech_name}' assigned to a new group '{tech_satellite_point_name}' not found during initial setup.", 'warning')
+                TECHNICIAN_GROUPS[tech_satellite_point_name] = [tech_name]
+
             # Fetch lines for the technician using their satellite_point_id via the new db_utils function
             # get_technician_lines_via_satellite_point returns a list of line names
             # The original code expected line numbers, this needs to be clarified if line names or IDs are expected here.
@@ -98,13 +107,6 @@ def load_app_config(database_path, logger=None): # Added logger argument
             # For now, proceeding with line names as strings.
             technician_actual_lines = get_technician_lines_via_satellite_point(conn, tech_id)
             TECHNICIAN_LINES[tech_name] = technician_actual_lines
-
-            if tech_satellite_point_name in TECHNICIAN_GROUPS:
-                TECHNICIAN_GROUPS[tech_satellite_point_name].append(tech_name)
-            else:
-                # This case should ideally not happen if TECHNICIAN_GROUPS is pre-populated from all satellite_points
-                _log(f"  Warning: Satellite point '{tech_satellite_point_name}' for technician '{tech_name}' not found in pre-populated TECHNICIAN_GROUPS. Adding it.", 'warning')
-                TECHNICIAN_GROUPS[tech_satellite_point_name] = [tech_name]
 
         _log(f"Successfully loaded configuration for {len(TECHNICIANS)} technicians from database via config_manager.")
 

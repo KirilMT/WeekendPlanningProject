@@ -1,6 +1,6 @@
 import os
 import sys
-from flask import Flask, render_template, send_from_directory, request, jsonify, url_for
+from flask import Flask, g, render_template, send_from_directory, request, jsonify, url_for
 from jinja2 import Environment, FileSystemLoader
 import json
 import pandas as pd
@@ -49,6 +49,20 @@ app.logger.setLevel(logging.DEBUG)
 env = Environment(loader=FileSystemLoader(app.config['TEMPLATES_FOLDER']))
 session_excel_data_cache = {}
 
+# Database connection management using Flask's application context
+@app.before_request
+def before_request():
+    """Open a database connection before each request."""
+    if 'db' not in g:
+        g.db = get_db_connection(DATABASE_PATH)
+
+@app.teardown_request
+def teardown_request(exception=None):
+    """Close the database connection at the end of each request."""
+    db = g.pop('db', None)
+    if db is not None:
+        db.close()
+
 with app.app_context():
     init_db(DATABASE_PATH, app.logger)
     load_app_config(DATABASE_PATH, app.logger) # Ensure this line is present and uncommented
@@ -86,8 +100,7 @@ def get_technicians_route():
 
 @app.route('/api/get_technician_mappings', methods=['GET'])
 def get_technician_mappings_api():
-    conn = get_db_connection(DATABASE_PATH)
-    cursor = conn.cursor()
+    cursor = g.db.cursor()
     technicians_output = {}
     try:
         # Get all technology details to identify parents
@@ -229,16 +242,12 @@ def get_technician_mappings_api():
     except sqlite3.Error as e:
         app.logger.error(f"SQLite error in get_technician_mappings_api: {e}")
         return jsonify({"error": f"Database error: {e}"}), 500
-    finally:
-        if conn:
-            conn.close()
+
 
 @app.route('/api/save_technician_mappings', methods=['POST'])
 def save_technician_mappings_api():
-    conn = None
     try:
-        conn = get_db_connection(DATABASE_PATH)
-        cursor = conn.cursor()
+        cursor = g.db.cursor()
         updated_data = request.get_json()
         if not updated_data or 'technicians' not in updated_data:
             return jsonify({"message": "Invalid data format"}), 400
@@ -275,24 +284,21 @@ def save_technician_mappings_api():
                                        (technician_id, task_id_assign))
                     else:
                         app.logger.warning(f"Task '{task_name_assign}' not found. Cannot save assignment for '{tech_name}'.")
-        conn.commit()
+        g.db.commit()
         load_app_config(DATABASE_PATH, app.logger) # Reload config globals
         return jsonify({"message": "Technician mappings saved and reloaded."})
     except sqlite3.Error as e:
-        if conn: conn.rollback()
+        g.db.rollback()
         app.logger.error(f"SQLite error saving technician mappings: {e}")
         return jsonify({"message": f"Database error: {e}"}), 500
     except Exception as e:
-        if conn: conn.rollback()
+        g.db.rollback()
         app.logger.error(f"Error saving technician mappings: {e}", exc_info=True)
         return jsonify({"message": f"Error saving mappings: {str(e)}"}), 500
-    finally:
-        if conn:
-            conn.close()
+
 
 @app.route('/api/technicians', methods=['POST'])
 def add_technician_api():
-    conn = None
     name_from_payload = None  # Initialize for use in error logging
     try:
         data = request.get_json()
@@ -313,8 +319,7 @@ def add_technician_api():
         if not name_from_payload:
             return jsonify({"message": "Technician name is required."}), 400
 
-        conn = get_db_connection(DATABASE_PATH)
-        cursor = conn.cursor()
+        cursor = g.db.cursor()
 
         # Check if technician already exists
         cursor.execute("SELECT id FROM technicians WHERE name = ?", (name_from_payload,))
@@ -327,7 +332,7 @@ def add_technician_api():
         # This SQL query is critical and must not contain 'group_id'.
         sql_insert = "INSERT INTO technicians (name, satellite_point_id) VALUES (?, ?)"
         cursor.execute(sql_insert, (name_from_payload, satellite_point_id_from_payload))
-        conn.commit()
+        g.db.commit()
         technician_id = cursor.lastrowid
         app.logger.info(f"Technician inserted with ID: {technician_id}")
 
@@ -354,28 +359,25 @@ def add_technician_api():
             return jsonify({"message": "Technician added but failed to retrieve details post-insertion."}), 500
 
     except sqlite3.IntegrityError as ie:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         error_message = f"Technician '{name_from_payload or 'Unknown'}' already exists or another integrity constraint failed. Details: {str(ie)}"
         app.logger.error(f"IntegrityError adding technician: {error_message}")
         return jsonify({"message": error_message}), 409
     except sqlite3.Error as e_sqlite: # More specific variable for SQLite errors
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         # This is where "no column named group_id" would be caught if it's an SQLite error from THIS function's direct operations
         db_error_message = f"Database error: {str(e_sqlite)}"
         app.logger.error(f"SQLite error in add_technician_api for '{name_from_payload or 'Unknown'}': {db_error_message}. SQL operations in this function use 'satellite_point_id'.", exc_info=True)
         return jsonify({"message": db_error_message}), 500
     except Exception as e_general:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         server_error_message = f"Server error: {str(e_general)}"
         app.logger.error(f"Generic server error in add_technician_api for '{name_from_payload or 'Unknown'}': {server_error_message}", exc_info=True)
         return jsonify({"message": server_error_message}), 500
-    finally:
-        if conn:
-            conn.close()
+
 
 @app.route('/api/technicians/<int:technician_id>', methods=['PUT'])
 def update_technician_api(technician_id):
-    conn = None
     try:
         data = request.get_json()
         name = data.get('name', '').strip()
@@ -388,8 +390,7 @@ def update_technician_api(technician_id):
         if not name and satellite_point_id is None: # Check if there is anything to update
             return jsonify({"message": "No data provided for update."}), 400
 
-        conn = get_db_connection(DATABASE_PATH)
-        cursor = conn.cursor()
+        cursor = g.db.cursor()
 
         cursor.execute("SELECT id FROM technicians WHERE id = ?", (technician_id,))
         if not cursor.fetchone():
@@ -420,7 +421,7 @@ def update_technician_api(technician_id):
             # So, this simple if/elif should cover current frontend behavior.
             pass # No actual update query if only one field was expected but not provided (e.g. name was empty string)
 
-        conn.commit()
+        g.db.commit()
 
         # Fetch satellite_point_id in SELECT
         cursor.execute("SELECT id, name, satellite_point_id FROM technicians WHERE id = ?", (technician_id,))
@@ -431,27 +432,23 @@ def update_technician_api(technician_id):
         return jsonify({"message": f"Technician ID {technician_id} updated successfully.", "technician": dict(updated_technician)}), 200
 
     except sqlite3.IntegrityError:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         # This specific error for name uniqueness is caught above, but this is a general fallback.
         return jsonify({"message": f"Technician name '{name}' may already exist for another technician or other integrity issue."}), 409
     except sqlite3.Error as e:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         app.logger.error(f"Database error updating technician {technician_id}: {e}")
         return jsonify({"message": f"Database error: {str(e)}"}), 500
     except Exception as e:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         app.logger.error(f"Server error updating technician {technician_id}: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn:
-            conn.close()
+
 
 @app.route('/api/technicians/<int:technician_id>', methods=['DELETE'])
 def delete_technician_api(technician_id):
-    conn = None
     try:
-        conn = get_db_connection(DATABASE_PATH)
-        cursor = conn.cursor()
+        cursor = g.db.cursor()
 
         # Check if technician exists
         cursor.execute("SELECT name FROM technicians WHERE id = ?", (technician_id,))
@@ -469,7 +466,7 @@ def delete_technician_api(technician_id):
 
         # Delete the technician
         cursor.execute("DELETE FROM technicians WHERE id = ?", (technician_id,))
-        conn.commit()
+        g.db.commit()
 
         if cursor.rowcount > 0:
             load_app_config(DATABASE_PATH, app.logger) # Reload config globals
@@ -479,37 +476,31 @@ def delete_technician_api(technician_id):
             return jsonify({"message": "Technician found but could not be deleted."}), 500
 
     except sqlite3.Error as e:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         app.logger.error(f"Database error deleting technician {technician_id}: {e}", exc_info=True)
         return jsonify({"message": f"Database error: {str(e)}"}), 500
     except Exception as e:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         app.logger.error(f"Server error deleting technician {technician_id}: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn:
-            conn.close()
+
 
 @app.route('/api/technologies', methods=['GET'])
 def get_technologies_api():
-    conn = None
     try:
-        conn = get_db_connection(DATABASE_PATH)
-        cursor = conn.cursor()
+        cursor = g.db.cursor()
         cursor.execute("SELECT t.id, t.name, t.group_id, t.parent_id, tg.name as group_name FROM technologies t LEFT JOIN technology_groups tg ON t.group_id = tg.id ORDER BY tg.name, t.name")
         technologies = [{"id": row['id'], "name": row['name'], "group_id": row['group_id'], "group_name": row['group_name'], "parent_id": row['parent_id']} for row in cursor.fetchall()]
         return jsonify(technologies)
     except sqlite3.Error as e:
-        app.logger.error(f"Database error fetching technologies: {e}")
-        return jsonify({"message": f"Database error: {e}"}), 500
-    finally:
-        if conn: conn.close()
+        app.logger.error(f"Database error in get_technologies_api: {e}")
+        return jsonify({"error": f"Database error: {e}"}), 500
+
 
 @app.route('/api/lines', methods=['GET', 'POST']) # Added 'POST'
 def get_lines_api():
-    conn = None
     try:
-        conn = get_db_connection(DATABASE_PATH)
+        cursor = g.db.cursor()
         if request.method == 'POST':
             data = request.get_json()
             name = data.get('name')
@@ -520,12 +511,11 @@ def get_lines_api():
                 # Ensure satellite_point_id is an integer
                 satellite_point_id = int(satellite_point_id)
                 # Check if satellite point exists
-                cursor = conn.cursor()
                 cursor.execute("SELECT id FROM satellite_points WHERE id = ?", (satellite_point_id,))
                 if not cursor.fetchone():
                     return jsonify({"message": f"Satellite point ID {satellite_point_id} not found."}), 400
 
-                line_id = add_line(conn, name, satellite_point_id)
+                line_id = add_line(g.db, name, satellite_point_id)
                 # Fetch the created line to return its details
                 cursor.execute("SELECT id, name, satellite_point_id FROM lines WHERE id = ?", (line_id,))
                 line = cursor.fetchone()
@@ -539,19 +529,17 @@ def get_lines_api():
                 return jsonify({"message": f"Server error: {str(e)}"}), 500
 
         # GET request part
-        lines = get_all_lines(conn)
+        lines = get_all_lines(g.db)
         return jsonify(lines)
     except Exception as e:
         app.logger.error(f"Error in /api/lines: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
+
 
 @app.route('/api/lines/<int:line_id>', methods=['PUT', 'DELETE'])
 def manage_line_item_api(line_id):
-    conn = None
     try:
-        conn = get_db_connection(DATABASE_PATH)
+        cursor = g.db.cursor()
         if request.method == 'PUT':
             data = request.get_json()
             name = data.get('name')
@@ -561,12 +549,11 @@ def manage_line_item_api(line_id):
             try:
                 satellite_point_id = int(satellite_point_id)
                 # Check if satellite point exists
-                cursor = conn.cursor()
                 cursor.execute("SELECT id FROM satellite_points WHERE id = ?", (satellite_point_id,))
                 if not cursor.fetchone():
                     return jsonify({"message": f"Satellite point ID {satellite_point_id} not found."}), 400
 
-                updated_line_data = update_line(conn, line_id, name, satellite_point_id)
+                updated_line_data = update_line(g.db, line_id, name, satellite_point_id)
                 if updated_line_data:
                     return jsonify(updated_line_data), 200
                 else:
@@ -581,7 +568,7 @@ def manage_line_item_api(line_id):
 
         elif request.method == 'DELETE':
             try:
-                success = delete_line(conn, line_id)
+                success = delete_line(g.db, line_id)
                 if success:
                     return jsonify({"message": "Line deleted successfully"}), 200
                 else:
@@ -595,24 +582,20 @@ def manage_line_item_api(line_id):
     except Exception as e:
         app.logger.error(f"Error in /api/lines/<id>: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn:
-            conn.close()
+
 
 @app.route('/api/satellite_points', methods=['GET', 'POST']) # Added 'POST'
 def get_satellite_points_api():
-    conn = None
     try:
-        conn = get_db_connection(DATABASE_PATH)
+        cursor = g.db.cursor()
         if request.method == 'POST':
             data = request.get_json()
             name = data.get('name')
             if not name:
                 return jsonify({"message": "Satellite point name is required"}), 400
             try:
-                point_id = get_or_create_satellite_point(conn, name)
+                point_id = get_or_create_satellite_point(g.db, name)
                 # Fetch the created/existing point to return its details
-                cursor = conn.cursor()
                 cursor.execute("SELECT id, name FROM satellite_points WHERE id = ?", (point_id,))
                 point = cursor.fetchone()
                 return jsonify(dict(point)), 201 # Return the created or existing point
@@ -623,7 +606,7 @@ def get_satellite_points_api():
                 return jsonify({"message": f"Server error: {str(e)}"}), 500
 
         # GET request part remains the same
-        cursor = conn.cursor()
+        cursor = g.db.cursor()
         cursor.execute("SELECT id, name FROM satellite_points ORDER BY name")
         satellite_points = [{"id": row['id'], "name": row['name']} for row in cursor.fetchall()]
         return jsonify(satellite_points)
@@ -633,22 +616,19 @@ def get_satellite_points_api():
     except Exception as e: # Catch other potential errors, e.g., if request.get_json() fails
         app.logger.error(f"Error in /api/satellite_points: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn:
-            conn.close()
+
 
 @app.route('/api/satellite_points/<int:point_id>', methods=['PUT', 'DELETE'])
 def manage_satellite_point_item_api(point_id):
-    conn = None
     try:
-        conn = get_db_connection(DATABASE_PATH)
+        cursor = g.db.cursor()
         if request.method == 'PUT':
             data = request.get_json()
             name = data.get('name')
             if not name:
                 return jsonify({"message": "Name is required for update"}), 400
             try:
-                updated_point = update_satellite_point(conn, point_id, name)
+                updated_point = update_satellite_point(g.db, point_id, name)
                 if updated_point:
                     return jsonify(updated_point), 200
                 else:
@@ -661,7 +641,7 @@ def manage_satellite_point_item_api(point_id):
 
         elif request.method == 'DELETE':
             try:
-                success = delete_satellite_point(conn, point_id)
+                success = delete_satellite_point(g.db, point_id)
                 if success:
                     return jsonify({"message": "Satellite point deleted successfully"}), 200
                 else:
@@ -675,13 +655,10 @@ def manage_satellite_point_item_api(point_id):
     except Exception as e:
         app.logger.error(f"Error in /api/satellite_points/<id>: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn:
-            conn.close()
+
 
 @app.route('/api/technologies', methods=['POST'])
 def add_technology_api():
-    conn = None
     tech_name = None  # Initialize tech_name
     parent_id_from_payload = None # Initialize for cleanup logic
     try:
@@ -703,8 +680,7 @@ def add_technology_api():
         except ValueError:
             return jsonify({"message": "Invalid group_id or parent_id format. Must be integers."}), 400
 
-        conn = get_db_connection(DATABASE_PATH)
-        cursor = conn.cursor()
+        cursor = g.db.cursor()
 
         # Check for duplicate: name, group_id, parent_id must be unique together
         query_check_duplicate = "SELECT id FROM technologies WHERE name = ? AND group_id = ?"
@@ -721,7 +697,7 @@ def add_technology_api():
             return jsonify({"message": f"Technology '{tech_name}' with the same parent under group ID {group_id} already exists."}), 409
 
         cursor.execute("INSERT INTO technologies (name, group_id, parent_id) VALUES (?, ?, ?)", (tech_name, group_id, parent_id_from_payload))
-        conn.commit()
+        g.db.commit()
         created_technology_id = cursor.lastrowid
 
         # Cleanup: If the new technology was assigned a parent, that parent technology's skills should be cleared.
@@ -729,7 +705,7 @@ def add_technology_api():
             cursor.execute("DELETE FROM technician_technology_skills WHERE technology_id = ?", (parent_id_from_payload,))
             if cursor.rowcount > 0:
                 app.logger.info(f"Cleaned skills for technology {parent_id_from_payload} as it's now parent to new tech {created_technology_id}.")
-                conn.commit() # Commit the deletion
+                g.db.commit() # Commit the deletion
 
         cursor.execute("SELECT t.id, t.name, t.group_id, t.parent_id, tg.name as group_name FROM technologies t LEFT JOIN technology_groups tg ON t.group_id = tg.id WHERE t.id = ?", (created_technology_id,))
         technology = cursor.fetchone()
@@ -737,22 +713,20 @@ def add_technology_api():
     except ValueError:
         return jsonify({"message": "Invalid group_id or parent_id format."}), 400
     except sqlite3.IntegrityError:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         return jsonify({"message": f"Technology '{tech_name}' already exists or invalid foreign key."}), 409
     except sqlite3.Error as e:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         app.logger.error(f"Database error adding technology: {e}")
         return jsonify({"message": f"Database error: {e}"}), 500
     except Exception as e:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         app.logger.error(f"Server error adding technology: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
+
 
 @app.route('/api/technologies/<int:technology_id>', methods=['PUT', 'DELETE'])
 def manage_technology_item_api(technology_id):
-    conn = None
     new_name = None # Initialize new_name here
     try:
         if request.method == 'PUT':
@@ -771,8 +745,7 @@ def manage_technology_item_api(technology_id):
             except ValueError:
                 return jsonify({"message": "Invalid group_id or parent_id format. Must be integers or null."}), 400
 
-            conn = get_db_connection(DATABASE_PATH)
-            cursor = conn.cursor()
+            cursor = g.db.cursor()
 
             cursor.execute("SELECT id FROM technologies WHERE id = ?", (technology_id,))
             if not cursor.fetchone():
@@ -815,7 +788,7 @@ def manage_technology_item_api(technology_id):
 
             cursor.execute("UPDATE technologies SET name = ?, group_id = ?, parent_id = ? WHERE id = ?",
                            (new_name, group_id, parent_id_from_payload, technology_id))
-            conn.commit()
+            g.db.commit()
 
             # --- Start of skill cleanup logic ---
             skills_cleaned_for_new_parent = False
@@ -834,7 +807,7 @@ def manage_technology_item_api(technology_id):
                     skills_cleaned_for_edited_tech = True
 
             if skills_cleaned_for_new_parent or skills_cleaned_for_edited_tech:
-                conn.commit()
+                g.db.commit()
             # --- End of skill cleanup logic ---
 
             cursor.execute("SELECT t.id, t.name, t.group_id, t.parent_id, tg.name as group_name FROM technologies t LEFT JOIN technology_groups tg ON t.group_id = tg.id WHERE t.id = ?", (technology_id,))
@@ -842,17 +815,16 @@ def manage_technology_item_api(technology_id):
             return jsonify(dict(updated_technology)), 200
 
         elif request.method == 'DELETE':
-            conn = get_db_connection(DATABASE_PATH)
-            cursor = conn.cursor()
+            cursor = g.db.cursor()
 
             cursor.execute("SELECT id FROM technologies WHERE id = ?", (technology_id,))
             if not cursor.fetchone():
                 return jsonify({"message": f"Technology ID {technology_id} not found."}), 404
 
             cursor.execute("UPDATE technologies SET parent_id = NULL WHERE parent_id = ?", (technology_id,))
-            conn.commit()
+            g.db.commit()
 
-            rows_deleted = delete_technology(conn, technology_id)
+            rows_deleted = delete_technology(g.db, technology_id)
 
             if rows_deleted > 0:
                 return jsonify({"message": f"Technology ID {technology_id} deleted. Child references updated."}), 200
@@ -863,31 +835,26 @@ def manage_technology_item_api(technology_id):
     except ValueError as ve:
         return jsonify({"message": f"Invalid data format: {str(ve)}"}), 400
     except sqlite3.IntegrityError:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         return jsonify({"message": f"Technology group name \'{new_name}\' already exists."}), 409
     except Exception as e:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         app.logger.error(f"Error processing technology {technology_id} ({request.method}): {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
+
 
 @app.route('/api/technology_groups', methods=['GET'])
 def get_technology_groups_api():
-    conn = None
     try:
-        conn = get_db_connection(DATABASE_PATH)
-        groups = get_all_technology_groups(conn)
+        groups = get_all_technology_groups(g.db)
         return jsonify(groups)
     except Exception as e:
         app.logger.error(f"Error fetching technology groups: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
+
 
 @app.route('/api/technology_groups', methods=['POST'])
 def add_technology_group_api():
-    conn = None
     group_name = None  # Initialize group_name
     try:
         data = request.get_json()
@@ -895,33 +862,29 @@ def add_technology_group_api():
         if not group_name:
             return jsonify({"message": "Technology group name is required."}), 400
 
-        conn = get_db_connection(DATABASE_PATH)
-        group_id = get_or_create_technology_group(conn, group_name)
-        cursor = conn.cursor()
+        group_id = get_or_create_technology_group(g.db, group_name)
+        cursor = g.db.cursor()
         cursor.execute("SELECT id, name FROM technology_groups WHERE id = ?", (group_id,))
         group = cursor.fetchone()
         return jsonify(dict(group)), 201
     except sqlite3.IntegrityError:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         return jsonify({"message": f"Technology group '{group_name}' already exists."}), 409
     except Exception as e:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         app.logger.error(f"Error adding technology group: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
+
 
 @app.route('/api/technology_groups/<int:group_id>', methods=['PUT'])
 def update_technology_group_api(group_id):
-    conn = None
     try:
         data = request.get_json()
         new_name = data.get('name', '').strip()
         if not new_name:
             return jsonify({"message": "New name for technology group is required."}), 400
 
-        conn = get_db_connection(DATABASE_PATH)
-        cursor = conn.cursor()
+        cursor = g.db.cursor()
         cursor.execute("SELECT id FROM technology_groups WHERE id = ?", (group_id,))
         if not cursor.fetchone():
             return jsonify({"message": f"Technology group ID {group_id} not found."}), 404
@@ -931,27 +894,24 @@ def update_technology_group_api(group_id):
             return jsonify({"message": f"Technology group name \'{new_name}\' already exists."}), 409
 
         cursor.execute("UPDATE technology_groups SET name = ? WHERE id = ?", (new_name, group_id))
-        conn.commit()
+        g.db.commit()
 
         cursor.execute("SELECT id, name FROM technology_groups WHERE id = ?", (group_id,))
         updated_group = cursor.fetchone()
         return jsonify(dict(updated_group)), 200
     except sqlite3.IntegrityError:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         return jsonify({"message": f"Technology group name \'{new_name}\' already exists."}), 409
     except Exception as e:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         app.logger.error(f"Error updating technology group {group_id}: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
+
 
 @app.route('/api/technology_groups/<int:group_id>', methods=['DELETE'])
 def delete_technology_group_api(group_id):
-    conn = None
     try:
-        conn = get_db_connection(DATABASE_PATH)
-        cursor = conn.cursor()
+        cursor = g.db.cursor()
 
         # Check if group exists
         cursor.execute("SELECT id FROM technology_groups WHERE id = ?", (group_id,))
@@ -966,10 +926,10 @@ def delete_technology_group_api(group_id):
             return jsonify({"message": f"Technology group ID {group_id} is in use and cannot be deleted."}), 400
             # To nullify instead:
             # cursor.execute("UPDATE technologies SET group_id = NULL WHERE group_id = ?", (group_id,))
-            # conn.commit()
+            # g.db.commit()
 
         cursor.execute("DELETE FROM technology_groups WHERE id = ?", (group_id,))
-        conn.commit()
+        g.db.commit()
 
         if cursor.rowcount > 0:
             return jsonify({"message": f"Technology group ID {group_id} deleted."}), 200
@@ -977,28 +937,23 @@ def delete_technology_group_api(group_id):
             # This case should ideally be caught by the initial check
             return jsonify({"message": f"Technology group ID {group_id} not found or already deleted."}), 404
     except Exception as e:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         app.logger.error(f"Error deleting technology group {group_id}: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
+
 
 @app.route('/api/technician_skills/<int:technician_id>', methods=['GET'])
 def get_technician_skills_api(technician_id):
-    conn = None
     try:
-        conn = get_db_connection(DATABASE_PATH)
-        skills = get_technician_skills_by_id(conn, technician_id)
+        skills = get_technician_skills_by_id(g.db, technician_id)
         return jsonify({"technician_id": technician_id, "skills": skills})
     except Exception as e:
         app.logger.error(f"Error fetching skills for technician {technician_id}: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
+
 
 @app.route('/api/technician_skill', methods=['POST'])
 def update_technician_skill_api():
-    conn = None
     try:
         data = request.get_json()
         technician_id = data.get('technician_id')
@@ -1012,24 +967,21 @@ def update_technician_skill_api():
         if not (0 <= skill_level <= 4):
             raise ValueError("Skill level must be between 0 and 4.")
 
-        conn = get_db_connection(DATABASE_PATH)
-        update_technician_skill(conn, technician_id, technology_id, skill_level)
+        update_technician_skill(g.db, technician_id, technology_id, skill_level)
         return jsonify({"message": "Technician skill updated.", "technician_id": technician_id, "technology_id": technology_id, "skill_level": skill_level}), 200
     except ValueError as ve:
         return jsonify({"message": str(ve)}), 400
     except sqlite3.IntegrityError:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         return jsonify({"message": "Database integrity error. Check IDs."}), 400
     except Exception as e:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         app.logger.error(f"Error updating skill: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
+
 
 @app.route('/api/tasks', methods=['POST'])
 def add_task_api():
-    conn = None
     try:
         data = request.get_json()
         task_name = data.get('name', '').strip()
@@ -1040,8 +992,7 @@ def add_task_api():
         if not isinstance(technology_ids, list) or not technology_ids: # Ensure it's a non-empty list
             return jsonify({"message": "At least one Technology ID is required for the task."}), 400
 
-        conn = get_db_connection(DATABASE_PATH)
-        cursor = conn.cursor()
+        cursor = g.db.cursor()
 
         # Validate all technology IDs
         for tech_id in technology_ids:
@@ -1053,13 +1004,13 @@ def add_task_api():
             except ValueError:
                 return jsonify({"message": f"Invalid Technology ID format: {tech_id}."}), 400
 
-        task_id = get_or_create_task(conn, task_name) # Creates task if not exists, no technology_id here
+        task_id = get_or_create_task(g.db, task_name) # Creates task if not exists, no technology_id here
 
         # Add required skills
         for tech_id in technology_ids:
-            add_required_skill_to_task(conn, task_id, int(tech_id))
+            add_required_skill_to_task(g.db, task_id, int(tech_id))
 
-        conn.commit()
+        g.db.commit()
 
         # Fetch the newly created task and its skills to return it
         cursor.execute("SELECT id, name FROM tasks WHERE id = ?", (task_id,))
@@ -1068,7 +1019,7 @@ def add_task_api():
              app.logger.error(f"Failed to fetch newly created task with ID {task_id}")
              return jsonify({"message": "Error retrieving created task."}), 500
 
-        required_skills_objects = get_required_skills_for_task(conn, task_id)
+        required_skills_objects = get_required_skills_for_task(g.db, task_id)
 
         response_data = dict(new_task_data)
         response_data['required_skills'] = required_skills_objects # Keep for detailed info
@@ -1077,19 +1028,17 @@ def add_task_api():
         return jsonify(response_data), 201
 
     except sqlite3.IntegrityError as e:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         app.logger.error(f"Database integrity error adding task: {e}")
         return jsonify({"message": f"Database integrity error: {e}"}), 409
     except Exception as e:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         app.logger.error(f"Server error adding task: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
+
 
 @app.route('/api/tasks/<int:task_id>', methods=['PUT'])
 def update_task_api(task_id):
-    conn = None
     try:
         data = request.get_json()
         new_name = data.get('name', '').strip()
@@ -1100,8 +1049,7 @@ def update_task_api(task_id):
         if not isinstance(new_technology_ids, list) or not new_technology_ids: # Ensure it's a non-empty list
             return jsonify({"message": "At least one Technology ID is required for the task."}), 400
 
-        conn = get_db_connection(DATABASE_PATH)
-        cursor = conn.cursor()
+        cursor = g.db.cursor()
 
         # Check if task exists
         cursor.execute("SELECT id FROM tasks WHERE id = ?", (task_id,))
@@ -1122,15 +1070,15 @@ def update_task_api(task_id):
         cursor.execute("UPDATE tasks SET name = ? WHERE id = ?", (new_name, task_id))
 
         # Update required skills
-        remove_all_required_skills_for_task(conn, task_id) # Remove old skills
+        remove_all_required_skills_for_task(g.db, task_id) # Remove old skills
         for tech_id in new_technology_ids:
-            add_required_skill_to_task(conn, task_id, int(tech_id)) # Add new skills
+            add_required_skill_to_task(g.db, task_id, int(tech_id)) # Add new skills
 
-        conn.commit()
+        g.db.commit()
 
         cursor.execute("SELECT id, name FROM tasks WHERE id = ?", (task_id,))
         updated_task_data = cursor.fetchone()
-        required_skills_objects = get_required_skills_for_task(conn, task_id)
+        required_skills_objects = get_required_skills_for_task(g.db, task_id)
 
         response_data = dict(updated_task_data)
         response_data['required_skills'] = required_skills_objects # Keep for detailed info
@@ -1138,18 +1086,15 @@ def update_task_api(task_id):
 
         return jsonify(response_data), 200
     except Exception as e:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         app.logger.error(f"Error updating task {task_id}: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
+
 
 @app.route('/api/tasks/<int:task_id>', methods=['DELETE'])
 def delete_task_api(task_id):
-    conn = None
     try:
-        conn = get_db_connection(DATABASE_PATH)
-        cursor = conn.cursor()
+        cursor = g.db.cursor()
 
         # Check if task exists
         cursor.execute("SELECT name FROM tasks WHERE id = ?", (task_id,))
@@ -1165,7 +1110,7 @@ def delete_task_api(task_id):
         # Delete the task itself
         cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
 
-        conn.commit()
+        g.db.commit()
 
         if cursor.rowcount > 0: # Checks if the task itself was deleted
             return jsonify({"message": f"Task '{task_name}' (ID: {task_id}) and its assignments deleted successfully."}), 200
@@ -1175,30 +1120,26 @@ def delete_task_api(task_id):
             return jsonify({"message": f"Task ID {task_id} found but could not be deleted."}), 500
 
     except sqlite3.Error as e: # Catch SQLite specific errors
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         app.logger.error(f"Database error deleting task {task_id}: {e}", exc_info=True)
         return jsonify({"message": f"Database error: {str(e)}"}), 500
     except Exception as e:
-        if conn: conn.rollback()
+        if g.db: g.db.rollback()
         app.logger.error(f"Server error deleting task {task_id}: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
 
 
 @app.route('/api/tasks_for_mapping', methods=['GET'])
 def get_tasks_for_mapping_api():
-    conn = None
     try:
-        conn = get_db_connection(DATABASE_PATH)
-        cursor = conn.cursor()
+        cursor = g.db.cursor()
         cursor.execute("SELECT id, name FROM tasks ORDER BY name") # Removed technology_id and technology_name from direct task query
         tasks_raw = cursor.fetchall()
 
         tasks_with_skills = []
         for task_row in tasks_raw:
             task_data = dict(task_row)
-            required_skills_objects = get_required_skills_for_task(conn, task_row['id'])
+            required_skills_objects = get_required_skills_for_task(g.db, task_row['id'])
             task_data['required_skills'] = required_skills_objects # Keep for detailed info
             task_data['technology_ids'] = [skill['technology_id'] for skill in required_skills_objects] # Add for frontend compatibility
             tasks_with_skills.append(task_data)
@@ -1207,8 +1148,7 @@ def get_tasks_for_mapping_api():
     except Exception as e:
         app.logger.error(f"Error fetching tasks for mapping: {e}", exc_info=True)
         return jsonify({"message": f"Server error: {str(e)}"}), 500
-    finally:
-        if conn: conn.close()
+
 
 @app.route('/api/tasks/<int:task_id>/technology', methods=['PUT'])
 def update_task_technology_api(task_id):

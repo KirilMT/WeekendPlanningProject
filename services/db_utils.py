@@ -38,23 +38,32 @@ def init_db(db_path, logger=None):
     ''')
     logger.info("Table 'lines' ensured.") if logger else None
 
-    # Create technicians table (or alter if exists)
-    cursor.execute("PRAGMA table_info(technicians)")
-    columns = [column[1] for column in cursor.fetchall()]
+    # --- Technicians Table Logic ---
+    # Check if the technicians table exists
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='technicians'")
+    table_exists = cursor.fetchone()
 
-    if 'sattelite_point' in columns or 'lines' in columns or 'satellite_point_id' not in columns:
-        logger.info("Old 'technicians' table structure found. Recreating with new schema.") if logger else None
-        # Need to handle data migration if this were a production system
-        # For development, we might drop and recreate or carefully alter
-        # Simplified approach: drop and recreate if old columns exist or new one is missing.
-        # This will lose existing technician data if not migrated.
-        # A more robust solution would use ALTER TABLE commands carefully.
+    recreate_table = False
+    existing_technicians_simple = []
 
-        # Try to preserve data (basic example, assumes id and name are key)
-        cursor.execute("SELECT id, name FROM technicians")
-        existing_technicians_simple = cursor.fetchall()
+    if table_exists:
+        # If it exists, check if it has the old schema that needs updating
+        cursor.execute("PRAGMA table_info(technicians)")
+        columns = [column[1] for column in cursor.fetchall()]
+        if 'sattelite_point' in columns or 'lines' in columns or 'satellite_point_id' not in columns:
+            recreate_table = True
+            logger.info("Old 'technicians' table structure found. Preparing to recreate with new schema.") if logger else None
+            # Back up existing data before dropping the table
+            cursor.execute("SELECT id, name FROM technicians")
+            existing_technicians_simple = cursor.fetchall()
+            cursor.execute("DROP TABLE technicians")
+            logger.info("Dropped old 'technicians' table.") if logger else None
+    else:
+        # If table doesn't exist, it needs to be created
+        recreate_table = True
 
-        cursor.execute("DROP TABLE IF EXISTS technicians")
+    if recreate_table:
+        # Create the table with the new, correct schema
         cursor.execute('''
             CREATE TABLE technicians (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,22 +72,15 @@ def init_db(db_path, logger=None):
                 FOREIGN KEY(satellite_point_id) REFERENCES satellite_points(id)
             )
         ''')
-        logger.info("Table 'technicians' recreated with new schema (satellite_point_id).") if logger else None
+        logger.info("Table 'technicians' created with new schema (satellite_point_id).") if logger else None
 
-        # Restore basic data if any was backed up (without old satellite/lines info)
+        # Restore basic data if any was backed up from an old table version
         if existing_technicians_simple:
             cursor.executemany("INSERT INTO technicians (id, name) VALUES (?, ?)", existing_technicians_simple)
             logger.info(f"Restored {len(existing_technicians_simple)} technicians (name/id only) to new table structure.") if logger else None
     else:
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS technicians (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                satellite_point_id INTEGER,
-                FOREIGN KEY(satellite_point_id) REFERENCES satellite_points(id)
-            )
-        ''')
-        logger.info("Table 'technicians' (new schema) ensured.") if logger else None
+        logger.info("Table 'technicians' already up-to-date.") if logger else None
+
 
     # Technologies Table
     cursor.execute('''
