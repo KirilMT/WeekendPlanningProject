@@ -50,9 +50,12 @@ def create_app():
         if db is not None:
             db.close()
 
-    with app.app_context():
-        init_db(DATABASE_PATH, app.logger)
-        load_app_config(DATABASE_PATH, app.logger)
+    # Only initialize database and config if we're not in the reloader process
+    # This prevents double initialization when Flask's auto-reloader is enabled
+    if not os.environ.get('WERKZEUG_RUN_MAIN'):
+        with app.app_context():
+            init_db(DATABASE_PATH, app.logger)
+            load_app_config(DATABASE_PATH, app.logger)
 
     return app
 
