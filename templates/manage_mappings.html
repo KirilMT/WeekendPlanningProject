@@ -2,206 +2,370 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Manage Mappings</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Skill-Based Mappings Management - Weekend Planning</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/manage_mappings.css') }}">
 </head>
 <body>
 <div class="container">
-    <div class="header-controls">
-        <h1>Manage Mappings</h1>
-        <button id="backToDashboardBtn" class="button-link">Back to Dashboard Upload</button>
-    </div>
-
-    <!-- Manage Satellite Points and Lines Section -->
-    <div id="manageSatelliteLinesSection" class="section">
-        <div class="section-header">
-            <h2>Manage Satellite Points & Lines</h2>
-            <span class="toggle-icon">+</span>
+    <header class="page-header">
+        <div class="header-content">
+            <h1>Skill-Based Mappings Management</h1>
+            <p class="header-subtitle">Configure technician skills, task requirements, and organizational structure</p>
         </div>
-        <div class="section-content collapsed">
-            <!-- Satellite Points Management -->
-            <h4>Satellite Points</h4>
-            <div class="form-inline-group" style="margin-bottom: 15px;"> <!-- Moved Up & added margin -->
-                <input type="text" id="newSatellitePointName" placeholder="New satellite point name" aria-label="New satellite point name">
-                <button id="addSatellitePointBtn" class="button-add">Add Satellite Point</button> <!-- Added class for styling -->
-            </div>
-            <div id="satellitePointListContainer" style="max-height: 200px; overflow-y: auto; margin-bottom: 10px;">
-                <!-- Satellite Points will be listed here -->
-            </div>
+        <nav class="header-nav">
+            <button id="backToDashboardBtn" class="btn btn-outline">
+                <span class="btn-icon">←</span>
+                Back to Dashboard
+            </button>
+        </nav>
+    </header>
 
-            <hr style="margin: 20px 0;">
-
-            <!-- Lines Management -->
-            <h4>Lines</h4>
-            <div class="form-inline-group" style="margin-bottom: 15px;"> <!-- Moved Up & added margin -->
-                <input type="text" id="newLineName" placeholder="New line name" aria-label="New line name">
-                <select id="newLineSatellitePointSelect" style="margin-left:10px;" title="Assign to Satellite Point" aria-label="Assign to Satellite Point">
-                    <option value="">Select Satellite Point</option>
-                    <!-- Satellite Point options will be populated by JS -->
-                </select>
-                <button id="addLineBtn" style="margin-left:10px;" class="button-add">Add Line</button> <!-- Added class for styling -->
-            </div>
-            <div id="newLineError" class="error-message" style="display:none; color: red; margin-top: 5px;"></div> <!-- Added this line -->
-            <div id="lineListContainer" style="max-height: 200px; overflow-y: auto; margin-bottom: 10px;">
-                <!-- Lines will be listed here -->
-            </div>
-        </div>
-    </div>
-    <div class="section-divider"></div>
-
-    <!-- Manage Technologies & Groups Section (Hierarchical) -->
-    <div id="manageTechnologiesSection" class="section">
-        <div class="section-header">
-            <h2>Manage Technologies & Groups</h2>
-            <span class="toggle-icon">+</span>
-        </div>
-        <div class="section-content collapsed">
-            <h4>Technology Groups</h4>
-            <div class="form-inline-group" style="margin-bottom: 15px;"> <!-- Moved Up & added margin -->
-                <input type="text" id="newTechnologyGroupName" placeholder="New group name"
-                       aria-label="New technology group name">
-                <button id="addTechnologyGroupBtn" class="button-add">Add Group</button> <!-- Added class for styling -->
-            </div>
-            <div id="technologyGroupListContainer" style="max-height: 150px; overflow-y: auto; margin-bottom: 10px;">
-                <!-- Technology Groups will be listed here -->
-            </div>
-
-            <hr style="margin: 20px 0;">
-
-            <h4>Technologies (Hierarchical)</h4>
-            <div class="form-inline-group" style="margin-bottom: 15px;"> <!-- Moved Up & added margin -->
-                <input type="text" id="newTechnologyName" placeholder="New technology name"
-                       aria-label="New technology name">
-                <select id="newTechnologyGroupSelect" style="margin-left:10px; flex-grow:0.5;" title="Assign to Group"
-                        aria-label="Assign to Group">
-                    <option value="">No Group</option>
-                </select>
-                <select id="newTechnologyParentSelect" style="margin-left:10px; flex-grow:0.5;"
-                        title="Assign Parent Technology" aria-label="Assign Parent Technology">
-                    <option value="">No Parent (Top Level)</option>
-                </select>
-                <button id="addTechnologyBtn" style="margin-left:10px;" class="button-add">Add Technology</button> <!-- Added class for styling -->
-            </div>
-            <div id="technologyListContainer" style="max-height: 300px; overflow-y: auto; margin-bottom: 10px;">
-                <!-- Technologies will be listed here, grouped and hierarchical -->
-            </div>
-        </div>
-    </div>
-    <div class="section-divider"></div>
-
-    <!-- Manage Task-Technology Mappings Section -->
-    <div id="manageTaskTechnologySection" class="section">
-        <div class="section-header">
-            <h2>Manage Task-Technology Mappings</h2>
-            <span class="toggle-icon">+</span>
-        </div>
-        <div class="section-content collapsed">
-            <!-- New Task Creation Area -->
-            <h4>Add New Task</h4>
-            <div class="form-inline-group" id="addNewTaskFormContainer">
-                <input type="text" id="newTaskNameForMapping" placeholder="New task name" aria-label="New task name for mapping" style="flex-grow: 1.5;">
-                <div style="flex-grow:1; display: flex; flex-direction: column;">
-                    <input type="text" id="newTaskTechnologySearch" class="select-search-input" placeholder="Search technologies...">
-                    <select id="newTaskTechnologySelectForMapping" style="width: 100%;" class="task-technology-select" title="Assign Technologies to New Task (Required, Ctrl+Click for multiple)" aria-label="Assign Technologies to New Task" multiple>
-                        <!-- Options will be populated by JS -->
-                    </select>
+    <main class="main-content">
+        <!-- Manage Satellite Points and Lines Section -->
+        <section id="manageSatelliteLinesSection" class="management-section">
+            <header class="section-header" role="button" tabindex="0" aria-expanded="false">
+                <div class="section-title">
+                    <h2>📍 Satellite Points & Production Lines</h2>
+                    <p class="section-description">Manage organizational locations and production line assignments</p>
                 </div>
-                <button id="addNewTaskForMappingBtn">Add Task</button>
-            </div>
-            <hr style="margin: 20px 0;">
-
-            <!-- Existing Task List Area -->
-            <h4>Existing Tasks</h4>
-            <p>View tasks and their assigned technologies. Click 'Edit' to modify a task's name or technology, or 'Delete' to remove it.
-            Changes to technology assignments via the select lists in view mode are saved immediately if no explicit 'Edit' mode is active for that row.
-            </p>
-            <div id="taskTechnologyMappingListContainer" style="max-height: 400px; overflow-y: auto; margin-top: 10px;">
-                <!-- Task-technology mappings will be listed here -->
-            </div>
-        </div>
-    </div>
-    <div class="section-divider"></div>
-
-    <!-- Manage Technician Details Section -->
-    <div id="manageTechnicianDetailsSection" class="section">
-        <div class="section-header">
-            <h3>Technician Details</h3>
-            <span class="toggle-icon">+</span>
-        </div>
-        <div class="section-content collapsed">
-            <div class="form-inline-group" style="margin-bottom: 15px;"> <!-- Container for Add button -->
-                 <button id="addNewTechnicianBtn" class="button-add">Add New Technician</button>
-            </div>
-
-            <!-- New Technician Form - Initially Hidden -->
-            <div id="addNewTechnicianFormContainer" style="display:none; border: 1px solid #ccc; padding: 15px; margin-bottom: 15px; background-color: #f9f9f9;">
-                <h4>Add New Technician Details</h4>
-                <div class="form-group">
-                    <label for="newTechnicianNameInput">Technician Name:</label>
-                    <input type="text" id="newTechnicianNameInput" placeholder="Enter technician name" aria-label="Technician Name">
-                </div>
-                <div class="form-group">
-                    <label for="newTechnicianSatellitePointSelect">Satellite Point:</label>
-                    <select id="newTechnicianSatellitePointSelect" aria-label="Select Satellite Point" disabled>
-                        <option value="">Select Satellite Point</option>
-                        <!-- Options will be populated by JS -->
-                    </select>
-                </div>
-                <div class="form-actions" style="margin-top: 10px;">
-                    <button id="saveNewTechnicianBtn" class="button-save">Save</button>
-                    <button id="cancelNewTechnicianBtn" class="button-cancel">Cancel</button>
-                </div>
-                 <div id="newTechnicianError" class="error-message" style="display:none; color: red; margin-top: 10px;"></div>
-            </div>
-            <!-- End New Technician Form -->
-
-            <div class="form-inline-group"> <!-- Container for select and its action buttons -->
-                <label for="technicianSelect" style="margin-right: 10px; white-space: nowrap;">Select Technician:</label>
-                <select id="technicianSelect" aria-label="Select Technician" style="flex-grow: 1; margin-right:10px;"></select>
-                <button id="editTechnicianNameBtn" type="button" class="edit-btn" style="margin-left: 0px; display:none;">Edit Name</button> <!-- Added class, removed margin-left, initially hidden -->
-                <button id="deleteTechnicianBtn" type="button" class="delete-btn" style="display:none;">Delete Technician</button> <!-- Added class, initially hidden -->
-            </div>
-
-            <div id="technicianDetails" style="display:none; margin-top:15px;">
-                <h3 id="currentTechNameDisplay"></h3>
-                <div>
-                    <label>Satellite Point:</label> <!-- Removed 'for' attribute -->
-                    <span id="techSatellitePointNameDisplay" class="editable-field-display"></span>
-                    <button id="editTechSatellitePointBtn" type="button" class="edit-button" style="margin-left: 8px;">Edit</button>
-                    <select id="techSatellitePointSelect" class="editable-field-input" style="display:none; margin-left: 5px;">
-                        <!-- Options will be populated by JS -->
-                    </select>
-                    <!-- A save/cancel for this specific edit could be added here if desired, -->
-                    <!-- but for now, we'll rely on the global 'Save All Changes' button -->
+                <span class="toggle-icon" aria-label="Toggle section">▼</span>
+            </header>
+            <div class="section-content" id="satelliteLinesContent">
+                <!-- Satellite Points Management -->
+                <div class="subsection">
+                    <h3>Satellite Points</h3>
+                    <form class="inline-form" id="satellitePointForm">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div class="form-group">
+                            <input type="text" id="newSatellitePointName" name="satellitePointName"
+                                   placeholder="New satellite point name"
+                                   aria-label="New satellite point name"
+                                   class="form-control" maxlength="50" required>
+                        </div>
+                        <button type="submit" id="addSatellitePointBtn" class="btn btn-primary">
+                            <span class="btn-icon">+</span>
+                            Add Point
+                        </button>
+                    </form>
+                    <div id="satellitePointListContainer" class="list-container">
+                        <!-- Satellite Points will be listed here -->
+                    </div>
                 </div>
 
-                <h4>Tasks (Skill-Based View)</h4>
-                <div id="taskList" class="task-list-container">
-                    <!-- Tasks will be dynamically populated here -->
-                </div>
+                <hr class="section-divider">
 
-                <h4>Technician Skills</h4>
-                <div id="technicianSkillsListContainer" class="skills-list-container">
-                    <!-- Technician skills will be populated here -->
-                </div>
-
-                <div class="actions-container">
-                    <!-- <button onclick="saveAllChanges()" id="saveTechnicianDataBtn" class="action-button">Save Technician Data</button> --> <!-- Removed -->
+                <!-- Lines Management -->
+                <div class="subsection">
+                    <h3>Production Lines</h3>
+                    <form class="inline-form" id="productionLineForm">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div class="form-group">
+                            <input type="text" id="newLineName" name="lineName"
+                                   placeholder="New line name"
+                                   aria-label="New line name"
+                                   class="form-control" maxlength="30" required>
+                        </div>
+                        <div class="form-group">
+                            <select id="newLineSatellitePointSelect" name="satellitePointId"
+                                    class="form-control" required
+                                    aria-label="Assign to Satellite Point">
+                                <option value="">Select Satellite Point</option>
+                                <!-- Options populated by JavaScript -->
+                            </select>
+                        </div>
+                        <button type="submit" id="addLineBtn" class="btn btn-primary">
+                            <span class="btn-icon">+</span>
+                            Add Line
+                        </button>
+                    </form>
+                    <div id="newLineError" class="error-message" role="alert"></div>
+                    <div id="lineListContainer" class="list-container">
+                        <!-- Lines will be listed here -->
+                    </div>
                 </div>
             </div>
-        </div>
-    </div>
+        </section>
 
-    <button id="saveChangesBtn">Save All Changes</button>
-    <div id="statusMessage"></div>
+        <!-- Manage Technologies & Groups Section -->
+        <section id="manageTechnologiesSection" class="management-section">
+            <header class="section-header" role="button" tabindex="0" aria-expanded="false">
+                <div class="section-title">
+                    <h2>🔧 Skills & Technologies</h2>
+                    <p class="section-description">Define skill hierarchies and technology groups for task assignments</p>
+                </div>
+                <span class="toggle-icon" aria-label="Toggle section">▼</span>
+            </header>
+            <div class="section-content" id="technologiesContent">
+                <!-- Technology Groups -->
+                <div class="subsection">
+                    <h3>Technology Groups</h3>
+                    <form class="inline-form" id="technologyGroupForm">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div class="form-group">
+                            <input type="text" id="newTechnologyGroupName" name="groupName"
+                                   placeholder="New group name"
+                                   aria-label="New technology group name"
+                                   class="form-control" maxlength="50" required>
+                        </div>
+                        <button type="submit" id="addTechnologyGroupBtn" class="btn btn-primary">
+                            <span class="btn-icon">+</span>
+                            Add Group
+                        </button>
+                    </form>
+                    <div id="technologyGroupListContainer" class="list-container">
+                        <!-- Technology Groups will be listed here -->
+                    </div>
+                </div>
+
+                <hr class="section-divider">
+
+                <!-- Technologies (Hierarchical) -->
+                <div class="subsection">
+                    <h3>Technologies & Skills (Hierarchical)</h3>
+                    <form class="inline-form multi-field" id="technologyForm">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div class="form-group">
+                            <input type="text" id="newTechnologyName" name="technologyName"
+                                   placeholder="New technology/skill name"
+                                   aria-label="New technology name"
+                                   class="form-control" maxlength="50" required>
+                        </div>
+                        <div class="form-group">
+                            <select id="newTechnologyGroupSelect" name="groupId"
+                                    class="form-control"
+                                    aria-label="Assign to Group">
+                                <option value="">No Group</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <select id="newTechnologyParentSelect" name="parentId"
+                                    class="form-control"
+                                    aria-label="Assign Parent Technology">
+                                <option value="">No Parent (Top Level)</option>
+                            </select>
+                        </div>
+                        <button type="submit" id="addTechnologyBtn" class="btn btn-primary">
+                            <span class="btn-icon">+</span>
+                            Add Technology
+                        </button>
+                    </form>
+                    <div id="technologyListContainer" class="list-container hierarchical">
+                        <!-- Technologies will be listed here, grouped and hierarchical -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Manage Task-Technology Mappings Section -->
+        <section id="manageTaskTechnologySection" class="management-section">
+            <header class="section-header" role="button" tabindex="0" aria-expanded="false">
+                <div class="section-title">
+                    <h2>⚙️ Task-Skill Requirements</h2>
+                    <p class="section-description">Define which skills are required for each task type</p>
+                </div>
+                <span class="toggle-icon" aria-label="Toggle section">▼</span>
+            </header>
+            <div class="section-content" id="taskTechnologyContent">
+                <!-- New Task Creation -->
+                <div class="subsection">
+                    <h3>Create New Task Type</h3>
+                    <form class="inline-form multi-field" id="newTaskForm">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div class="form-group flex-grow-2">
+                            <input type="text" id="newTaskNameForMapping" name="taskName"
+                                   placeholder="New task name"
+                                   aria-label="New task name for mapping"
+                                   class="form-control" maxlength="100" required>
+                        </div>
+                        <div class="form-group skill-selection">
+                            <div class="search-wrapper">
+                                <input type="text" id="newTaskTechnologySearch"
+                                       class="form-control search-input"
+                                       placeholder="Search skills/technologies..."
+                                       aria-label="Search technologies">
+                            </div>
+                            <select id="newTaskTechnologySelectForMapping"
+                                    name="requiredSkills"
+                                    class="form-control skill-select"
+                                    multiple required
+                                    aria-label="Select required skills for task"
+                                    title="Hold Ctrl/Cmd to select multiple skills">
+                                <!-- Options populated by JavaScript -->
+                            </select>
+                            <small class="help-text">Hold Ctrl/Cmd to select multiple required skills</small>
+                        </div>
+                        <button type="submit" id="addNewTaskForMappingBtn" class="btn btn-primary">
+                            <span class="btn-icon">+</span>
+                            Create Task
+                        </button>
+                    </form>
+                </div>
+
+                <hr class="section-divider">
+
+                <!-- Existing Task List -->
+                <div class="subsection">
+                    <h3>Existing Task Types & Required Skills</h3>
+                    <div class="section-help">
+                        <p>Manage existing task types and their skill requirements. Click <strong>Edit</strong> to modify or <strong>Delete</strong> to remove a task type.</p>
+                    </div>
+                    <div id="taskTechnologyMappingListContainer" class="list-container task-mappings">
+                        <!-- Task-technology mappings will be listed here -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Manage Technician Details Section -->
+        <section id="manageTechnicianDetailsSection" class="management-section">
+            <header class="section-header" role="button" tabindex="0" aria-expanded="false">
+                <div class="section-title">
+                    <h2>👨‍🔧 Technician Skills & Details</h2>
+                    <p class="section-description">Manage individual technician profiles and skill levels (0-4 scale)</p>
+                </div>
+                <span class="toggle-icon" aria-label="Toggle section">▼</span>
+            </header>
+            <div class="section-content" id="technicianDetailsContent">
+                <!-- Add New Technician -->
+                <div class="subsection">
+                    <div class="inline-form">
+                        <button id="addNewTechnicianBtn" class="btn btn-success">
+                            <span class="btn-icon">+</span>
+                            Add New Technician
+                        </button>
+                    </div>
+
+                    <!-- New Technician Form - Initially Hidden -->
+                    <form id="addNewTechnicianFormContainer" class="new-item-form" style="display:none;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <h4>Add New Technician</h4>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="newTechnicianNameInput" class="required">Technician Name</label>
+                                <input type="text" id="newTechnicianNameInput" name="technicianName"
+                                       placeholder="Enter technician name"
+                                       aria-label="Technician Name"
+                                       class="form-control" maxlength="50" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="newTechnicianSatellitePointSelect">Satellite Point</label>
+                                <select id="newTechnicianSatellitePointSelect" name="satellitePointId"
+                                        class="form-control"
+                                        aria-label="Select Satellite Point">
+                                    <option value="">Select Satellite Point</option>
+                                    <!-- Options populated by JavaScript -->
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" id="saveNewTechnicianBtn" class="btn btn-success">
+                                <span class="btn-icon">💾</span>
+                                Save Technician
+                            </button>
+                            <button type="button" id="cancelNewTechnicianBtn" class="btn btn-secondary">Cancel</button>
+                        </div>
+                        <div id="newTechnicianError" class="error-message" role="alert"></div>
+                    </form>
+                </div>
+
+                <hr class="section-divider">
+
+                <!-- Technician Selection & Details -->
+                <div class="subsection">
+                    <div class="technician-selector">
+                        <div class="form-group">
+                            <label for="technicianSelect">Select Technician to Manage</label>
+                            <div class="selector-controls">
+                                <select id="technicianSelect" class="form-control" aria-label="Select Technician">
+                                    <option value="">Choose a technician...</option>
+                                </select>
+                                <div class="action-buttons">
+                                    <button id="editTechnicianNameBtn" type="button" class="btn btn-warning btn-sm" style="display:none;">
+                                        <span class="btn-icon">✏️</span>
+                                        Edit Name
+                                    </button>
+                                    <button id="deleteTechnicianBtn" type="button" class="btn btn-danger btn-sm" style="display:none;">
+                                        <span class="btn-icon">🗑️</span>
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="technicianDetails" class="technician-details" style="display:none;">
+                        <div class="technician-header">
+                            <h3 id="currentTechNameDisplay" class="technician-name"></h3>
+                            <div class="technician-info">
+                                <label>Satellite Point:</label>
+                                <span id="techSatellitePointNameDisplay" class="info-value"></span>
+                                <button id="editTechSatellitePointBtn" type="button" class="btn btn-sm btn-outline">
+                                    <span class="btn-icon">✏️</span>
+                                    Edit
+                                </button>
+                                <select id="techSatellitePointSelect" class="form-control" style="display:none;">
+                                    <!-- Options populated by JavaScript -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Skills Management -->
+                        <div class="skills-section">
+                            <h4>🎯 Skill Levels (0-4 Scale)</h4>
+                            <div class="skill-level-legend">
+                                <span class="legend-item"><span class="level-badge level-0">0</span> No Experience</span>
+                                <span class="legend-item"><span class="level-badge level-1">1</span> Beginner</span>
+                                <span class="legend-item"><span class="level-badge level-2">2</span> Intermediate</span>
+                                <span class="legend-item"><span class="level-badge level-3">3</span> Advanced</span>
+                                <span class="legend-item"><span class="level-badge level-4">4</span> Expert</span>
+                            </div>
+                            <div id="technicianSkillsListContainer" class="skills-grid">
+                                <!-- Technician skills will be populated here -->
+                            </div>
+                        </div>
+
+                        <!-- Task Assignments Preview -->
+                        <div class="assignments-section">
+                            <h4>🔄 Potential Task Assignments</h4>
+                            <div id="taskList" class="task-assignments-preview">
+                                <!-- Tasks will be dynamically populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Global Actions -->
+    <footer class="page-footer">
+        <div class="global-actions">
+            <button id="saveChangesBtn" class="btn btn-primary btn-lg">
+                <span class="btn-icon">💾</span>
+                Save All Changes
+            </button>
+            <div id="statusMessage" class="status-message" role="status" aria-live="polite"></div>
+        </div>
+    </footer>
 </div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="loading-overlay" style="display: none;">
+    <div class="loading-spinner">
+        <div class="spinner"></div>
+        <p>Processing changes...</p>
+    </div>
+</div>
+
 <script src="{{ url_for('static', filename='js/manage_mappings_globals.js') }}"></script>
 <script src="{{ url_for('static', filename='js/manage_mappings_utils.js') }}"></script>
 <script src="{{ url_for('static', filename='js/manage_mappings_satellite_lines.js') }}"></script>
 <script src="{{ url_for('static', filename='js/manage_mappings_technologies.js') }}"></script>
-<script src="{{ url_for('static', filename='js/manage_mappings_technician_skills.js') }}"></script>
 <script src="{{ url_for('static', filename='js/manage_mappings_task_technology.js') }}"></script>
 <script src="{{ url_for('static', filename='js/manage_mappings_technician_data.js') }}"></script>
+<script src="{{ url_for('static', filename='js/manage_mappings_technician_skills.js') }}"></script>
 <script src="{{ url_for('static', filename='js/manage_mappings_main.js') }}"></script>
 </body>
 </html>

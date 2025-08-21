@@ -2,112 +2,205 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Upload Excel File</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Weekend Planning - Upload & Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
 </head>
 <body>
     <div class="container">
-        <h1>Upload Excel File to Generate Dashboards</h1>
-        <form id="uploadForm">
-            <input type="file" id="excelFile" name="excelFile" accept=".xlsx, .xls, .xlsb" required>
-            <button type="submit">Generate Dashboards</button>
-        </form>
-        <div id="message"></div>
-        <button id="openDashboardButton" onclick="window.location.href='/output/technician_dashboard.html'">Open Technician Dashboard</button>
+        <header>
+            <h1>Weekend Planning System</h1>
+            <p class="subtitle">Upload Excel file to generate skill-based task assignments</p>
+        </header>
+
+        <main>
+            <section class="upload-section">
+                <form id="uploadForm" method="post" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="excelFile" name="excelFile"
+                               accept=".xlsx,.xls,.xlsb" required
+                               aria-describedby="file-help">
+                        <label for="excelFile" class="file-label">
+                            <span class="file-icon">📁</span>
+                            Choose Excel File
+                        </label>
+                        <small id="file-help" class="help-text">
+                            Supported formats: .xlsx, .xls, .xlsb (Max 16MB)
+                        </small>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <span class="btn-icon">⚡</span>
+                        Generate Skill-Based Assignments
+                    </button>
+                </form>
+
+                <div id="message" class="message-container" role="alert" aria-live="polite"></div>
+
+                <button id="openDashboardButton" class="btn btn-secondary" style="display: none;">
+                    <span class="btn-icon">📊</span>
+                    Open Technician Dashboard
+                </button>
+            </section>
+
+            <nav class="action-nav">
+                <button id="manageMappingsBtn" class="btn btn-outline"
+                        onclick="window.location.href='/manage_mappings_ui'">
+                    <span class="btn-icon">⚙️</span>
+                    Manage Skills & Mappings
+                </button>
+            </nav>
+        </main>
     </div>
 
-    <!-- Button to Manage Technician Mappings -->
-    <button id="manageMappingsBtn" onclick="window.location.href='/manage_mappings_ui'">Manage Mappings</button>
-
     <!-- Absent Technicians Modal -->
-    <div id="absentModal" class="modal">
+    <div id="absentModal" class="modal" role="dialog" aria-labelledby="absent-modal-title" aria-hidden="true">
         <div class="modal-content">
-            <h2>Select Technicians Not Available</h2>
-            <p>Please click on the technicians who are not available today:</p>
-            <div id="technicianGroups"></div>
-            <button id="confirmAbsent">Submit</button>
+            <header class="modal-header">
+                <h2 id="absent-modal-title">Select Unavailable Technicians</h2>
+                <button class="modal-close" aria-label="Close modal">&times;</button>
+            </header>
+            <div class="modal-body">
+                <p>Click on technicians who are not available for weekend assignments:</p>
+                <div id="technicianGroups" class="technician-groups"></div>
+            </div>
+            <footer class="modal-footer">
+                <button id="confirmAbsent" class="btn btn-success">Confirm Selection</button>
+                <button class="btn btn-secondary modal-cancel">Cancel</button>
+            </footer>
         </div>
     </div>
 
-    <!-- Rep Task Technician Selection Modal -->
-    <div id="repModal" class="modal">
+    <!-- Skill-Based Task Assignment Modal -->
+    <div id="taskAssignmentModal" class="modal" role="dialog" aria-labelledby="task-modal-title" aria-hidden="true">
         <div class="modal-content">
-            <h2>Select Technicians for Rep Task</h2>
-            <div id="ticketInfo"></div>
-            <label for="repSearch"></label><input type="text" id="repSearch" placeholder="Search for technicians...">
-            <div class="technician-checkboxes" id="repTechnicians"></div>
-            <!-- MODIFIED: Wrap buttons in a div and add the new "Add Additional Task" button -->
-            <div class="rep-modal-buttons">
-                <button id="addAdditionalTask">Add Additional Task</button>
-                <div>
-                    <button id="validateRep">Validate Selection</button>
-                    <button id="skipRep">Skip Task</button>
+            <header class="modal-header">
+                <h2 id="task-modal-title">Skill-Based Task Assignment</h2>
+                <button class="modal-close" aria-label="Close modal">&times;</button>
+            </header>
+            <div class="modal-body">
+                <div id="taskInfo" class="task-info"></div>
+                <div class="search-wrapper">
+                    <input type="text" id="technicianSearch"
+                           placeholder="Search technicians by name or skills..."
+                           aria-label="Search technicians">
+                </div>
+                <div id="requiredSkills" class="required-skills">
+                    <h3>Required Skills:</h3>
+                    <div class="skills-list"></div>
+                </div>
+                <div id="availableTechnicians" class="technician-selection">
+                    <h3>Available Technicians (by skill level):</h3>
+                    <div class="technician-checkboxes"></div>
                 </div>
             </div>
+            <footer class="modal-footer">
+                <button id="addAdditionalTask" class="btn btn-warning">Add Custom Task</button>
+                <div class="button-group">
+                    <button id="validateAssignment" class="btn btn-success">Validate Assignment</button>
+                    <button id="skipTask" class="btn btn-danger">Skip Task</button>
+                </div>
+            </footer>
         </div>
     </div>
 
     <!-- Additional Task Creation Modal -->
-    <div id="additionalTaskModal" class="modal">
+    <div id="additionalTaskModal" class="modal" role="dialog" aria-labelledby="additional-task-title" aria-hidden="true">
         <div class="modal-content">
-            <h2>Create Additional Task</h2>
-            <form id="additionalTaskForm">
+            <header class="modal-header">
+                <h2 id="additional-task-title">Create Custom Task</h2>
+                <button class="modal-close" aria-label="Close modal">&times;</button>
+            </header>
+            <form id="additionalTaskForm" class="modal-body">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
                 <div class="form-group">
-                    <label for="taskName">Task Name *</label>
-                    <input type="text" id="taskName" class="form-control" required>
-                    <div class="invalid-feedback">Please provide a task name.</div>
+                    <label for="taskName" class="required">Task Name</label>
+                    <input type="text" id="taskName" name="taskName"
+                           class="form-control" required maxlength="100"
+                           aria-describedby="task-name-help">
+                    <small id="task-name-help" class="help-text">Enter a descriptive task name</small>
+                    <div class="invalid-feedback">Please provide a task name (max 100 characters).</div>
                 </div>
+
+                <div class="form-group">
+                    <label for="requiredSkillsSelect">Required Skills</label>
+                    <select id="requiredSkillsSelect" name="requiredSkills"
+                            class="form-control" multiple
+                            aria-describedby="skills-help">
+                        <!-- Populated by JavaScript -->
+                    </select>
+                    <small id="skills-help" class="help-text">Select all skills required for this task</small>
+                </div>
+
                 <div class="form-group">
                     <label for="taskLines">Production Lines</label>
-                    <input type="text" id="taskLines" class="form-control" placeholder="E.g. 1, 2, 3">
-                    <small>Enter line numbers separated by commas</small>
+                    <input type="text" id="taskLines" name="taskLines"
+                           class="form-control" pattern="[0-9,\s]+"
+                           placeholder="1, 2, 3" maxlength="50"
+                           aria-describedby="lines-help">
+                    <small id="lines-help" class="help-text">Enter line numbers separated by commas</small>
                 </div>
+
                 <div class="form-group">
                     <label for="taskTicketMO">Ticket/MO Reference</label>
-                    <input type="text" id="taskTicketMO" class="form-control">
+                    <input type="text" id="taskTicketMO" name="taskTicketMO"
+                           class="form-control" maxlength="50">
                 </div>
+
                 <div class="form-group">
-                    <label for="taskTicketURL">Link/URL</label>
-                    <input type="url" id="taskTicketURL" class="form-control" placeholder="https://...">
+                    <label for="taskTicketURL">Reference URL</label>
+                    <input type="url" id="taskTicketURL" name="taskTicketURL"
+                           class="form-control" placeholder="https://..."
+                           maxlength="200">
                 </div>
-                <div class="form-group">
-                    <label for="taskPriority">Priority</label>
-                    <select id="taskPriority" class="form-control">
-                        <option value="C">C - Low</option>
-                        <option value="B">B - Medium</option>
-                        <option value="A">A - High</option>
-                    </select>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="taskDuration" class="required">Duration (minutes)</label>
+                        <input type="number" id="taskDuration" name="taskDuration"
+                               class="form-control" min="1" max="1440" required
+                               aria-describedby="duration-help">
+                        <small id="duration-help" class="help-text">Estimated task duration</small>
+                        <div class="invalid-feedback">Duration must be between 1-1440 minutes.</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="taskTechnicians" class="required">Technicians Required</label>
+                        <input type="number" id="taskTechnicians" name="taskTechnicians"
+                               class="form-control" min="1" max="10" value="1" required>
+                        <div class="invalid-feedback">Must require 1-10 technicians.</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="taskQuantity" class="required">Quantity</label>
+                        <input type="number" id="taskQuantity" name="taskQuantity"
+                               class="form-control" min="1" max="100" value="1" required>
+                        <div class="invalid-feedback">Quantity must be between 1-100.</div>
+                    </div>
                 </div>
+
                 <div class="form-group">
-                    <label for="taskDuration">Planned Duration (minutes) *</label>
-                    <input type="number" id="taskDuration" class="form-control" min="0" required>
-                    <div class="invalid-feedback">Please provide a valid duration (0 or greater).</div>
-                </div>
-                <div class="form-group">
-                    <label for="taskTechnicians">Technicians Required *</label>
-                    <input type="number" id="taskTechnicians" class="form-control" min="0" value="1" required>
-                    <div class="invalid-feedback">Please provide a valid number (0 or greater).</div>
-                </div>
-                <div class="form-group">
-                    <label for="taskQuantity">Quantity *</label>
-                    <input type="number" id="taskQuantity" class="form-control" min="1" value="1" required>
-                    <div class="invalid-feedback">Please provide a valid quantity (1 or greater).</div>
-                </div>
-                <div class="form-group">
-                    <label for="taskType">Task Type *</label>
-                    <select id="taskType" class="form-control" required>
-                        <option value="REP" selected>REP</option>
-                        <option value="PM">PM</option>
+                    <label for="taskType" class="required">Task Type</label>
+                    <select id="taskType" name="taskType" class="form-control" required>
+                        <option value="MAINTENANCE">Maintenance</option>
+                        <option value="REPAIR">Repair</option>
+                        <option value="INSPECTION">Inspection</option>
+                        <option value="UPGRADE">Upgrade</option>
+                        <option value="CALIBRATION">Calibration</option>
                     </select>
                     <div class="invalid-feedback">Please select a task type.</div>
                 </div>
-                <div class="additional-task-buttons">
-                    <button type="button" id="cancelAdditionalTask">Cancel</button>
-                    <button type="submit" id="createAdditionalTask">Create Task</button>
-                </div>
+
+                <footer class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancelAdditionalTask">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="createAdditionalTask">Create Task</button>
+                </footer>
             </form>
         </div>
     </div>
+
     <script src="{{ url_for('static', filename='js/index.js') }}"></script>
 </body>
 </html>
