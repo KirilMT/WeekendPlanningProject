@@ -10,10 +10,259 @@ let sessionId = '';
 let additionalTaskCounter = 0;
 let availableSkills = []; // Store available skills for task creation
 
+// State management functions
+let saveStateThrottle = null;
+let lastStateSave = 0;
+
+function savePageState() {
+    // Throttle state saving to prevent excessive calls
+    const now = Date.now();
+    if (now - lastStateSave < 1000) { // Don't save more than once per second
+        if (saveStateThrottle) clearTimeout(saveStateThrottle);
+        saveStateThrottle = setTimeout(() => savePageState(), 1000);
+        return;
+    }
+    lastStateSave = now;
+
+    const dashboardButton = document.getElementById('openDashboardButton');
+    const fileInput = document.getElementById('excelFile');
+    const fileLabel = document.querySelector('.file-label');
+
+    const state = {
+        uploadedFile: uploadedFile ? {
+            name: uploadedFile.name,
+            size: uploadedFile.size,
+            type: uploadedFile.type,
+            lastModified: uploadedFile.lastModified
+        } : null,
+        repTasks,
+        currentRepTaskIndex,
+        repAssignments,
+        presentTechnicians,
+        eligibleTechnicians,
+        filename,
+        sessionId, // Keep the current session ID
+        additionalTaskCounter,
+        availableSkills,
+        // Enhanced file state tracking
+        fileInputState: {
+            disabled: fileInput?.disabled || false,
+            fileName: fileLabel?.textContent?.trim() || '',
+            hasFile: !!(uploadedFile || filename),
+            fileSelected: !!(fileInput?.files?.[0] || uploadedFile || filename),
+            fileUploaded: !!(uploadedFile && filename) // Track if file was actually uploaded
+        },
+        // UI state with better detection
+        dashboardButtonVisible: dashboardButton && (dashboardButton.style.display === 'inline-flex' ||
+                                                   dashboardButton.style.display === 'block' ||
+                                                   (!dashboardButton.style.display && getComputedStyle(dashboardButton).display !== 'none')),
+        dashboardUrl: null, // Will be set below
+        generateNewButtonExists: !!document.getElementById('generateNewDashboardBtn'),
+        currentMessage: {
+            text: document.getElementById('message')?.textContent || '',
+            type: document.getElementById('message')?.className?.split(' ').find(cls => ['success', 'error', 'warning'].includes(cls)) || '',
+            visible: document.getElementById('message')?.style.display === 'block'
+        },
+        submitButtonVisible: document.querySelector('#uploadForm button[type="submit"]')?.style.display !== 'none',
+        // Add timestamp for cache management
+        timestamp: Date.now(),
+        version: '1.0' // For future compatibility
+    };
+
+    // Multiple approaches to get dashboard URL
+    if (window.currentDashboardUrl) {
+        state.dashboardUrl = window.currentDashboardUrl;
+    } else if (dashboardButton && dashboardButton.onclick) {
+        const onclickStr = dashboardButton.onclick.toString();
+        const urlMatch = onclickStr.match(/window\.open\(['"]([^'"]+)['"]/);
+        if (urlMatch) {
+            state.dashboardUrl = urlMatch[1];
+        }
+    }
+
+    console.log('Saving state:', {
+        hasFile: state.fileInputState.hasFile,
+        fileSelected: state.fileInputState.fileSelected,
+        fileUploaded: state.fileInputState.fileUploaded,
+        filename: state.filename,
+        sessionId: state.sessionId,
+        uploadedFile: !!state.uploadedFile,
+        dashboardVisible: state.dashboardButtonVisible,
+        dashboardUrl: state.dashboardUrl,
+        globalUrl: window.currentDashboardUrl,
+        timestamp: new Date(state.timestamp).toLocaleTimeString()
+    });
+
+    // Store with expiration management
+    try {
+        sessionStorage.setItem('weekendPlanningState', JSON.stringify(state));
+        sessionStorage.setItem('weekendPlanningStateTimestamp', state.timestamp.toString());
+    } catch (e) {
+        console.warn('SessionStorage full, clearing old data:', e);
+        clearExpiredStates();
+        try {
+            sessionStorage.setItem('weekendPlanningState', JSON.stringify(state));
+            sessionStorage.setItem('weekendPlanningStateTimestamp', state.timestamp.toString());
+        } catch (e2) {
+            console.error('Failed to save state even after cleanup:', e2);
+        }
+    }
+}
+
+function restorePageState() {
+    const savedState = sessionStorage.getItem('weekendPlanningState');
+    const savedTimestamp = sessionStorage.getItem('weekendPlanningStateTimestamp');
+
+    if (!savedState) return false;
+
+    // Check if state is expired (older than 24 hours)
+    if (savedTimestamp) {
+        const stateAge = Date.now() - parseInt(savedTimestamp);
+        const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+        if (stateAge > maxAge) {
+            console.log('Saved state expired, clearing...');
+            clearPageState();
+            return false;
+        }
+    }
+
+    try {
+        const state = JSON.parse(savedState);
+        console.log('Restoring state from:', new Date(state.timestamp || 0).toLocaleTimeString());
+
+        // Restore application variables
+        repTasks = state.repTasks || [];
+        currentRepTaskIndex = state.currentRepTaskIndex || 0;
+        repAssignments = state.repAssignments || [];
+        presentTechnicians = state.presentTechnicians || [];
+        eligibleTechnicians = state.eligibleTechnicians || {};
+        filename = state.filename || '';
+
+        // Check if session should be considered expired based on time away
+        const timeAway = Date.now() - (state.timestamp || 0);
+        const sessionTimeoutMs = 5 * 60 * 1000; // 5 minutes session timeout
+
+        if (timeAway > sessionTimeoutMs) {
+            // Session expired due to time - generate new session ID
+            sessionId = generateSessionId();
+            console.log('Session expired due to time away:', Math.round(timeAway / 1000), 'seconds');
+        } else {
+            // Session still valid - keep the same session ID
+            sessionId = state.sessionId || generateSessionId();
+            console.log('Session restored, time away:', Math.round(timeAway / 1000), 'seconds');
+        }
+
+        additionalTaskCounter = state.additionalTaskCounter || 0;
+        availableSkills = state.availableSkills || [];
+
+        // Enhanced file state restoration
+        const fileInput = document.getElementById('excelFile');
+        if (state.fileInputState?.fileSelected || state.uploadedFile?.name || state.filename) {
+            const restoredFileName = state.uploadedFile?.name || state.filename;
+            if (restoredFileName) {
+                filename = restoredFileName;
+                updateFileDisplay(restoredFileName);
+
+                // Check if file upload is still valid based on session status
+                const needsReupload = timeAway > sessionTimeoutMs;
+
+                window.restoredFileData = {
+                    name: restoredFileName,
+                    hasData: true,
+                    needsReupload: needsReupload
+                };
+
+                console.log('File state restored:', restoredFileName, 'needsReupload:', needsReupload, needsReupload ? '(session expired)' : '(session valid)');
+            }
+        }
+
+        // Restore UI state
+        if (state.fileInputState?.disabled) {
+            disableFileInput();
+        }
+
+        if (!state.submitButtonVisible) {
+            const submitBtn = document.querySelector('#uploadForm button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.style.display = 'none';
+            }
+        }
+
+        // Restore dashboard button with proper functionality
+        if (state.dashboardButtonVisible && state.dashboardUrl) {
+            const openDashboardButton = document.getElementById('openDashboardButton');
+            if (openDashboardButton) {
+                openDashboardButton.style.display = 'inline-flex';
+                openDashboardButton.onclick = () => window.open(state.dashboardUrl, '_blank');
+                window.currentDashboardUrl = state.dashboardUrl; // Restore global URL
+            }
+        } else if (state.dashboardButtonVisible) {
+            const openDashboardButton = document.getElementById('openDashboardButton');
+            if (openDashboardButton) {
+                openDashboardButton.style.display = 'inline-flex';
+            }
+        }
+
+        if (state.generateNewButtonExists) {
+            showGenerateNewDashboardButton();
+        }
+
+        if (state.currentMessage?.visible && state.currentMessage?.text) {
+            showMessage(state.currentMessage.text, state.currentMessage.type);
+        }
+
+        return true;
+    } catch (error) {
+        console.error('Error restoring page state:', error);
+        clearPageState();
+        return false;
+    }
+}
+
+function clearPageState() {
+    sessionStorage.removeItem('weekendPlanningState');
+    sessionStorage.removeItem('weekendPlanningStateTimestamp');
+    window.restoredFileData = null;
+}
+
+// Cache management functions
+function clearExpiredStates() {
+    const keys = Object.keys(sessionStorage);
+    keys.forEach(key => {
+        if (key.startsWith('weekendPlanning') || key.includes('State')) {
+            try {
+                sessionStorage.removeItem(key);
+            } catch (e) {
+                console.warn('Could not remove expired state:', key);
+            }
+        }
+    });
+}
+
 // Generate a simple session ID
 function generateSessionId() {
-    return Math.random().toString(36).substring(2, 15);
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
+
+// Cleanup on page visibility change (user switches tabs/windows)
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+        savePageState();
+    }
+});
+
+// Periodic cleanup every 30 minutes
+setInterval(() => {
+    const timestamp = sessionStorage.getItem('weekendPlanningStateTimestamp');
+    if (timestamp) {
+        const age = Date.now() - parseInt(timestamp);
+        // Clean up if older than 12 hours
+        if (age > 12 * 60 * 60 * 1000) {
+            console.log('Performing periodic state cleanup...');
+            clearExpiredStates();
+        }
+    }
+}, 30 * 60 * 1000); // Every 30 minutes
 
 // Initialize CSRF token from meta tag
 function getCSRFToken() {
@@ -296,6 +545,9 @@ function submitFinalAssignments() {
 
         showMessage(data.message, data.message.includes('Error') ? 'error' : 'success');
         if (data.dashboard_url) {
+            // Store the dashboard URL globally for state management
+            window.currentDashboardUrl = data.dashboard_url;
+
             const openDashboardButton = document.getElementById('openDashboardButton');
             if (openDashboardButton) {
                 openDashboardButton.onclick = () => window.open(data.dashboard_url, '_blank');
@@ -304,6 +556,9 @@ function submitFinalAssignments() {
 
             // Show the "Generate New Dashboard" button after successful generation
             showGenerateNewDashboardButton();
+
+            // Save state immediately after dashboard is generated
+            savePageState();
         }
     })
     .catch(error => {
@@ -505,6 +760,9 @@ function showGenerateNewDashboardButton() {
 }
 
 function resetToInitialState() {
+    // Clear saved state
+    clearPageState();
+
     // Reset all variables
     uploadedFile = null;
     repTasks = [];
@@ -553,45 +811,95 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize session ID
     sessionId = generateSessionId();
 
+    // Clear any saved state on page refresh (F5 or manual refresh)
+    // Only restore state when navigating back from other pages
+    const isPageRefresh = performance.navigation.type === performance.navigation.TYPE_RELOAD;
+    if (isPageRefresh) {
+        clearPageState();
+        console.log('Page refreshed - cleared saved state');
+    } else {
+        // Try to restore previous state only when navigating back
+        const stateRestored = restorePageState();
+        console.log('State restoration result:', stateRestored);
+    }
+
+    // Save state before navigating away
+    window.addEventListener('beforeunload', function() {
+        savePageState();
+    });
+
+    // Specifically handle the Manage Skills & Mappings button
+    const manageMappingsBtn = document.getElementById('manageMappingsBtn');
+    if (manageMappingsBtn) {
+        manageMappingsBtn.addEventListener('click', function(e) {
+            savePageState();
+        });
+    }
+
+    // Save state when clicking on other external links
+    document.querySelectorAll('a[href]:not([href^="#"]), button[onclick*="window.location"]').forEach(element => {
+        if (element.id !== 'manageMappingsBtn') {
+            element.addEventListener('click', function() {
+                savePageState();
+            });
+        }
+    });
+
     // Upload form handler
     const uploadForm = document.getElementById('uploadForm');
     if (uploadForm) {
         uploadForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            console.log('INDEX.JS: Upload form submitted.');
 
             const fileInput = document.getElementById('excelFile');
-            if (!fileInput || !fileInput.files[0]) {
+            let hasRestoredFile = window.restoredFileData?.hasData && filename;
+
+            // Check if restored file needs re-upload due to session expiration
+            if (hasRestoredFile && window.restoredFileData?.needsReupload) {
+                // File was restored but session expired - need actual file upload
+                if (!fileInput || !fileInput.files[0]) {
+                    showMessage('Session expired. Please re-select and upload your Excel file.', 'error');
+                    // Reset the file display to show that re-upload is needed
+                    updateFileDisplay(`${filename} (Please re-select)`);
+                    enableFileInput(); // Re-enable file input for new selection
+                    window.restoredFileData = null;
+                    return;
+                }
+                // User has selected a new file, proceed with normal upload
+                hasRestoredFile = false;
+            }
+
+            // Allow submission if we have either a new file or valid restored file state
+            if (!hasRestoredFile && (!fileInput || !fileInput.files[0])) {
                 showMessage('Please select an Excel file.', 'error');
                 return;
             }
 
+            // Use existing file data if we have it from restored state (no re-upload needed)
+            if (hasRestoredFile && filename && !window.restoredFileData?.needsReupload) {
+                savePageState();
+                showAbsentModal();
+                return;
+            }
+
+            // Handle new file upload
             uploadedFile = fileInput.files[0];
             filename = uploadedFile.name;
 
-            // Show selected file name
             updateFileDisplay(filename);
+            savePageState();
 
             const formData = new FormData();
             formData.append('csrf_token', getCSRFToken());
             formData.append('excelFile', uploadedFile);
             formData.append('session_id', sessionId);
 
-            console.log('INDEX.JS: Sending initial upload request...');
-
-            // Keep button visible and unchanged - no loading state
-
             fetch('/upload', {
                 method: 'POST',
                 body: formData
             })
-            .then(response => {
-                console.log('INDEX.JS: Initial upload response status:', response.status);
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data => {
-                console.log('INDEX.JS: Initial upload response data:', data);
-
                 if (data.error) {
                     showMessage(data.error, 'error');
                     return;
@@ -599,26 +907,41 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 repTasks = data.rep_tasks || [];
                 eligibleTechnicians = data.eligible_technicians || {};
-
-                console.log('INDEX.JS: Initial upload successful, preparing for absent modal.');
-                console.log('INDEX.JS: repTasks after initial upload:', repTasks);
-
-                // Button stays visible and unchanged
+                savePageState();
                 showAbsentModal();
             })
             .catch(error => {
-                console.error('INDEX.JS: Error in initial upload:', error);
+                console.error('Error in upload:', error);
                 showMessage('Upload failed. Please try again.', 'error');
             });
         });
     }
 
-    // File input change handler to show selected file
+    // Submit button click handler to ensure form submission
+    const submitButton = document.querySelector('#uploadForm button[type="submit"]');
+    if (submitButton) {
+        submitButton.addEventListener('click', function(e) {
+            const form = submitButton.closest('form');
+            if (form) {
+                const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+                form.dispatchEvent(submitEvent);
+            }
+        });
+    }
+
+    // File input change handler
     const fileInput = document.getElementById('excelFile');
     if (fileInput) {
         fileInput.addEventListener('change', function() {
             if (this.files && this.files[0]) {
-                updateFileDisplay(this.files[0].name);
+                const selectedFile = this.files[0];
+
+                uploadedFile = selectedFile;
+                filename = selectedFile.name;
+
+                updateFileDisplay(selectedFile.name);
+                window.restoredFileData = null;
+                savePageState();
             }
         });
     }

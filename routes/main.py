@@ -4,6 +4,7 @@ from io import BytesIO
 import json
 import pandas as pd
 import random
+import time
 
 from ..services.extract_data import extract_data, get_current_day, get_current_week_number
 from ..services.data_processing import sanitize_data, calculate_work_time
@@ -14,7 +15,57 @@ from ..services.security import InputValidator
 
 main_bp = Blueprint('main', __name__)
 
+# Enhanced session management with timestamps
 session_excel_data_cache = {}
+SESSION_TIMEOUT_SECONDS = 5 * 60  # 5 minutes to match frontend
+
+def cleanup_expired_sessions():
+    """Remove expired sessions from cache."""
+    current_time = time.time()
+    expired_sessions = []
+
+    for session_id, session_data in session_excel_data_cache.items():
+        if isinstance(session_data, dict) and 'timestamp' in session_data:
+            if current_time - session_data['timestamp'] > SESSION_TIMEOUT_SECONDS:
+                expired_sessions.append(session_id)
+
+    for session_id in expired_sessions:
+        del session_excel_data_cache[session_id]
+        current_app.logger.info(f"Expired session removed: {session_id}")
+
+def is_session_valid(session_id):
+    """Check if session exists and is not expired."""
+    cleanup_expired_sessions()  # Clean up first
+
+    if session_id not in session_excel_data_cache:
+        return False
+
+    session_data = session_excel_data_cache[session_id]
+    if not isinstance(session_data, dict) or 'timestamp' not in session_data:
+        return False
+
+    current_time = time.time()
+    return current_time - session_data['timestamp'] <= SESSION_TIMEOUT_SECONDS
+
+def get_session_data(session_id):
+    """Get session data if session is valid."""
+    if not is_session_valid(session_id):
+        return None
+    return session_excel_data_cache[session_id]['data']
+
+def store_session_data(session_id, data):
+    """Store data with timestamp for session management."""
+    session_excel_data_cache[session_id] = {
+        'data': data,
+        'timestamp': time.time()
+    }
+    current_app.logger.info(f"Session data stored: {session_id}")
+
+def update_session_timestamp(session_id):
+    """Update session timestamp to extend session life."""
+    if session_id in session_excel_data_cache:
+        session_excel_data_cache[session_id]['timestamp'] = time.time()
+        current_app.logger.info(f"Session timestamp updated: {session_id}")
 
 @main_bp.route('/')
 def index_route():
@@ -79,7 +130,7 @@ def upload_file_route():
                         item_with_id['name'] = item_with_id.get('scheduler_group_task', f'Unnamed Task {idx+1}')
                     excel_data_list_with_ids.append(item_with_id)
 
-                session_excel_data_cache[session_id] = excel_data_list_with_ids
+                store_session_data(session_id, excel_data_list_with_ids)
 
                 sanitized_data_for_pm_ui = sanitize_data(excel_data_list, current_app.logger)
                 pm_tasks_for_ui = [
@@ -107,10 +158,20 @@ def upload_file_route():
                 return jsonify({"message": f"Error processing file: {str(e)}"}), 500
 
         elif 'absentTechnicians' in request.form:
-            if session_id not in session_excel_data_cache:
+            # Use new session validation
+            if not is_session_valid(session_id):
+                current_app.logger.warning(f"Session validation failed for session: {session_id}")
                 return jsonify({"message": "Session expired. Re-upload."}), 400
 
-            excel_data_list_cached = session_excel_data_cache[session_id]
+            # Get cached data using new session management
+            excel_data_list_cached = get_session_data(session_id)
+            if excel_data_list_cached is None:
+                current_app.logger.warning(f"No session data found for session: {session_id}")
+                return jsonify({"message": "Session expired. Re-upload."}), 400
+
+            # Update session timestamp to extend session life
+            update_session_timestamp(session_id)
+
             try:
                 absent_technicians = json.loads(request.form.get('absentTechnicians', '[]'))
                 all_technicians_flat = [tech for group in TECHNICIAN_GROUPS.values() for tech in group]
@@ -169,10 +230,21 @@ def generate_dashboard_route():
     try:
         form_data = request.form
         session_id = form_data.get('session_id')
-        if not session_id or session_id not in session_excel_data_cache:
+
+        # Use new session validation
+        if not session_id or not is_session_valid(session_id):
+            current_app.logger.warning(f"Session validation failed for dashboard generation: {session_id}")
             return jsonify({"message": "Invalid session. Re-upload Excel."}), 400
 
-        excel_data_from_cache = session_excel_data_cache[session_id]
+        # Get cached data using new session management
+        excel_data_from_cache = get_session_data(session_id)
+        if excel_data_from_cache is None:
+            current_app.logger.warning(f"No session data found for dashboard generation: {session_id}")
+            return jsonify({"message": "Invalid session. Re-upload Excel."}), 400
+
+        # Update session timestamp to extend session life
+        update_session_timestamp(session_id)
+
         present_technicians = json.loads(form_data.get('present_technicians', '[]'))
         rep_assignments_from_ui = json.loads(form_data.get('rep_assignments', '[]'))
         all_processed_tasks_from_ui = json.loads(form_data.get('all_processed_tasks', '[]'))
