@@ -5,7 +5,10 @@ async function initializePage() {
     newTechnologyParentSelect.disabled = true;
     newTechnologyParentSelect.innerHTML = '<option value="">No Parent (Top Level)</option>';
 
-    // 2. Event Listeners
+    // 2. Setup collapsible sections
+    setupCollapsibleSections();
+
+    // 3. Event Listeners
     // Global controls
     if (technicianSelect) {
         technicianSelect.addEventListener('change', async (event) => {
@@ -223,4 +226,36 @@ async function fetchAllInitialData() {
     if (newTaskTechnologySelectForMapping) {
         populateTechnologySelectDropdown(newTaskTechnologySelectForMapping);
     }
+}
+
+// Setup collapsible sections for the new template structure
+function setupCollapsibleSections() {
+    document.querySelectorAll('.section-header').forEach(header => {
+        const section = header.closest('.management-section');
+        const content = section.querySelector('.section-content');
+        const toggleIcon = header.querySelector('.toggle-icon');
+
+        if (!content || !toggleIcon) return;
+
+        // Initialize as collapsed
+        content.style.display = 'none';
+        header.setAttribute('aria-expanded', 'false');
+        toggleIcon.textContent = '▼';
+
+        header.addEventListener('click', () => {
+            const isExpanded = header.getAttribute('aria-expanded') === 'true';
+
+            if (isExpanded) {
+                content.style.display = 'none';
+                header.setAttribute('aria-expanded', 'false');
+                toggleIcon.textContent = '▼';
+                content.classList.remove('expanded');
+            } else {
+                content.style.display = 'block';
+                header.setAttribute('aria-expanded', 'true');
+                toggleIcon.textContent = '▲';
+                content.classList.add('expanded');
+            }
+        });
+    });
 }

@@ -55,149 +55,106 @@
     </div>
 
     <!-- Absent Technicians Modal -->
-    <div id="absentModal" class="modal" role="dialog" aria-labelledby="absent-modal-title" aria-hidden="true">
+    <div id="absentModal" class="modal" aria-hidden="true" role="dialog" aria-labelledby="absentModalTitle">
         <div class="modal-content">
-            <header class="modal-header">
-                <h2 id="absent-modal-title">Select Unavailable Technicians</h2>
+            <div class="modal-header">
+                <h2 id="absentModalTitle">Select Absent Technicians</h2>
                 <button class="modal-close" aria-label="Close modal">&times;</button>
-            </header>
+            </div>
             <div class="modal-body">
-                <p>Click on technicians who are not available for weekend assignments:</p>
+                <p>Click on technicians who are absent today:</p>
                 <div id="technicianGroups" class="technician-groups"></div>
             </div>
-            <footer class="modal-footer">
-                <button id="confirmAbsent" class="btn btn-success">Confirm Selection</button>
-                <button class="btn btn-secondary modal-cancel">Cancel</button>
-            </footer>
+            <div class="modal-footer">
+                <button id="confirmAbsent" class="btn btn-primary">Confirm & Continue</button>
+                <button class="modal-cancel btn btn-secondary">Cancel</button>
+            </div>
         </div>
     </div>
 
-    <!-- Skill-Based Task Assignment Modal -->
-    <div id="taskAssignmentModal" class="modal" role="dialog" aria-labelledby="task-modal-title" aria-hidden="true">
-        <div class="modal-content">
-            <header class="modal-header">
-                <h2 id="task-modal-title">Skill-Based Task Assignment</h2>
+    <!-- Task Assignment Modal -->
+    <div id="taskAssignmentModal" class="modal" aria-hidden="true" role="dialog" aria-labelledby="taskModalTitle">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h2 id="taskModalTitle">Task Assignment</h2>
                 <button class="modal-close" aria-label="Close modal">&times;</button>
-            </header>
+            </div>
             <div class="modal-body">
                 <div id="taskInfo" class="task-info"></div>
-                <div class="search-wrapper">
-                    <input type="text" id="technicianSearch"
-                           placeholder="Search technicians by name or skills..."
-                           aria-label="Search technicians">
-                </div>
-                <div id="requiredSkills" class="required-skills">
-                    <h3>Required Skills:</h3>
-                    <div class="skills-list"></div>
-                </div>
                 <div id="availableTechnicians" class="technician-selection">
-                    <h3>Available Technicians (by skill level):</h3>
+                    <h3>Available Technicians</h3>
+                    <input type="text" id="technicianSearch" placeholder="Search technicians..." class="search-input">
                     <div class="technician-checkboxes"></div>
                 </div>
             </div>
-            <footer class="modal-footer">
-                <button id="addAdditionalTask" class="btn btn-warning">Add Custom Task</button>
-                <div class="button-group">
-                    <button id="validateAssignment" class="btn btn-success">Validate Assignment</button>
-                    <button id="skipTask" class="btn btn-danger">Skip Task</button>
-                </div>
-            </footer>
+            <div class="modal-footer">
+                <button id="validateAssignment" class="btn btn-primary">Assign Selected</button>
+                <button id="skipTask" class="btn btn-secondary">Skip Task</button>
+                <button id="addAdditionalTask" class="btn btn-outline">Add Custom Task</button>
+            </div>
         </div>
     </div>
 
-    <!-- Additional Task Creation Modal -->
-    <div id="additionalTaskModal" class="modal" role="dialog" aria-labelledby="additional-task-title" aria-hidden="true">
+    <!-- Additional Task Modal -->
+    <div id="additionalTaskModal" class="modal" aria-hidden="true" role="dialog" aria-labelledby="additionalTaskModalTitle">
         <div class="modal-content">
-            <header class="modal-header">
-                <h2 id="additional-task-title">Create Custom Task</h2>
+            <div class="modal-header">
+                <h2 id="additionalTaskModalTitle">Create Additional Task</h2>
                 <button class="modal-close" aria-label="Close modal">&times;</button>
-            </header>
-            <form id="additionalTaskForm" class="modal-body">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-
-                <div class="form-group">
-                    <label for="taskName" class="required">Task Name</label>
-                    <input type="text" id="taskName" name="taskName"
-                           class="form-control" required maxlength="100"
-                           aria-describedby="task-name-help">
-                    <small id="task-name-help" class="help-text">Enter a descriptive task name</small>
-                    <div class="invalid-feedback">Please provide a task name (max 100 characters).</div>
-                </div>
-
-                <div class="form-group">
-                    <label for="requiredSkillsSelect">Required Skills</label>
-                    <select id="requiredSkillsSelect" name="requiredSkills"
-                            class="form-control" multiple
-                            aria-describedby="skills-help">
-                        <!-- Populated by JavaScript -->
-                    </select>
-                    <small id="skills-help" class="help-text">Select all skills required for this task</small>
-                </div>
-
-                <div class="form-group">
-                    <label for="taskLines">Production Lines</label>
-                    <input type="text" id="taskLines" name="taskLines"
-                           class="form-control" pattern="[0-9,\s]+"
-                           placeholder="1, 2, 3" maxlength="50"
-                           aria-describedby="lines-help">
-                    <small id="lines-help" class="help-text">Enter line numbers separated by commas</small>
-                </div>
-
-                <div class="form-group">
-                    <label for="taskTicketMO">Ticket/MO Reference</label>
-                    <input type="text" id="taskTicketMO" name="taskTicketMO"
-                           class="form-control" maxlength="50">
-                </div>
-
-                <div class="form-group">
-                    <label for="taskTicketURL">Reference URL</label>
-                    <input type="url" id="taskTicketURL" name="taskTicketURL"
-                           class="form-control" placeholder="https://..."
-                           maxlength="200">
-                </div>
-
-                <div class="form-row">
+            </div>
+            <div class="modal-body">
+                <form id="additionalTaskForm" class="task-form">
                     <div class="form-group">
-                        <label for="taskDuration" class="required">Duration (minutes)</label>
-                        <input type="number" id="taskDuration" name="taskDuration"
-                               class="form-control" min="1" max="1440" required
-                               aria-describedby="duration-help">
-                        <small id="duration-help" class="help-text">Estimated task duration</small>
-                        <div class="invalid-feedback">Duration must be between 1-1440 minutes.</div>
+                        <label for="taskName">Task Name*</label>
+                        <input type="text" id="taskName" name="taskName" required>
                     </div>
-
                     <div class="form-group">
-                        <label for="taskTechnicians" class="required">Technicians Required</label>
-                        <input type="number" id="taskTechnicians" name="taskTechnicians"
-                               class="form-control" min="1" max="10" value="1" required>
-                        <div class="invalid-feedback">Must require 1-10 technicians.</div>
+                        <label for="taskLines">Production Lines</label>
+                        <input type="text" id="taskLines" name="taskLines" placeholder="e.g., Line 1, Line 2">
                     </div>
-
                     <div class="form-group">
-                        <label for="taskQuantity" class="required">Quantity</label>
-                        <input type="number" id="taskQuantity" name="taskQuantity"
-                               class="form-control" min="1" max="100" value="1" required>
-                        <div class="invalid-feedback">Quantity must be between 1-100.</div>
+                        <label for="taskTicketMO">Ticket/MO</label>
+                        <input type="text" id="taskTicketMO" name="taskTicketMO">
                     </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="taskType" class="required">Task Type</label>
-                    <select id="taskType" name="taskType" class="form-control" required>
-                        <option value="MAINTENANCE">Maintenance</option>
-                        <option value="REPAIR">Repair</option>
-                        <option value="INSPECTION">Inspection</option>
-                        <option value="UPGRADE">Upgrade</option>
-                        <option value="CALIBRATION">Calibration</option>
-                    </select>
-                    <div class="invalid-feedback">Please select a task type.</div>
-                </div>
-
-                <footer class="modal-footer">
-                    <button type="button" class="btn btn-secondary" id="cancelAdditionalTask">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="createAdditionalTask">Create Task</button>
-                </footer>
-            </form>
+                    <div class="form-group">
+                        <label for="taskTicketURL">Ticket URL</label>
+                        <input type="url" id="taskTicketURL" name="taskTicketURL">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="taskDuration">Duration (min)*</label>
+                            <input type="number" id="taskDuration" name="taskDuration" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="taskTechnicians">Technicians Needed*</label>
+                            <input type="number" id="taskTechnicians" name="taskTechnicians" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="taskQuantity">Quantity</label>
+                            <input type="number" id="taskQuantity" name="taskQuantity" min="1" value="1">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskType">Task Type</label>
+                        <select id="taskType" name="taskType" required>
+                            <option value="REP">REP</option>
+                            <option value="PM">PM</option>
+                            <option value="OTHER">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="requiredSkillsSelect">Required Skills</label>
+                        <select id="requiredSkillsSelect" name="requiredSkills" multiple>
+                            <!-- Options populated by JavaScript -->
+                        </select>
+                        <small class="help-text">Hold Ctrl/Cmd to select multiple skills</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" form="additionalTaskForm" class="btn btn-primary">Create Task</button>
+                <button id="cancelAdditionalTask" class="btn btn-secondary">Cancel</button>
+            </div>
         </div>
     </div>
 

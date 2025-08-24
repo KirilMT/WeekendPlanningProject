@@ -78,9 +78,10 @@ function populateTechnicianGroups() {
 
     groupsContainer.innerHTML = '';
 
+    let satelliteIndex = 1;
     for (const [groupName, technicians] of Object.entries(technicianGroups)) {
         const groupDiv = document.createElement('div');
-        groupDiv.className = `group ${groupName.toLowerCase()}`;
+        groupDiv.className = `group ${groupName.toLowerCase()} satellite-${satelliteIndex}`;
 
         const groupTitle = document.createElement('h3');
         groupTitle.textContent = groupName;
@@ -103,6 +104,9 @@ function populateTechnicianGroups() {
 
         groupDiv.appendChild(buttonsDiv);
         groupsContainer.appendChild(groupDiv);
+
+        // Increment satellite index, reset to 1 if we exceed 10 colors
+        satelliteIndex = satelliteIndex >= 10 ? 1 : satelliteIndex + 1;
     }
     console.log('INDEX.HTML: Technician groups populated.');
 }
@@ -258,6 +262,17 @@ function hideAdditionalTaskModal() {
 }
 
 function submitFinalAssignments() {
+    // NOW is the right time to hide button and disable file input
+    // This happens after absent modal and all REP task assignments are done
+    const submitBtn = document.querySelector('#uploadForm button[type="submit"]');
+    if (submitBtn) {
+        submitBtn.style.display = 'none';
+    }
+    disableFileInput();
+
+    // Show progress bar now - during actual dashboard generation
+    const progressInterval = showProgressBar();
+
     const formData = new FormData();
     formData.append('csrf_token', getCSRFToken());
     formData.append('present_technicians', JSON.stringify(presentTechnicians));
@@ -275,6 +290,10 @@ function submitFinalAssignments() {
     })
     .then(data => {
         console.log('INDEX.HTML: /generate_dashboard response data:', data);
+
+        // Hide progress bar when dashboard generation is complete
+        hideProgressBar(progressInterval);
+
         showMessage(data.message, data.message.includes('Error') ? 'error' : 'success');
         if (data.dashboard_url) {
             const openDashboardButton = document.getElementById('openDashboardButton');
@@ -282,12 +301,242 @@ function submitFinalAssignments() {
                 openDashboardButton.onclick = () => window.open(data.dashboard_url, '_blank');
                 openDashboardButton.style.display = 'inline-flex';
             }
+
+            // Show the "Generate New Dashboard" button after successful generation
+            showGenerateNewDashboardButton();
         }
     })
     .catch(error => {
         console.error('INDEX.HTML: Error in /generate_dashboard:', error);
+
+        // Hide progress bar on error
+        hideProgressBar(progressInterval);
+
         showMessage('Error generating dashboard. Please try again.', 'error');
     });
+}
+
+function setButtonLoading(button, isLoading) {
+    if (!button) return;
+
+    if (isLoading) {
+        button.classList.add('loading');
+        button.disabled = true;
+        button.dataset.originalText = button.textContent;
+        button.innerHTML = '<span class="btn-icon">⏳</span> Processing...';
+    } else {
+        button.classList.remove('loading');
+        button.disabled = false;
+        if (button.dataset.originalText) {
+            button.innerHTML = `<span class="btn-icon">⚡</span> ${button.dataset.originalText.replace('⚡ ', '')}`;
+        }
+    }
+}
+
+function showProgressBar() {
+    // Remove any existing progress container first
+    const existingProgress = document.getElementById('progressContainer');
+    if (existingProgress) {
+        existingProgress.remove();
+    }
+
+    const progressContainer = document.createElement('div');
+    progressContainer.id = 'progressContainer';
+    progressContainer.className = 'progress-container';
+    progressContainer.style.display = 'flex'; // Ensure it's visible
+    progressContainer.innerHTML = `
+        <div>
+            <div class="progress-header">
+                <h3>🚀 Generating Skill-Based Assignments</h3>
+                <p>Please wait while we process your data...</p>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-steps">
+                <div class="step active" id="step1">📊 Processing Excel Data</div>
+                <div class="step" id="step2">👥 Analyzing Technician Skills</div>
+                <div class="step" id="step3">⚙️ Matching Tasks to Skills</div>
+                <div class="step" id="step4">📋 Generating Dashboard</div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(progressContainer);
+
+    // Force reflow to ensure element is rendered
+    progressContainer.offsetHeight;
+
+    // Animate progress
+    let progress = 0;
+    const progressFill = document.getElementById('progressFill');
+    const steps = ['step1', 'step2', 'step3', 'step4'];
+    let currentStep = 0;
+
+    const progressInterval = setInterval(() => {
+        progress += Math.random() * 10 + 3; // Smaller, more realistic increments
+        if (progress > 85) progress = 85; // Don't complete until actual completion
+
+        progressFill.style.width = `${progress}%`;
+
+        // Update active step
+        const newStep = Math.floor(progress / 22);
+        if (newStep > currentStep && newStep < steps.length) {
+            const currentStepEl = document.getElementById(steps[currentStep]);
+            const newStepEl = document.getElementById(steps[newStep]);
+            if (currentStepEl) currentStepEl.classList.remove('active');
+            if (newStepEl) newStepEl.classList.add('active');
+            currentStep = newStep;
+        }
+    }, 800); // Slower updates for better visibility
+
+    return progressInterval;
+}
+
+function hideProgressBar(progressInterval) {
+    if (progressInterval) {
+        clearInterval(progressInterval);
+    }
+
+    const progressContainer = document.getElementById('progressContainer');
+    if (progressContainer) {
+        // Complete the progress bar
+        const progressFill = document.getElementById('progressFill');
+        if (progressFill) {
+            progressFill.style.width = '100%';
+        }
+
+        // Mark all steps as complete
+        document.querySelectorAll('.step').forEach(step => {
+            step.classList.remove('active');
+            step.classList.add('completed');
+        });
+
+        // Remove after showing completion
+        setTimeout(() => {
+            progressContainer.remove();
+        }, 1000);
+    }
+}
+
+// Helper functions for UI updates
+function updateFileDisplay(fileName) {
+    const fileLabel = document.querySelector('.file-label');
+    if (fileLabel) {
+        fileLabel.innerHTML = `
+            <span class="file-icon">✅</span>
+            <span class="file-name">${fileName}</span>
+        `;
+        fileLabel.style.background = '#ecfdf5';
+        fileLabel.style.borderColor = '#10b981';
+        fileLabel.style.color = '#065f46';
+    }
+}
+
+function disableFileInput() {
+    const fileInput = document.getElementById('excelFile');
+    const fileLabel = document.querySelector('.file-label');
+
+    if (fileInput) {
+        fileInput.disabled = true;
+    }
+
+    if (fileLabel) {
+        fileLabel.style.pointerEvents = 'none';
+        fileLabel.style.opacity = '0.6';
+        fileLabel.style.cursor = 'not-allowed';
+        fileLabel.style.background = '#f3f4f6';
+        fileLabel.style.borderColor = '#d1d5db';
+        fileLabel.style.color = '#9ca3af';
+    }
+}
+
+function enableFileInput() {
+    const fileInput = document.getElementById('excelFile');
+    const fileLabel = document.querySelector('.file-label');
+
+    if (fileInput) {
+        fileInput.disabled = false;
+        fileInput.value = ''; // Clear the file selection
+    }
+
+    if (fileLabel) {
+        fileLabel.style.pointerEvents = 'auto';
+        fileLabel.style.opacity = '1';
+        fileLabel.style.cursor = 'pointer';
+        fileLabel.style.background = '#f9fafb';
+        fileLabel.style.borderColor = '#d1d5db';
+        fileLabel.style.color = '#6b7280';
+        fileLabel.innerHTML = `
+            <span class="file-icon">📁</span>
+            Choose Excel File
+        `;
+    }
+}
+
+function showGenerateNewDashboardButton() {
+    const uploadSection = document.querySelector('.upload-section');
+    if (uploadSection) {
+        // Remove existing generate new button if it exists
+        const existingButton = document.getElementById('generateNewDashboardBtn');
+        if (existingButton) {
+            existingButton.remove();
+        }
+
+        const generateNewBtn = document.createElement('button');
+        generateNewBtn.id = 'generateNewDashboardBtn';
+        generateNewBtn.className = 'btn btn-primary';
+        generateNewBtn.innerHTML = '<span class="btn-icon">🔄</span> Generate New Dashboard';
+        generateNewBtn.addEventListener('click', function() {
+            resetToInitialState();
+        });
+
+        uploadSection.appendChild(generateNewBtn);
+    }
+}
+
+function resetToInitialState() {
+    // Reset all variables
+    uploadedFile = null;
+    repTasks = [];
+    currentRepTaskIndex = 0;
+    repAssignments = [];
+    presentTechnicians = [];
+    eligibleTechnicians = {};
+    filename = '';
+    additionalTaskCounter = 0;
+
+    // Generate new session ID
+    sessionId = generateSessionId();
+
+    // Show the original submit button
+    const submitBtn = document.querySelector('#uploadForm button[type="submit"]');
+    if (submitBtn) {
+        submitBtn.style.display = 'inline-flex';
+        setButtonLoading(submitBtn, false);
+    }
+
+    // Re-enable file input
+    enableFileInput();
+
+    // Hide dashboard and generate new buttons
+    const openDashboardButton = document.getElementById('openDashboardButton');
+    const generateNewBtn = document.getElementById('generateNewDashboardBtn');
+
+    if (openDashboardButton) {
+        openDashboardButton.style.display = 'none';
+    }
+
+    if (generateNewBtn) {
+        generateNewBtn.remove();
+    }
+
+    // Clear any messages
+    const messageDiv = document.getElementById('message');
+    if (messageDiv) {
+        messageDiv.style.display = 'none';
+        messageDiv.textContent = '';
+    }
 }
 
 // Event Listeners
@@ -300,7 +549,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (uploadForm) {
         uploadForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            console.log('INDEX.HTML: Upload form submitted.');
+            console.log('INDEX.JS: Upload form submitted.');
 
             const fileInput = document.getElementById('excelFile');
             if (!fileInput || !fileInput.files[0]) {
@@ -311,23 +560,28 @@ document.addEventListener('DOMContentLoaded', function() {
             uploadedFile = fileInput.files[0];
             filename = uploadedFile.name;
 
+            // Show selected file name
+            updateFileDisplay(filename);
+
             const formData = new FormData();
             formData.append('csrf_token', getCSRFToken());
             formData.append('excelFile', uploadedFile);
             formData.append('session_id', sessionId);
 
-            console.log('INDEX.HTML: Sending initial upload request...');
+            console.log('INDEX.JS: Sending initial upload request...');
+
+            // Keep button visible and unchanged - no loading state
 
             fetch('/upload', {
                 method: 'POST',
                 body: formData
             })
             .then(response => {
-                console.log('INDEX.HTML: Initial upload response status:', response.status);
+                console.log('INDEX.JS: Initial upload response status:', response.status);
                 return response.json();
             })
             .then(data => {
-                console.log('INDEX.HTML: Initial upload response data:', data);
+                console.log('INDEX.JS: Initial upload response data:', data);
 
                 if (data.error) {
                     showMessage(data.error, 'error');
@@ -337,15 +591,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 repTasks = data.rep_tasks || [];
                 eligibleTechnicians = data.eligible_technicians || {};
 
-                console.log('INDEX.HTML: Initial upload successful, preparing for absent modal.');
-                console.log('INDEX.HTML: repTasks after initial upload:', repTasks);
+                console.log('INDEX.JS: Initial upload successful, preparing for absent modal.');
+                console.log('INDEX.JS: repTasks after initial upload:', repTasks);
 
+                // Button stays visible and unchanged
                 showAbsentModal();
             })
             .catch(error => {
-                console.error('INDEX.HTML: Error in initial upload:', error);
+                console.error('INDEX.JS: Error in initial upload:', error);
                 showMessage('Upload failed. Please try again.', 'error');
             });
+        });
+    }
+
+    // File input change handler to show selected file
+    const fileInput = document.getElementById('excelFile');
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                updateFileDisplay(this.files[0].name);
+            }
         });
     }
 
