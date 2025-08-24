@@ -379,13 +379,22 @@ function showProgressBar() {
 
         progressFill.style.width = `${progress}%`;
 
-        // Update active step
+        // Update active step and mark completed steps as green
         const newStep = Math.floor(progress / 22);
         if (newStep > currentStep && newStep < steps.length) {
+            // Mark the current step as completed (green) before moving to next
             const currentStepEl = document.getElementById(steps[currentStep]);
+            if (currentStepEl) {
+                currentStepEl.classList.remove('active');
+                currentStepEl.classList.add('completed');
+            }
+
+            // Set the new step as active
             const newStepEl = document.getElementById(steps[newStep]);
-            if (currentStepEl) currentStepEl.classList.remove('active');
-            if (newStepEl) newStepEl.classList.add('active');
+            if (newStepEl) {
+                newStepEl.classList.add('active');
+            }
+
             currentStep = newStep;
         }
     }, 800); // Slower updates for better visibility
