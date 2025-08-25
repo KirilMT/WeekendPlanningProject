@@ -213,8 +213,8 @@ def upload_file_route():
                                 'task_full_duration': task_duration_rep
                             })
                 return jsonify({
-                    "message": "REP task data prepared.", "repTasks": rep_tasks_for_ui,
-                    "eligibleTechnicians": eligible_technicians_for_rep_modal, "session_id": session_id
+                    "message": "REP task data prepared.", "rep_tasks": rep_tasks_for_ui,
+                    "eligible_technicians": eligible_technicians_for_rep_modal, "session_id": session_id
                 })
             except Exception as e:
                 current_app.logger.error(f"Error processing absent technicians: {e}", exc_info=True)

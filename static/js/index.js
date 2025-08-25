@@ -303,11 +303,79 @@ function populateSkillsSelect() {
     const skillsSelect = document.getElementById('requiredSkillsSelect');
     if (skillsSelect && availableSkills.length > 0) {
         skillsSelect.innerHTML = '';
+
+        // Organize skills by groups and parent-child relationships
+        const skillsByGroup = {};
+        const parentSkills = new Map();
+        const childSkills = new Map();
+
+        // First pass: categorize skills by group and identify parent-child relationships
         availableSkills.forEach(skill => {
-            const option = document.createElement('option');
-            option.value = skill.id;
-            option.textContent = skill.name;
-            skillsSelect.appendChild(option);
+            const groupName = skill.group_name || 'Other';
+            if (!skillsByGroup[groupName]) {
+                skillsByGroup[groupName] = [];
+            }
+            skillsByGroup[groupName].push(skill);
+
+            // Build parent-child maps
+            if (skill.parent_id) {
+                if (!childSkills.has(skill.parent_id)) {
+                    childSkills.set(skill.parent_id, []);
+                }
+                childSkills.get(skill.parent_id).push(skill);
+            } else {
+                // This is a parent skill or standalone skill
+                if (!parentSkills.has(skill.id)) {
+                    parentSkills.set(skill.id, skill);
+                }
+            }
+        });
+
+        // Create organized options
+        const sortedGroups = Object.keys(skillsByGroup).sort();
+
+        sortedGroups.forEach(groupName => {
+            // Add group header
+            const groupHeader = document.createElement('optgroup');
+            groupHeader.label = `📁 ${groupName}`;
+            skillsSelect.appendChild(groupHeader);
+
+            const groupSkills = skillsByGroup[groupName];
+
+            // Sort skills within group: parents first, then children
+            const parentSkillsInGroup = groupSkills.filter(skill => !skill.parent_id);
+            const childSkillsInGroup = groupSkills.filter(skill => skill.parent_id);
+
+            // Add parent skills and their children
+            parentSkillsInGroup.forEach(parentSkill => {
+                const parentOption = document.createElement('option');
+                parentOption.value = parentSkill.id;
+                parentOption.textContent = `🔧 ${parentSkill.name}`;
+                parentOption.className = 'parent-skill';
+                groupHeader.appendChild(parentOption);
+
+                // Add children of this parent
+                const children = childSkillsInGroup.filter(child => child.parent_id === parentSkill.id);
+                children.forEach(childSkill => {
+                    const childOption = document.createElement('option');
+                    childOption.value = childSkill.id;
+                    childOption.textContent = `    ↳ 🔩 ${childSkill.name}`;
+                    childOption.className = 'child-skill';
+                    groupHeader.appendChild(childOption);
+                });
+            });
+
+            // Add orphaned child skills (children whose parents are not in this group)
+            const orphanedChildren = childSkillsInGroup.filter(child =>
+                !parentSkillsInGroup.some(parent => parent.id === child.parent_id)
+            );
+            orphanedChildren.forEach(childSkill => {
+                const childOption = document.createElement('option');
+                childOption.value = childSkill.id;
+                childOption.textContent = `🔩 ${childSkill.name}`;
+                childOption.className = 'orphaned-child-skill';
+                groupHeader.appendChild(childOption);
+            });
         });
     }
 }
@@ -422,32 +490,34 @@ function hideAbsentModal() {
 }
 
 function showTaskAssignmentModal() {
-    console.log('INDEX.HTML: showTaskAssignmentModal called. Current task index:', currentRepTaskIndex, 'Total tasks:', repTasks.length);
+    console.log('INDEX.HTML: showTaskAssignmentModal called, currentRepTaskIndex:', currentRepTaskIndex, 'repTasks length:', repTasks.length);
+
     if (currentRepTaskIndex < repTasks.length) {
         const task = repTasks[currentRepTaskIndex];
         console.log('INDEX.HTML: Current task for modal:', task);
 
         const taskInfoDiv = document.getElementById('taskInfo');
         if (taskInfoDiv) {
+            // Simple ticket info display matching the original showRepModal format
             taskInfoDiv.innerHTML = `
-                <div class="task-details">
-                    <h3>${task.name || task.scheduler_group_task || 'Unknown Task'}</h3>
-                    <div class="task-meta">
-                        <span class="task-type">${task.task_type || 'REP'}</span>
-                        <span class="task-duration">${task.planned_worktime_min} min</span>
-                        <span class="task-technicians">${task.mitarbeiter_pro_aufgabe} technicians needed</span>
-                    </div>
-                    ${task.ticket_mo ? `<p><strong>Ticket/MO:</strong> ${task.ticket_mo}</p>` : ''}
-                    ${task.ticket_url ? `<p><strong>Link:</strong> <a href="${task.ticket_url}" target="_blank" rel="noopener">${task.ticket_url}</a></p>` : ''}
-                    <p><strong>Progress:</strong> ${currentRepTaskIndex + 1} of ${repTasks.length}</p>
-                    ${task.isAdditionalTask ? '<span class="additional-task-badge">Additional Task</span>' : ''}
-                </div>
+                <p><strong>Task:</strong> ${task.name || task.scheduler_group_task || 'Unknown Task'}</p>
+                <p><strong>Ticket/MO:</strong> ${task.ticket_mo || 'N/A'}</p>
+                ${task.ticket_url ? `<p><strong>Link:</strong> <a href="${task.ticket_url}" target="_blank">${task.ticket_url}</a></p>` : ''}
+                <p><strong>Technicians Planned:</strong> ${task.mitarbeiter_pro_aufgabe}</p>
+                <p><strong>Duration:</strong> ${task.planned_worktime_min} minutes</p>
+                <p><strong>Progress:</strong> ${currentRepTaskIndex + 1} of ${repTasks.length}</p>
+                ${task.isAdditionalTask ? '<p><span class="additional-task-badge">Additional Task</span></p>' : ''}
             `;
         } else {
             console.error("INDEX.HTML: taskInfo div not found!");
         }
 
         populateTaskTechnicians(task);
+
+        // Clear search input and show modal
+        const technicianSearch = document.getElementById('technicianSearch');
+        if (technicianSearch) technicianSearch.value = '';
+
         showModal('taskAssignmentModal');
     } else {
         console.log('INDEX.HTML: All tasks processed, submitting final assignments...');
@@ -1019,22 +1089,42 @@ document.addEventListener('DOMContentLoaded', function() {
         validateAssignmentBtn.addEventListener('click', function() {
             const selectedCheckboxes = document.querySelectorAll('#availableTechnicians input[type="checkbox"]:checked');
             const selectedTechnicians = Array.from(selectedCheckboxes).map(cb => cb.value);
+            const currentTask = repTasks[currentRepTaskIndex];
+            const requiredTechnicians = parseInt(currentTask.mitarbeiter_pro_aufgabe) || 1;
 
             if (selectedTechnicians.length === 0) {
                 showMessage('Please select at least one technician.', 'error');
-                return;
+                return; // Stop here, don't close modal
             }
 
-            const currentTask = repTasks[currentRepTaskIndex];
+            // CRITICAL: Check if selected technicians count matches required count
+            if (selectedTechnicians.length !== requiredTechnicians) {
+                const message = selectedTechnicians.length < requiredTechnicians
+                    ? `You have selected ${selectedTechnicians.length} technician${selectedTechnicians.length > 1 ? 's' : ''}, but this task requires exactly ${requiredTechnicians} technician${requiredTechnicians > 1 ? 's' : ''}. Please select ${requiredTechnicians - selectedTechnicians.length} more technician${(requiredTechnicians - selectedTechnicians.length) > 1 ? 's' : ''}.`
+                    : `You have selected ${selectedTechnicians.length} technician${selectedTechnicians.length > 1 ? 's' : ''}, but this task requires exactly ${requiredTechnicians} technician${requiredTechnicians > 1 ? 's' : ''}. Please remove ${selectedTechnicians.length - requiredTechnicians} technician${(selectedTechnicians.length - requiredTechnicians) > 1 ? 's' : ''}.`;
+                showMessage(message, 'error');
+                return; // Stop here, don't close modal
+            }
+
+            // CRITICAL: Store assignment data in the format expected by backend
             repAssignments.push({
                 task_id: currentTask.id,
-                task_name: currentTask.name,
-                assigned_technicians: selectedTechnicians
+                task_name: currentTask.name || currentTask.scheduler_group_task,
+                technicians: selectedTechnicians, // Backend expects 'technicians' not 'assigned_technicians'
+                skipped: false // Explicitly mark as not skipped
+            });
+
+            console.log('Task assigned:', {
+                task_id: currentTask.id,
+                task_name: currentTask.name || currentTask.scheduler_group_task,
+                technicians: selectedTechnicians,
+                required_count: requiredTechnicians,
+                selected_count: selectedTechnicians.length
             });
 
             currentRepTaskIndex++;
-            hideTaskAssignmentModal();
-            showTaskAssignmentModal(); // Show next task or finish
+            // Don't hide modal, just show next task directly
+            showTaskAssignmentModal(); // This will show next task or finish
         });
     }
 
@@ -1042,15 +1132,40 @@ document.addEventListener('DOMContentLoaded', function() {
     if (skipTaskBtn) {
         skipTaskBtn.addEventListener('click', function() {
             const currentTask = repTasks[currentRepTaskIndex];
+
+            // CRITICAL: Show prompt for skip reason - this is required by the backend
+            const skipReason = prompt('Please provide a reason for skipping this task:', '');
+
+            // If user cancels the prompt, don't skip the task
+            if (skipReason === null) {
+                return;
+            }
+
+            // If user provides empty reason, ask for a valid reason
+            if (skipReason.trim() === '') {
+                showMessage('Please provide a valid reason for skipping this task.', 'error');
+                return;
+            }
+
+            // CRITICAL: Store skip data in the format expected by backend
             repAssignments.push({
                 task_id: currentTask.id,
-                task_name: currentTask.name,
-                assigned_technicians: []
+                task_name: currentTask.name || currentTask.scheduler_group_task,
+                technicians: [], // Empty technicians array for skipped tasks
+                skipped: true, // CRITICAL: Backend checks for this flag
+                skip_reason: skipReason.trim() // CRITICAL: Backend uses this for reporting
+            });
+
+            console.log('Task skipped:', {
+                task_id: currentTask.id,
+                task_name: currentTask.name || currentTask.scheduler_group_task,
+                skip_reason: skipReason.trim(),
+                skipped: true
             });
 
             currentRepTaskIndex++;
-            hideTaskAssignmentModal();
-            showTaskAssignmentModal(); // Show next task or finish
+            // Don't hide modal, just show next task directly
+            showTaskAssignmentModal(); // This will show next task or finish
         });
     }
 
