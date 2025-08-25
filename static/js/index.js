@@ -428,15 +428,46 @@ function populateTechnicianGroups() {
     console.log('INDEX.HTML: Technician groups populated.');
 }
 
+let isUploadInProgress = false;
+
+// Improved message display function
 function showMessage(text, type) {
     const messageDiv = document.getElementById('message');
     if (messageDiv) {
+        // Clear any existing message first
+        messageDiv.style.display = 'none';
+
+        // Force reflow to ensure the hide takes effect
+        messageDiv.offsetHeight;
+
+        // Set new message
         messageDiv.style.display = 'block';
         messageDiv.className = `message-container ${type}`;
         messageDiv.textContent = text;
+        messageDiv.style.position = 'fixed';
+        messageDiv.style.top = '20px';
+        messageDiv.style.left = '50%';
+        messageDiv.style.transform = 'translateX(-50%)';
+        messageDiv.style.zIndex = '10000';
+
+        // Force the element to be visible and scroll into view
         messageDiv.scrollIntoView({behavior: 'smooth', block: 'center'});
+
+        console.log(`Message displayed: [${type.toUpperCase()}] ${text}`);
+
+        // Auto-hide messages after appropriate time
+        const hideTimeout = type === 'error' ? 8000 : 4000; // Longer for errors
+        setTimeout(() => {
+            if (messageDiv.style.display === 'block' && messageDiv.textContent === text) {
+                messageDiv.style.display = 'none';
+            }
+        }, hideTimeout);
     } else {
         console.error("INDEX.HTML: Message div not found!");
+        // Fallback to browser alert for critical errors
+        if (type === 'error') {
+            alert(`Error: ${text}`);
+        }
     }
 }
 
@@ -547,19 +578,60 @@ function populateTaskTechnicians(task) {
     taskEligibleTechnicians.forEach(tech => {
         const techDiv = document.createElement('div');
         techDiv.className = 'technician-option';
+        techDiv.style.cursor = 'pointer';
+        techDiv.style.padding = '8px';
+        techDiv.style.border = '1px solid #ddd';
+        techDiv.style.borderRadius = '4px';
+        techDiv.style.marginBottom = '4px';
+        techDiv.style.display = 'flex';
+        techDiv.style.alignItems = 'center';
 
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.id = `tech_${tech.name}`;
         checkbox.value = tech.name;
         checkbox.name = 'selectedTechnicians';
+        checkbox.style.marginRight = '8px';
 
         const label = document.createElement('label');
-        label.htmlFor = checkbox.id;
-        label.innerHTML = `
-            <span class="tech-name">${tech.name}</span>
-            <span class="tech-time">Available: ${tech.available_time}min</span>
-        `;
+        // REMOVED: label.htmlFor = `tech_${tech.name}`; - This was causing the conflict
+        label.className = 'tech-name';
+        label.textContent = tech.name;
+        label.style.cursor = 'pointer';
+        label.style.flex = '1';
+        label.style.margin = '0';
+        label.style.userSelect = 'none'; // Prevent text selection when clicking
+
+        // Make the entire div clickable - improved event handler
+        techDiv.addEventListener('click', function(e) {
+            // If clicking directly on the checkbox, let it handle its own state
+            if (e.target === checkbox) {
+                // Don't prevent default behavior for checkbox clicks
+                // Just update the visual feedback after the checkbox state changes
+                setTimeout(() => {
+                    updateVisualFeedback();
+                }, 0);
+                return;
+            }
+
+            // For clicks anywhere else in the div, toggle the checkbox
+            e.preventDefault();
+            e.stopPropagation();
+
+            checkbox.checked = !checkbox.checked;
+            updateVisualFeedback();
+        });
+
+        // Function to update visual feedback based on checkbox state
+        function updateVisualFeedback() {
+            if (checkbox.checked) {
+                techDiv.style.backgroundColor = '#e3f2fd';
+                techDiv.style.borderColor = '#2196f3';
+            } else {
+                techDiv.style.backgroundColor = '';
+                techDiv.style.borderColor = '#ddd';
+            }
+        }
 
         techDiv.appendChild(checkbox);
         techDiv.appendChild(label);
@@ -915,11 +987,17 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Upload form handler
+    // Upload form handler with improved error handling
     const uploadForm = document.getElementById('uploadForm');
     if (uploadForm) {
         uploadForm.addEventListener('submit', function(e) {
             e.preventDefault();
+
+            // Prevent duplicate uploads
+            if (isUploadInProgress) {
+                console.log('Upload already in progress, ignoring duplicate request');
+                return;
+            }
 
             const fileInput = document.getElementById('excelFile');
             let hasRestoredFile = window.restoredFileData?.hasData && filename;
@@ -964,25 +1042,45 @@ document.addEventListener('DOMContentLoaded', function() {
             formData.append('excelFile', uploadedFile);
             formData.append('session_id', sessionId);
 
+            // Set upload in progress flag
+            isUploadInProgress = true;
+            console.log('Starting file upload for:', filename);
+
             fetch('/upload', {
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    showMessage(data.error, 'error');
+            .then(response => {
+                console.log('Upload response status:', response.status);
+                // Handle both success and error responses
+                return response.json().then(data => {
+                    return { data, status: response.status, ok: response.ok };
+                });
+            })
+            .then(({ data, status, ok }) => {
+                if (!ok || data.error || (data.message && data.message.includes('mismatch'))) {
+                    // Handle error cases
+                    const errorMessage = data.error || data.message || `Upload failed (${status}). Please try again.`;
+                    console.log('Upload error:', errorMessage);
+                    showMessage(errorMessage, 'error');
                     return;
                 }
 
+                // Success - process the data
+                console.log('Upload successful, proceeding to absent modal');
                 repTasks = data.rep_tasks || [];
                 eligibleTechnicians = data.eligible_technicians || {};
                 savePageState();
                 showAbsentModal();
             })
             .catch(error => {
-                console.error('Error in upload:', error);
-                showMessage('Upload failed. Please try again.', 'error');
+                console.error('Upload request failed:', error);
+                showMessage('Upload failed. Please check your connection and try again.', 'error');
+            })
+            .finally(() => {
+                // Always reset the upload flag
+                isUploadInProgress = false;
+                console.log('Upload process completed');
             });
         });
     }
@@ -1092,25 +1190,25 @@ document.addEventListener('DOMContentLoaded', function() {
             const currentTask = repTasks[currentRepTaskIndex];
             const requiredTechnicians = parseInt(currentTask.mitarbeiter_pro_aufgabe) || 1;
 
-            if (selectedTechnicians.length === 0) {
-                showMessage('Please select at least one technician.', 'error');
-                return; // Stop here, don't close modal
-            }
-
-            // CRITICAL: Check if selected technicians count matches required count
-            if (selectedTechnicians.length !== requiredTechnicians) {
-                const message = selectedTechnicians.length < requiredTechnicians
-                    ? `You have selected ${selectedTechnicians.length} technician${selectedTechnicians.length > 1 ? 's' : ''}, but this task requires exactly ${requiredTechnicians} technician${requiredTechnicians > 1 ? 's' : ''}. Please select ${requiredTechnicians - selectedTechnicians.length} more technician${(requiredTechnicians - selectedTechnicians.length) > 1 ? 's' : ''}.`
-                    : `You have selected ${selectedTechnicians.length} technician${selectedTechnicians.length > 1 ? 's' : ''}, but this task requires exactly ${requiredTechnicians} technician${requiredTechnicians > 1 ? 's' : ''}. Please remove ${selectedTechnicians.length - requiredTechnicians} technician${(selectedTechnicians.length - requiredTechnicians) > 1 ? 's' : ''}.`;
+            // CRITICAL: Check if selected technicians count is less than required count
+            if (selectedTechnicians.length < requiredTechnicians) {
+                let message;
+                if (selectedTechnicians.length === 0) {
+                    message = `This task requires ${requiredTechnicians} technician${requiredTechnicians > 1 ? 's' : ''}. Please select ${requiredTechnicians} technician${requiredTechnicians > 1 ? 's' : ''}.`;
+                } else {
+                    message = `You have selected ${selectedTechnicians.length} technician${selectedTechnicians.length > 1 ? 's' : ''}, but this task requires ${requiredTechnicians} technician${requiredTechnicians > 1 ? 's' : ''}. Please select ${requiredTechnicians - selectedTechnicians.length} more technician${(requiredTechnicians - selectedTechnicians.length) > 1 ? 's' : ''}.`;
+                }
                 showMessage(message, 'error');
                 return; // Stop here, don't close modal
             }
 
-            // CRITICAL: Store assignment data in the format expected by backend
+            // CRITICAL: Store assignment data with exact counts for backend processing
             repAssignments.push({
                 task_id: currentTask.id,
                 task_name: currentTask.name || currentTask.scheduler_group_task,
-                technicians: selectedTechnicians, // Backend expects 'technicians' not 'assigned_technicians'
+                technicians: selectedTechnicians, // Backend expects 'technicians' field
+                required_technicians: requiredTechnicians, // CRITICAL: Backend needs to know required count
+                selected_count: selectedTechnicians.length, // CRITICAL: Backend needs to know selected count
                 skipped: false // Explicitly mark as not skipped
             });
 
@@ -1123,8 +1221,17 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             currentRepTaskIndex++;
-            // Don't hide modal, just show next task directly
-            showTaskAssignmentModal(); // This will show next task or finish
+
+            // Check if this was the last task
+            if (currentRepTaskIndex >= repTasks.length) {
+                // Close REP modal before showing progress
+                hideTaskAssignmentModal();
+                // Submit final assignments which will show progress bar
+                submitFinalAssignments();
+            } else {
+                // Show next task directly without closing modal
+                showTaskAssignmentModal();
+            }
         });
     }
 
