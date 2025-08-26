@@ -1,0 +1,5 @@
+# Ignore technician_dashboard.html output file
+/output/technician_dashboard.html
+# Ignore technician_mappings.json
+/technician_mappings.json
+
