@@ -4,13 +4,16 @@ A professional Flask-based web application for managing weekend technician task 
 
 ## 🚀 Features
 
-- **Skill-Based Task Assignment:** Intelligent assignment of tasks to technicians based on required skills and competency levels
-- **Technician Management:** Comprehensive technician profiles with skill tracking and satellite point assignments
-- **Task Management:** Create, update, and manage tasks with multi-skill requirements
+- **Advanced Skill-Based Matching:** Intelligent task assignment system matching technician skills with task requirements
+- **Multi-Skill Task Support:** Tasks can require multiple technical skills with different proficiency levels
+- **Group Assignment Logic:** Smart grouping of technicians to optimize skill coverage and team effectiveness
+- **Technician Management:** Comprehensive technician profiles with skill tracking and experience levels
+- **Task Management:** Create, update, and manage tasks with multi-skill requirements and duration calculations
 - **Interactive Dashboard:** User-friendly interface for managing assignments and viewing technician workloads
 - **Security Features:** CSRF protection, input validation, rate limiting, and secure headers
-- **Excel Integration:** Import and process technician data from Excel files
+- **Excel Integration:** Import and process technician data and skill matrices from Excel files
 - **Real-time Updates:** Dynamic skill mapping and assignment optimization
+- **Workload Balancing:** Automatic adjustment of task duration based on team size and skill levels
 
 ## 📁 Project Structure
 
@@ -18,17 +21,19 @@ A professional Flask-based web application for managing weekend technician task 
 WeekendPlanningProject/
 ├── wkndPlanning/              # Main application package
 │   ├── routes/                # Flask blueprints and routing
-│   │   ├── api.py            # API endpoints
+│   │   ├── api.py            # API endpoints for skill-based assignments
+│   │   ├── health.py         # Health check endpoints
 │   │   └── main.py           # Main web routes
 │   ├── services/              # Business logic and utilities
 │   │   ├── config_manager.py # Configuration management
 │   │   ├── dashboard.py      # Dashboard generation
 │   │   ├── data_processing.py # Data processing utilities
-│   │   ├── db_utils.py       # Database operations
+│   │   ├── db_utils.py       # Database operations and schema
 │   │   ├── extract_data.py   # Excel data extraction
+│   │   ├── health_check.py   # System health monitoring
 │   │   ├── logging_config.py # Logging configuration
 │   │   ├── security.py       # Security utilities
-│   │   └── task_assigner.py  # Task assignment algorithms
+│   │   └── task_assigner.py  # Skill-based assignment algorithms
 │   ├── static/               # CSS, JavaScript, and static assets
 │   ├── templates/            # Jinja2 HTML templates
 │   ├── uploads/              # File upload directory
@@ -44,8 +49,9 @@ WeekendPlanningProject/
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.12 or higher
 - pip (Python package installer)
+- Git
 
 ### Installation Steps
 
@@ -98,12 +104,32 @@ WeekendPlanningProject/
 | `CSRF_TIME_LIMIT` | CSRF token expiration (seconds) | 3600 |
 | `SESSION_LIFETIME` | Session timeout (seconds) | 1800 |
 | `MAX_UPLOAD_SIZE` | Maximum file upload size (bytes) | 16777216 |
+| `MIN_SKILL_LEVEL` | Minimum required skill level | 1 |
+| `MAX_SKILL_LEVEL` | Maximum possible skill level | 5 |
 
-### Database Configuration
+## 📊 Skill-Based Assignment System
 
-The application automatically selects the appropriate database:
-- **Development:** `testsDB.db` (when `DEBUG_MODE=1`)
-- **Production:** `weekend_planning.db`
+The application uses a sophisticated skill-based assignment system that:
+- Matches technicians to tasks based on required technical skills
+- Supports multiple skill requirements per task
+- Calculates optimal team sizes based on task complexity
+- Adjusts task duration based on team composition
+- Ensures fair workload distribution while maintaining skill coverage
+
+## 🔒 Security
+
+- CSRF Protection for all forms
+- Input validation and sanitization
+- Rate limiting on API endpoints
+- Secure session handling
+- XSS prevention
+- Secure file upload handling
+
+## 📝 Documentation
+
+Detailed documentation is available in the following files:
+- `technician_dashboard_manual.md`: User manual for the technician dashboard
+- `ROADMAP.md`: Development roadmap and future features
 
 ## 🎯 Usage
 
