@@ -16,7 +16,6 @@ const techSattelitePointInput = document.getElementById('techSattelitePoint');
 const techLinesInput = document.getElementById('techLines');
 const taskListDiv = document.getElementById('taskList');
 const addTaskBtn = document.getElementById('addTaskBtn');
-const saveChangesBtn = document.getElementById('saveChangesBtn');
 const statusMessageDiv = document.getElementById('statusMessage');
 const backToDashboardBtn = document.getElementById('backToDashboardBtn');
 
@@ -44,20 +43,6 @@ const taskTechnologyMappingListContainerDiv = document.getElementById('taskTechn
 const newTaskNameForMappingInput = document.getElementById('newTaskNameForMapping');
 const newTaskTechnologySelectForMapping = document.getElementById('newTaskTechnologySelectForMapping');
 const addNewTaskForMappingBtn = document.getElementById('addNewTaskForMappingBtn');
-
-
-function updateSaveChangesButton() {
-    if (saveChangesBtn) {
-        const numChanges = changesSummary.size;
-        if (numChanges > 0) {
-            saveChangesBtn.textContent = `Save All Changes (${numChanges})`;
-            saveChangesBtn.disabled = false;
-        } else {
-            saveChangesBtn.textContent = 'Save All Changes';
-            saveChangesBtn.disabled = true; // Disable if no changes
-        }
-    }
-}
 
 function recordChange(type, entityId = null, field = null, oldValue = null, newValue = null, entityName = null, additionalInfo = {}) {
     const timestamp = new Date().toISOString();
@@ -100,12 +85,10 @@ function recordChange(type, entityId = null, field = null, oldValue = null, newV
 
     changesSummary.add(JSON.stringify(changeDetail)); // Add detailed object
     unsavedChanges = true;
-    updateSaveChangesButton();
 }
 
 function clearUnsavedChanges() {
     unsavedChanges = false;
     changesSummary.clear();
-    updateSaveChangesButton();
     if (statusMessageDiv) statusMessageDiv.textContent = '';
 }

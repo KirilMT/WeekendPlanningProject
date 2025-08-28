@@ -45,10 +45,6 @@ async function initializePage() {
         });
     }
 
-    if (saveChangesBtn) {
-        saveChangesBtn.addEventListener('click', saveAllChanges);
-    }
-
     if (backToDashboardBtn) {
         backToDashboardBtn.addEventListener('click', (event) => {
             if (unsavedChanges) {
