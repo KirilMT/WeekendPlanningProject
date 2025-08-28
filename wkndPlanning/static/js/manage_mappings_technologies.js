@@ -92,7 +92,7 @@ function renderTechnologyTree(parentElement, technologies, parentId, level) {
 
         const editBtn = document.createElement('button');
         editBtn.textContent = 'Edit';
-        editBtn.classList.add('edit-btn');
+        editBtn.classList.add('btn', 'btn-warning', 'btn-sm');
         editBtn.onclick = (e) => {
             e.stopPropagation();
             editTechnology(tech.id, tech.name, tech.group_id, tech.parent_id);
@@ -101,7 +101,7 @@ function renderTechnologyTree(parentElement, technologies, parentId, level) {
 
         const deleteBtn = document.createElement('button');
         deleteBtn.textContent = 'Delete';
-        deleteBtn.classList.add('delete-btn');
+        deleteBtn.classList.add('btn', 'btn-danger', 'btn-sm');
         deleteBtn.onclick = (e) => {
             e.stopPropagation();
             deleteTechnology(tech.id);
@@ -156,7 +156,7 @@ function renderAllTechnologies() {
         actionsDiv.classList.add('list-item-actions');
         const editBtn = document.createElement('button');
         editBtn.textContent = 'Edit';
-        editBtn.classList.add('edit-btn');
+        editBtn.classList.add('btn', 'btn-warning', 'btn-sm');
         editBtn.onclick = (e) => {
             e.stopPropagation();
             editTechnology(topLevelTech.id, topLevelTech.name, topLevelTech.group_id, topLevelTech.parent_id);
@@ -164,7 +164,7 @@ function renderAllTechnologies() {
         actionsDiv.appendChild(editBtn);
         const deleteBtn = document.createElement('button');
         deleteBtn.textContent = 'Delete';
-        deleteBtn.classList.add('delete-btn');
+        deleteBtn.classList.add('btn', 'btn-danger', 'btn-sm');
         deleteBtn.onclick = (e) => {
             e.stopPropagation();
             deleteTechnology(topLevelTech.id);
@@ -363,7 +363,7 @@ function renderTechnologyGroups() {
             actionsDiv.classList.add('list-item-actions');
             const editBtn = document.createElement('button');
             editBtn.textContent = 'Edit';
-            editBtn.classList.add('edit-btn');
+            editBtn.classList.add('btn', 'btn-warning', 'btn-sm');
             editBtn.onclick = (e) => {
                 e.stopPropagation();
                 editTechnologyGroup(group.id, group.name);
@@ -371,7 +371,7 @@ function renderTechnologyGroups() {
             actionsDiv.appendChild(editBtn);
             const deleteBtn = document.createElement('button');
             deleteBtn.textContent = 'Delete';
-            deleteBtn.classList.add('delete-btn');
+            deleteBtn.classList.add('btn', 'btn-danger', 'btn-sm');
             deleteBtn.onclick = (e) => {
                 e.stopPropagation();
                 deleteTechnologyGroup(group.id);

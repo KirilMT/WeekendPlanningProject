@@ -21,58 +21,58 @@ async function fetchTechnicianSkills(technicianName) {
 }
 
 const SKILL_LEVEL_TEXTS = ["Not Skilled (0)", "Beginner (1)", "Intermediate (2)", "Advanced (3)", "Expert (4)"];
+const SKILL_LEVEL_NAMES = ["Not Skilled", "Beginner", "Intermediate", "Advanced", "Expert"];
 
 function renderTechnicianSkills() {
     technicianSkillsListContainerDiv.innerHTML = '';
     if (!selectedTechnician || !currentMappings.technicians[selectedTechnician]) {
-        technicianSkillsListContainerDiv.innerHTML = '<p>Select technician to view skills.</p>';
+        technicianSkillsListContainerDiv.innerHTML = '<p>Select a technician to view their skills.</p>';
         return;
     }
     if (allTechnologies.length === 0) {
-        technicianSkillsListContainerDiv.innerHTML = '<p>No technologies defined. Skills cannot be assigned.</p>';
+        technicianSkillsListContainerDiv.innerHTML = '<p>No technologies have been defined. Skills cannot be assigned.</p>';
         return;
     }
 
-    const techSkills = currentMappings.technicians[selectedTechnician].skills || {};
+    technicianSkillsListContainerDiv.className = 'skills-tree-container';
 
-    const hasChildren = (technologyId) => {
-        return allTechnologies.some(tech => tech.parent_id === technologyId);
-    };
+    const techSkills = currentMappings.technicians[selectedTechnician].skills || {};
+    const hasChildren = (technologyId) => allTechnologies.some(tech => tech.parent_id === technologyId);
 
     const createSkillViewMode = (technology, currentLevel) => {
         const container = document.createElement('div');
         container.classList.add('skill-level-container');
 
-        const levelTextSpan = document.createElement('span');
-        levelTextSpan.classList.add('skill-level-text');
-
-        // Check if the technology is a parent or has become one
         if (hasChildren(technology.id)) {
-            levelTextSpan.textContent = 'Level: N/A (Parent Skill)';
-            levelTextSpan.style.color = 'orange';
-            levelTextSpan.title = 'This technology is a parent and cannot have a skill level directly assigned.';
-            // Optionally, do not show an edit button for parent skills
-            // container.appendChild(levelTextSpan);
-            // return container;
+            const parentSkillText = document.createElement('span');
+            parentSkillText.classList.add('skill-level-text', 'parent-skill-indicator');
+            parentSkillText.textContent = 'N/A (Parent Skill)';
+            parentSkillText.title = 'This technology is a parent and cannot have a skill level directly assigned.';
+            container.appendChild(parentSkillText);
         } else {
-            levelTextSpan.textContent = `Level: ${SKILL_LEVEL_TEXTS[currentLevel]}`;
-        }
-        container.appendChild(levelTextSpan);
+            const levelDisplay = document.createElement('div');
+            levelDisplay.classList.add('legend-item-display');
 
-        // Only show edit button if it's not a parent skill
-        if (!hasChildren(technology.id)) {
+            const badge = document.createElement('span');
+            badge.classList.add('level-badge', `level-${currentLevel}`);
+            badge.textContent = currentLevel;
+            badge.title = `Level: ${SKILL_LEVEL_NAMES[currentLevel]}`;
+            levelDisplay.appendChild(badge);
+            
+            container.appendChild(levelDisplay);
+
             const editButton = document.createElement('button');
-            editButton.classList.add('edit-skill-btn');
-            editButton.textContent = 'Edit';
+            editButton.classList.add('btn', 'btn-warning', 'btn-sm');
+            editButton.innerHTML = '<span class="btn-icon">✏️</span> Edit';
             editButton.addEventListener('click', () => {
                 const skillItemDiv = container.closest('.skill-item-controls');
                 skillItemDiv.innerHTML = ''; // Clear view mode
                 skillItemDiv.appendChild(createSkillEditMode(technology, currentLevel));
             });
             container.appendChild(editButton);
-        } else {
-            // If it is a parent, and a skill level was previously defined (e.g. techSkills[technology.id] exists)
-            // we might want to inform the user that this skill is now invalid.
+        }
+
+        if (hasChildren(technology.id)) {
             if (typeof techSkills[technology.id] !== 'undefined') {
                  displayMessage(`Skill '${escapeHtml(technology.name)}' for ${escapeHtml(selectedTechnician)} is now a parent skill and its level is no longer applicable.`, 'warning');
             }
@@ -98,93 +98,96 @@ function renderTechnicianSkills() {
 
         skillSelect.addEventListener('change', async () => {
             const newLevel = parseInt(skillSelect.value);
-            // selectedTechnician and currentSelectedTechnicianId are global variables
             await updateTechnicianSkill(selectedTechnician, currentSelectedTechnicianId, technology.id, newLevel);
-            // updateTechnicianSkill calls renderTechnicianSkills, which will redraw the list,
-            // automatically removing this edit-mode select and showing the updated view mode.
         });
-
-        // Save and Cancel buttons are removed as per the new auto-save requirement.
 
         return container;
     };
 
+    function renderSkillNode(parentElement, technology, level) {
+        const listItem = document.createElement('li');
+        listItem.classList.add('skill-tree-item', `level-${level}`);
+        listItem.dataset.techId = technology.id;
 
-    function renderSkillItemsRecursive(parentElement, parentTechnologyId, level) {
-        const childrenOfParent = allTechnologies.filter(tech => tech.parent_id === parentTechnologyId);
-        childrenOfParent.sort((a, b) => a.name.localeCompare(b.name));
+        const itemContent = document.createElement('div');
+        itemContent.classList.add('skill-item-content');
 
-        childrenOfParent.forEach(childTech => {
-            const skillDiv = document.createElement('div');
-            skillDiv.classList.add('skill-item');
-            skillDiv.style.marginLeft = `${level * 25}px`;
-
-            const skillLabel = document.createElement('label');
-            skillLabel.className = 'skill-label';
-            skillLabel.textContent = escapeHtml(childTech.name);
-            skillDiv.appendChild(skillLabel);
-
-            const controlsDiv = document.createElement('div');
-            controlsDiv.classList.add('skill-item-controls');
-
-            if (!hasChildren(childTech.id)) {
-                const skillInfo = techSkills[childTech.id];
-                // Ensure currentSkillLevel is an integer, defaulting to 0 if skillInfo is undefined
-                const currentSkillLevel = typeof skillInfo !== 'undefined' ? parseInt(skillInfo, 10) : 0;
-                controlsDiv.appendChild(createSkillViewMode(childTech, currentSkillLevel));
-            }
-            skillDiv.appendChild(controlsDiv);
-            parentElement.appendChild(skillDiv);
-
-            if (hasChildren(childTech.id)) {
-                renderSkillItemsRecursive(parentElement, childTech.id, level + 1);
-            }
-        });
-    }
-
-    const topLevelTechnologies = allTechnologies.filter(tech => tech.parent_id === null);
-    topLevelTechnologies.sort((a, b) => {
-        const groupCompare = (a.group_name || 'ZZZ_Uncategorized').localeCompare(b.group_name || 'ZZZ_Uncategorized');
-        if (groupCompare !== 0) return groupCompare;
-        return a.name.localeCompare(b.name);
-    });
-
-    let currentGroupName = null;
-    topLevelTechnologies.forEach(topLevelTech => {
-        if (topLevelTech.group_name !== currentGroupName) {
-            const groupHeader = document.createElement('h4');
-            groupHeader.textContent = escapeHtml(topLevelTech.group_name || 'Uncategorized');
-            groupHeader.classList.add('skill-group-header');
-            technicianSkillsListContainerDiv.appendChild(groupHeader);
-            currentGroupName = topLevelTech.group_name;
-        }
-
-        const skillDiv = document.createElement('div');
-        skillDiv.classList.add('skill-item');
-        skillDiv.style.marginLeft = '0px';
-
-        const skillLabel = document.createElement('label');
+        const skillLabel = document.createElement('span');
         skillLabel.className = 'skill-label';
-        skillLabel.textContent = escapeHtml(topLevelTech.name);
-        skillDiv.appendChild(skillLabel);
+        skillLabel.textContent = escapeHtml(technology.name);
+        itemContent.appendChild(skillLabel);
 
         const controlsDiv = document.createElement('div');
         controlsDiv.classList.add('skill-item-controls');
 
-        if (!hasChildren(topLevelTech.id)) {
-            const skillInfo = techSkills[topLevelTech.id];
-            // Ensure currentSkillLevel is an integer, defaulting to 0 if skillInfo is undefined
-            const currentSkillLevel = typeof skillInfo !== 'undefined' ? parseInt(skillInfo, 10) : 0;
-            controlsDiv.appendChild(createSkillViewMode(topLevelTech, currentSkillLevel));
+        if (!hasChildren(technology.id)) {
+            const currentSkillLevel = techSkills[technology.id] !== undefined ? parseInt(techSkills[technology.id], 10) : 0;
+            controlsDiv.appendChild(createSkillViewMode(technology, currentSkillLevel));
+        } else {
+            const parentIndicator = document.createElement('span');
+            parentIndicator.className = 'parent-indicator';
+            controlsDiv.appendChild(parentIndicator);
         }
-        skillDiv.appendChild(controlsDiv);
-        technicianSkillsListContainerDiv.appendChild(skillDiv);
+        itemContent.appendChild(controlsDiv);
+        listItem.appendChild(itemContent);
 
-        if (hasChildren(topLevelTech.id)) {
-            renderSkillItemsRecursive(technicianSkillsListContainerDiv, topLevelTech.id, 1);
+        const children = allTechnologies.filter(tech => tech.parent_id === technology.id);
+        if (children.length > 0) {
+            const sublist = document.createElement('ul');
+            sublist.classList.add('skill-subtree');
+            children.sort((a, b) => a.name.localeCompare(b.name));
+            children.forEach(child => renderSkillNode(sublist, child, level + 1));
+            listItem.appendChild(sublist);
         }
+
+        parentElement.appendChild(listItem);
+    }
+
+    const technologiesByGroup = allTechnologies.reduce((acc, tech) => {
+        if (tech.parent_id === null) {
+            const groupName = tech.group_name || 'Uncategorized';
+            if (!acc[groupName]) {
+                acc[groupName] = [];
+            }
+            acc[groupName].push(tech);
+        }
+        return acc;
+    }, {});
+
+    const sortedGroupNames = Object.keys(technologiesByGroup).sort((a, b) => {
+        if (a === 'Uncategorized') return 1;
+        if (b === 'Uncategorized') return -1;
+        return a.localeCompare(b);
+    });
+
+    const rootList = document.createElement('ul');
+    rootList.className = 'skill-tree';
+    technicianSkillsListContainerDiv.appendChild(rootList);
+
+    sortedGroupNames.forEach(groupName => {
+        const groupLi = document.createElement('li');
+        groupLi.className = 'skill-group';
+        
+        const groupHeader = document.createElement('h4');
+        groupHeader.className = 'skill-group-header';
+        groupHeader.textContent = escapeHtml(groupName);
+        groupLi.appendChild(groupHeader);
+        
+        const groupSublist = document.createElement('ul');
+        groupSublist.className = 'skill-subtree group-subtree';
+        groupLi.appendChild(groupSublist);
+
+        const topLevelTechs = technologiesByGroup[groupName];
+        topLevelTechs.sort((a, b) => a.name.localeCompare(b.name));
+        
+        topLevelTechs.forEach(tech => {
+            renderSkillNode(groupSublist, tech, 0);
+        });
+        
+        rootList.appendChild(groupLi);
     });
 }
+
 
 async function updateTechnicianSkill(technicianName, technicianId, technologyId, skillLevel) {
     if (!technicianName || typeof technicianId === 'undefined') {
@@ -204,15 +207,10 @@ async function updateTechnicianSkill(technicianName, technicianId, technologyId,
 
             displayMessage(`Skill '${escapeHtml(technologyName)}' for technician '${escapeHtml(techNameForMsg)}' updated to level ${escapeHtml(SKILL_LEVEL_TEXTS[skillLevel] || skillLevel)}.`, 'success');
 
-            // No need to manually update currentMappings.technicians[selectedTechnician].skills here,
-            // as fetchMappings will get the latest data from the server.
-
-            // Call fetchMappings to refresh all technician data and re-render relevant UI parts
             if (typeof fetchMappings === 'function' && technicianName) {
                 await fetchMappings(technicianName);
             } else {
                 console.error('fetchMappings function is not available or technicianName is missing. Cannot refresh full technician details.');
-                // Fallback to just re-rendering skills if full refresh is not possible
                 renderTechnicianSkills();
             }
         } else {
@@ -221,11 +219,10 @@ async function updateTechnicianSkill(technicianName, technicianId, technologyId,
     } catch (error) {
         displayMessage(`Error updating skill: ${error.message}`, 'error');
         console.error(error);
-        // On error, also try to refresh to get consistent state from server
-        if (typeof fetchMappings === 'function' && selectedTechnician) { // selectedTechnician is global
+        if (typeof fetchMappings === 'function' && selectedTechnician) { 
             await fetchMappings(selectedTechnician);
         } else {
-            await fetchTechnicianSkills(selectedTechnician); // Fallback if fetchMappings isn't available
+            await fetchTechnicianSkills(selectedTechnician); 
         }
     }
 }

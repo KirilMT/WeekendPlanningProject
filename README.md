@@ -91,6 +91,24 @@ WeekendPlanningProject/
 7. **Access the application:**
    Open your browser and navigate to `http://127.0.0.1:5000`
 
+## 🚀 Quick Test Guide
+
+To help you quickly explore the features of the Weekend Planning application, follow these steps. On the first run, the application will create a new, empty database. You can use the sample Excel files located in the `Excels_Testing/` directory to populate it with data.
+
+1.  **Start the Application**: If it's not already running, start the application with `python run.py`.
+2.  **Navigate to Management Page**: Open your browser and go to `http://127.0.0.1:5000/manage_mappings`. This is the main interface for managing technicians, tasks, and skills.
+3.  **Import Sample Data**:
+    *   Use the file upload functionality on the page to import `testsExcel.xlsb` and `testsExcel2.xlsb` from the `Excels_Testing/` directory.
+    *   This will populate the database with sample technicians, tasks, and their required skills.
+4.  **Run Task Assignment**:
+    *   Once the data is imported, you can trigger the task assignment process from the UI.
+    *   The application will use its skill-based algorithm to assign the tasks to the most suitable technicians.
+5.  **View the Dashboards**:
+    *   **Supervisor Dashboard**: Navigate to the supervisor dashboard to get an overview of all task assignments, schedules, and workloads.
+    *   **Technician Dashboard**: Check the individual technician dashboards to see their specific schedules and assigned tasks.
+
+This quick guide allows you to see the end-to-end workflow of the application, from data import to final schedule visualization.
+
 ## 🔧 Configuration
 
 ### Environment Variables

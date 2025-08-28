@@ -101,7 +101,6 @@ function recordChange(type, entityId = null, field = null, oldValue = null, newV
     changesSummary.add(JSON.stringify(changeDetail)); // Add detailed object
     unsavedChanges = true;
     updateSaveChangesButton();
-    console.log('Change recorded:', changeDetail);
 }
 
 function clearUnsavedChanges() {

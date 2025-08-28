@@ -490,8 +490,8 @@ function renderTasksForTechnologyMapping(tasks) {
         actionsDiv.style.display = 'flex';
 
         const editBtn = document.createElement('button');
-        editBtn.textContent = 'Edit';
-        editBtn.classList.add('edit-btn');
+        editBtn.innerHTML = '<span class="btn-icon">✏️</span> Edit';
+        editBtn.classList.add('btn', 'btn-warning', 'btn-sm');
         editBtn.onclick = () => {
             viewModeDiv.style.display = 'none';
             editModeDiv.style.display = 'flex';
@@ -506,15 +506,14 @@ function renderTasksForTechnologyMapping(tasks) {
         actionsDiv.appendChild(editBtn);
 
         const deleteBtn = document.createElement('button');
-        deleteBtn.textContent = 'Delete';
-        deleteBtn.classList.add('delete-btn');
+        deleteBtn.innerHTML = '<span class="btn-icon">🗑️</span> Delete';
+        deleteBtn.classList.add('btn', 'btn-danger', 'btn-sm');
         deleteBtn.onclick = () => deleteTaskMapping(task.id, task.name);
         actionsDiv.appendChild(deleteBtn);
 
         const saveBtn = document.createElement('button');
-        saveBtn.textContent = 'Save';
-        saveBtn.classList.add('save-btn');
-        saveBtn.style.backgroundColor = '#28a745';
+        saveBtn.innerHTML = '<span class="btn-icon">💾</span> Save';
+        saveBtn.classList.add('btn', 'btn-success', 'btn-sm');
         saveBtn.style.display = 'none';
         saveBtn.onclick = async () => {
             const newName = taskNameInput.value.trim();
@@ -535,8 +534,7 @@ function renderTasksForTechnologyMapping(tasks) {
 
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = 'Cancel';
-        cancelBtn.classList.add('cancel-btn');
-        cancelBtn.style.backgroundColor = '#6c757d';
+        cancelBtn.classList.add('btn', 'btn-secondary', 'btn-sm');
         cancelBtn.style.display = 'none';
         cancelBtn.onclick = () => {
             viewModeDiv.style.display = 'flex';

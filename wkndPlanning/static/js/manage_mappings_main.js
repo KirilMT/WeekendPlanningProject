@@ -115,7 +115,6 @@ async function initializePage() {
     if (typeof fetchAndPopulateSatellitePointsDropdowns === 'function') {
         fetchAndPopulateSatellitePointsDropdowns();
     } else {
-        console.error('fetchAndPopulateSatellitePointsDropdowns is not defined. Satellite point dropdowns will not be populated.');
     }
 
     // New technology form enhancements listeners
@@ -184,7 +183,6 @@ async function initializePage() {
 // --- DOMContentLoaded ---
 document.addEventListener('DOMContentLoaded', () => {
     initializePage().catch(error => {
-        console.error("Critical error during page initialization:", error);
         displayMessage("Page failed to load completely. Check console for errors.", "error");
     });
 });

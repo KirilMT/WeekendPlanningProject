@@ -1,32 +1,51 @@
-- This project, `wkndPlanning`, is a web application likely using Flask for the backend (Python) and vanilla JavaScript for the frontend.
-- Key Python files include:
-    - `wkndPlanning/app.py`: Main application file, Flask routes, API endpoints.
-    - `wkndPlanning/services/db_utils.py`: Database schema (likely SQLite), connection, and CRUD operations.
-    - `wkndPlanning/services/task_assigner.py`: Core logic for assigning tasks to technicians.
-    - `wkndPlanning/services/config_manager.py`: Handles application configuration.
-- Key frontend files include:
-    - `wkndPlanning/templates/manage_mappings.html`: Main UI for managing tasks, technicians, and skills.
-    - `wkndPlanning/static/js/manage_mappings_*.js`: JavaScript files for UI interactivity in `manage_mappings.html`.
-- The project is undergoing a major transition from a task priority-based system to a technology skill-based system for task assignment.
-    - Database changes: `technician_task_assignments.priority` column is removed. Tasks can require multiple skills (many-to-many relationship between tasks and technologies/skills).
-    - Task assignment logic in `task_assigner.py` must reflect this skill-based approach. Key considerations: number of technicians needed (`mitarbeiter_pro_aufgabe`), covering all required skills for a task, calculating average skill levels for groups.
-- When modifying `db_utils.py`:
-    - Clearly state any DDL changes (e.g., `CREATE TABLE`, `ALTER TABLE`).
-    - Ensure functions for managing new relationships (e.g., `task_required_skills`) are robust.
-- When modifying `app.py`:
-    - API endpoints (e.g., `/api/get_technician_mappings`, `/api/tasks`) should be updated to handle skill data and multi-skill requirements.
-    - Ensure data passed to templates or returned by APIs includes necessary skill information.
-- When modifying `task_assigner.py`:
-    - Focus on the new skill-based assignment logic.
-    - Refer to my detailed multi-prompt plan for the step-by-step implementation of skill-based assignment (single skill first, then multi-skill).
-    - Group selection criteria: coverage of required skills, highest average skill level per skill, tie-breakers (e.g., workload, technician names).
-    - Implement work/time management adjustments: `new_duration = (original_duration * required_technicians) / assigned_technicians`.
-- When modifying `manage_mappings.html` and related JavaScript:
-    - UI should display tasks based on technician skills.
-    - UI should allow managing multiple skills per task.
-    - Remove UI elements related to the old numerical task priority system.
-    - Ensure UI updates correctly reflect backend data (e.g., skill levels, task assignments).
-- For Python code in `wkndPlanning/services/`, strongly prefer class-based structures for new features or refactoring.
-- Avoid adding `print()` statements or excessive debugging logs unless specifically requested for temporary debugging. When development is complete, these should be removed.
-- When suggesting new JavaScript files for UI components related to `manage_mappings.html`, try to follow the existing pattern, e.g., `manage_mappings_[feature_name].js`.
-- The system uses data from an Excel file (e.g., `mitarbeiter_pro_aufgabe`, task duration). Be mindful of how this data integrates with the skill-based system.
+# AI Assistant Instructions for WeekendPlanningProject
+
+This document provides instructions for an AI assistant to help it provide the best possible assistance for this project.
+
+## Project Overview
+
+This project, `wkndPlanning`, is a web application built with a Flask backend (Python) and vanilla JavaScript for the frontend. Its primary purpose is to manage and assign tasks to technicians based on their skills.
+
+## Core Architectural Shift
+
+The project is transitioning from a simple task priority-based system to a more sophisticated **technology skill-based system** for task assignments. This is the most critical context for any code modifications.
+
+-   **Database Impact**: The `technician_task_assignments.priority` column is obsolete. The new schema requires a many-to-many relationship between tasks and the technologies/skills required to perform them.
+-   **Logic Impact**: The core assignment logic in `task_assigner.py` must now prioritize matching task skill requirements with technician skill sets.
+
+## Key Files
+
+-   **Backend (Python)**:
+    -   `wkndPlanning/app.py`: Main application file containing Flask routes and API endpoints.
+    -   `wkndPlanning/services/db_utils.py`: Defines the database schema (SQLite) and handles all database operations.
+    -   `wkndPlanning/services/task_assigner.py`: Contains the core business logic for assigning tasks to technicians.
+    -   `wkndPlanning/services/config_manager.py`: Manages application configuration.
+-   **Frontend (HTML/JavaScript)**:
+    -   `wkndPlanning/templates/manage_mappings.html`: The main user interface for managing tasks, technicians, and skills.
+    -   `wkndPlanning/static/js/manage_mappings_*.js`: A collection of JavaScript files that provide interactivity for the `manage_mappings.html` page.
+
+## Development Guidelines
+
+-   **When modifying `db_utils.py`**:
+    -   Clearly state any Data Definition Language (DDL) changes (e.g., `CREATE TABLE`, `ALTER TABLE`).
+    -   Ensure functions managing the new `task_required_skills` relationship are robust and efficient.
+
+-   **When modifying `app.py`**:
+    -   Update API endpoints (e.g., `/api/get_technician_mappings`, `/api/tasks`) to handle skill-based data.
+    -   Ensure all data passed to templates or returned by APIs includes the necessary skill information.
+
+-   **When modifying `task_assigner.py`**:
+    -   The primary focus is the new skill-based assignment logic.
+    -   Group selection must be based on skill coverage, average skill level, and tie-breakers (like workload).
+    -   Implement time adjustments based on team size: `new_duration = (original_duration * required_technicians) / assigned_technicians`.
+
+-   **When modifying the frontend**:
+    -   The UI must allow for managing multiple skills per task.
+    -   UI elements related to the old numerical priority system should be removed.
+    -   Ensure the UI dynamically reflects backend data changes.
+
+-   **General Rules**:
+    -   For new features or refactoring in the `wkndPlanning/services/` directory, a class-based architecture is strongly preferred.
+    -   Do not add `print()` statements or other temporary debugging logs to the final code.
+    -   Follow existing file naming conventions, especially for new JavaScript files (e.g., `manage_mappings_[feature_name].js`).
+    -   Be mindful that key data points (like `mitarbeiter_pro_aufgabe` and task duration) are integrated from Excel files.

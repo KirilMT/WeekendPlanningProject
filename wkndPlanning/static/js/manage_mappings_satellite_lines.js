@@ -18,7 +18,6 @@ async function loadSatellitePoints() {
         renderSatellitePoints(satellitePoints);
         populateSatellitePointDropdowns(satellitePoints); // For line management and technician details
     } catch (error) {
-        console.error('Error loading satellite points:', error);
         window.displayMessage('Failed to load satellite points. See console for details.', 'error');
     }
 }
@@ -50,19 +49,19 @@ function renderSatellitePoints(satellitePoints) {
         actionsDiv.className = 'item-actions';
 
         const editButton = document.createElement('button');
-        editButton.className = 'edit-button';
+        editButton.className = 'btn btn-warning btn-sm';
         editButton.dataset.id = point.id;
         editButton.dataset.name = point.name; // Store raw name
-        editButton.textContent = 'Edit';
+        editButton.innerHTML = '<span class="btn-icon">✏️</span> Edit';
         editButton.style.padding = '2px 6px';
         editButton.style.fontSize = '0.8em';
         editButton.style.marginRight = '5px';
 
         const deleteButton = document.createElement('button');
-        deleteButton.className = 'delete-button';
+        deleteButton.className = 'btn btn-danger btn-sm';
         deleteButton.dataset.id = point.id;
         deleteButton.dataset.name = point.name; // Store raw name
-        deleteButton.textContent = 'Delete';
+        deleteButton.innerHTML = '<span class="btn-icon">🗑️</span> Delete';
         deleteButton.style.padding = '2px 6px';
         deleteButton.style.fontSize = '0.8em';
 
@@ -76,10 +75,10 @@ function renderSatellitePoints(satellitePoints) {
     container.appendChild(ul);
 
     // Add event listeners for edit and delete buttons
-    container.querySelectorAll('.edit-button').forEach(button => {
+    container.querySelectorAll('.btn-warning').forEach(button => {
         button.addEventListener('click', handleEditSatellitePoint);
     });
-    container.querySelectorAll('.delete-button').forEach(button => {
+    container.querySelectorAll('.btn-danger').forEach(button => {
         button.addEventListener('click', handleDeleteSatellitePoint);
     });
 }
@@ -106,7 +105,6 @@ async function handleAddSatellitePoint() {
             loadSatellitePoints(); // Refresh the list
         }
     } catch (error) {
-        console.error('Error adding satellite point:', error);
         window.displayMessage('Failed to add satellite point. See console for details.', 'error');
     }
 }
@@ -118,14 +116,16 @@ function handleEditSatellitePoint(event) {
     const listItem = event.target.closest('.item-list-item');
 
     listItem.innerHTML = `
-        <input type="text" value="${window.escapeHtml(currentRawName)}" class="edit-input" data-id="${pointId}" style="flex-grow:1; margin-right: 5px;">
+        <input type="text" value="${window.escapeHtml(currentRawName)}" class="edit-input form-control" data-id="${pointId}" style="flex-grow:1; margin-right: 5px;">
         <div class="item-actions">
-            <button class="save-edit-button" data-id="${pointId}" data-current-name="${currentRawName}">Save</button> 
-            <button class="cancel-edit-button">Cancel</button>
+            <button class="btn btn-success btn-sm save-edit-satellite-point" data-id="${pointId}" data-current-name="${currentRawName}">
+                <span class="btn-icon">💾</span> Save
+            </button>
+            <button class="btn btn-secondary btn-sm cancel-edit-satellite-point">Cancel</button>
         </div>
     `;
 
-    listItem.querySelector('.save-edit-button').addEventListener('click', async (e) => {
+    listItem.querySelector('.save-edit-satellite-point').addEventListener('click', async (e) => {
         const newName = listItem.querySelector('.edit-input').value.trim();
         const originalRawName = e.target.dataset.currentName; // Raw name for comparison
         if (!newName) {
@@ -140,7 +140,7 @@ function handleEditSatellitePoint(event) {
         await executeUpdateSatellitePoint(pointId, newName);
     });
 
-    listItem.querySelector('.cancel-edit-button').addEventListener('click', () => {
+    listItem.querySelector('.cancel-edit-satellite-point').addEventListener('click', () => {
         loadSatellitePoints();
     });
 }
@@ -158,7 +158,6 @@ async function executeUpdateSatellitePoint(pointId, newName) { // newName is raw
             window.displayMessage(`Satellite point '${window.escapeHtml(displayName)}' updated successfully.`, 'success');
         }
     } catch (error) {
-        console.error('Error updating satellite point:', error);
         window.displayMessage('Failed to update satellite point. See console for details.', 'error');
     } finally {
         loadSatellitePoints();
@@ -188,7 +187,6 @@ async function handleDeleteSatellitePoint(event) {
             window.displayMessage(`Satellite point '${window.escapeHtml(rawPointName)}' deleted successfully.`, 'success');
         }
     } catch (error) {
-        console.error('Error deleting satellite point:', error);
         window.displayMessage('Failed to delete satellite point. See console for details.', 'error');
     } finally {
         loadSatellitePoints(); // Refresh the list
@@ -210,7 +208,6 @@ async function loadLines() {
         const lines = await response.json();
         renderLines(lines);
     } catch (error) {
-        console.error('Error loading lines:', error);
         window.displayMessage('Failed to load lines. See console for details.', 'error');
     }
 }
@@ -266,20 +263,20 @@ function renderLines(lines) {
             actionsDiv.className = 'item-actions';
 
             const editButton = document.createElement('button');
-            editButton.className = 'edit-button edit-line-button';
+            editButton.className = 'btn btn-warning btn-sm';
             editButton.dataset.id = line.id;
             editButton.dataset.name = line.name; // Store raw name
             editButton.dataset.spId = line.satellite_point_id;
-            editButton.textContent = 'Edit';
+            editButton.innerHTML = '<span class="btn-icon">✏️</span> Edit';
             editButton.style.padding = '2px 6px';
             editButton.style.fontSize = '0.8em';
             editButton.style.marginRight = '5px';
 
             const deleteButton = document.createElement('button');
-            deleteButton.className = 'delete-button delete-line-button';
+            deleteButton.className = 'btn btn-danger btn-sm';
             deleteButton.dataset.id = line.id;
             deleteButton.dataset.name = line.name; // Store raw name
-            deleteButton.textContent = 'Delete';
+            deleteButton.innerHTML = '<span class="btn-icon">🗑️</span> Delete';
             deleteButton.style.padding = '2px 6px';
             deleteButton.style.fontSize = '0.8em';
 
@@ -293,10 +290,10 @@ function renderLines(lines) {
         container.appendChild(ul);
     }
 
-    container.querySelectorAll('.edit-line-button').forEach(button => {
+    container.querySelectorAll('.btn-warning').forEach(button => {
         button.addEventListener('click', handleEditLine);
     });
-    container.querySelectorAll('.delete-line-button').forEach(button => {
+    container.querySelectorAll('.btn-danger').forEach(button => {
         button.addEventListener('click', handleDeleteLine);
     });
 }
@@ -352,7 +349,6 @@ async function handleAddLine() {
             loadLines();
         }
     } catch (error) {
-        console.error('Error adding line:', error);
         window.displayMessage('Failed to add line. See console for details.', 'error');
     }
 }
@@ -392,11 +388,13 @@ function handleEditLine(event) {
     }
 
     listItem.innerHTML = `
-        <input type="text" value="${window.escapeHtml(currentRawName)}" class="edit-line-name-input" style="flex-grow:1; margin-right: 5px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+        <input type="text" value="${window.escapeHtml(currentRawName)}" class="edit-line-name-input form-control" style="flex-grow:1; margin-right: 5px;">
         ${spSelectElement.outerHTML}
         <div class="item-actions" style="display: flex; align-items: center;">
-            <button class="save-line-edit-button edit-button" data-id="${lineId}" data-current-name="${currentRawName}" data-current-sp-id="${currentSpId}">Save</button>
-            <button class="cancel-line-edit-button delete-button" style="background-color: #6c757d;">Cancel</button>
+            <button class="btn btn-success btn-sm save-line-edit-button" data-id="${lineId}" data-current-name="${currentRawName}" data-current-sp-id="${currentSpId}">
+                <span class="btn-icon">💾</span> Save
+            </button>
+            <button class="btn btn-secondary btn-sm cancel-line-edit-button">Cancel</button>
         </div>
     `;
 
@@ -458,7 +456,6 @@ async function executeUpdateLine(lineId, newName, newSatellitePointId) { // newN
             }
         }
     } catch (error) {
-        console.error('Error updating line:', error);
         window.displayMessage('Failed to update line. See console for details.', 'error');
     } finally {
         loadLines();
@@ -487,7 +484,6 @@ async function handleDeleteLine(event) {
             window.displayMessage(`Line '${window.escapeHtml(rawLineName)}' deleted successfully.`, 'success');
         }
     } catch (error) {
-        console.error('Error deleting line:', error);
         window.displayMessage('Failed to delete line. See console for details.', 'error');
     } finally {
         loadLines();
@@ -592,7 +588,6 @@ async function handleTechnicianFormSubmit(event) {
             loadTechnicians(); // Refresh technician list
         }
     } catch (error) {
-        console.error('Error saving technician details:', error);
         window.displayMessage('Failed to save technician details. See console for details.', 'error');
     }
 }
@@ -609,7 +604,6 @@ async function loadTechnicians() {
         const technicians = await response.json();
         renderTechnicians(technicians);
     } catch (error) {
-        console.error('Error loading technicians:', error);
         window.displayMessage('Failed to load technicians. See console for details.', 'error');
     }
 }
@@ -641,19 +635,19 @@ function renderTechnicians(technicians) {
         actionsDiv.className = 'item-actions';
 
         const editButton = document.createElement('button');
-        editButton.className = 'edit-button';
+        editButton.className = 'btn btn-warning btn-sm';
         editButton.dataset.id = tech.id;
         editButton.dataset.name = tech.name; // Store raw name
-        editButton.textContent = 'Edit';
+        editButton.innerHTML = '<span class="btn-icon">✏️</span> Edit';
         editButton.style.padding = '2px 6px';
         editButton.style.fontSize = '0.8em';
         editButton.style.marginRight = '5px';
 
         const deleteButton = document.createElement('button');
-        deleteButton.className = 'delete-button';
+        deleteButton.className = 'btn btn-danger btn-sm';
         deleteButton.dataset.id = tech.id;
         deleteButton.dataset.name = tech.name; // Store raw name
-        deleteButton.textContent = 'Delete';
+        deleteButton.innerHTML = '<span class="btn-icon">🗑️</span> Delete';
         deleteButton.style.padding = '2px 6px';
         deleteButton.style.fontSize = '0.8em';
 
@@ -666,10 +660,10 @@ function renderTechnicians(technicians) {
     });
     container.appendChild(ul);
 
-    container.querySelectorAll('.edit-button').forEach(button => {
+    container.querySelectorAll('.btn-warning').forEach(button => {
         button.addEventListener('click', handleEditTechnician);
     });
-    container.querySelectorAll('.delete-button').forEach(button => {
+    container.querySelectorAll('.btn-danger').forEach(button => {
         button.addEventListener('click', handleDeleteTechnician);
     });
 }
@@ -703,7 +697,6 @@ function handleEditTechnician(event) {
             }
         })
         .catch(error => {
-            console.error('Error fetching technician details:', error);
             window.displayMessage('Failed to load technician details. See console for details.', 'error');
         });
 }
@@ -731,7 +724,6 @@ async function handleDeleteTechnician(event) {
             loadTechnicians();
         }
     } catch (error) {
-        console.error('Error deleting technician:', error);
         window.displayMessage('Failed to delete technician. See console for details.', 'error');
     }
 }
