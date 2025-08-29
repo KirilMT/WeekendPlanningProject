@@ -1304,13 +1304,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 isAdditionalTask: true
             };
 
-            repTasks.push(taskData);
-            hideAdditionalTaskModal();
-
-            // Reset form
-            additionalTaskForm.reset();
-
-            showMessage('Additional task created successfully!', 'success');
+            // Fetch eligible technicians for the new task
+            fetch('/api/eligible_technicians_for_task', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': getCSRFToken()
+                },
+                body: JSON.stringify({
+                    required_skills: taskData.required_skills,
+                    present_technicians: presentTechnicians
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showMessage(data.error, 'error');
+                    return;
+                }
+                eligibleTechnicians[taskData.id] = data;
+                repTasks.push(taskData);
+                hideAdditionalTaskModal();
+                additionalTaskForm.reset();
+                showMessage('Additional task created successfully!', 'success');
+            })
+            .catch(error => {
+                console.error('Error fetching eligible technicians for additional task:', error);
+                showMessage('Could not create additional task. Please try again.', 'error');
+            });
         });
     }
 
