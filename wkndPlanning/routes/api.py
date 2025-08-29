@@ -1104,3 +1104,64 @@ def update_task_technology_api(task_id):
     # For now, returning a 404 or a message indicating deprecation might be best.
     current_app.logger.warning(f"Attempt to use deprecated /api/tasks/{task_id}/technology PUT endpoint.")
     return jsonify({"message": "This endpoint is deprecated. Use PUT /api/tasks/<task_id> with a 'technology_ids' list to update task skills."}), 410 # 410 Gone
+
+@api_bp.route('/eligible_technicians_for_task', methods=['POST'])
+def get_eligible_technicians_for_task():
+    """
+    Get eligible technicians for a task based on required skills and presence.
+    """
+    try:
+        data = request.get_json()
+        required_skills = data.get('required_skills', [])
+        present_technicians_names = data.get('present_technicians', [])
+
+        if not required_skills:
+            # Return all present technicians if no skills are required
+            cursor = g.db.cursor()
+            # Ensure we only return technicians who are in the present_technicians_names list
+            if not present_technicians_names:
+                return jsonify([]) # Or handle as an error/empty case
+
+            # Create a placeholder string for the IN clause
+            placeholders = ', '.join('?' for _ in present_technicians_names)
+            query = f"SELECT id, name FROM technicians WHERE name IN ({placeholders})"
+            cursor.execute(query, present_technicians_names)
+            all_present_technicians = [{"id": row['id'], "name": row['name']} for row in cursor.fetchall()]
+            return jsonify(all_present_technicians)
+
+        if not present_technicians_names:
+             return jsonify([])
+
+
+        cursor = g.db.cursor()
+        
+        # Find technicians who have all the required skills.
+        # This is a bit complex with SQL, so we can do it in parts.
+        
+        # 1. Get all technicians and their skills.
+        cursor.execute("""
+            SELECT t.id, t.name, tts.technology_id
+            FROM technicians t
+            JOIN technician_technology_skills tts ON t.id = tts.technician_id
+            WHERE t.name IN ({})
+        """.format(', '.join('?' for _ in present_technicians_names)), present_technicians_names)
+        
+        tech_skills = {}
+        for row in cursor.fetchall():
+            if row['id'] not in tech_skills:
+                tech_skills[row['id']] = {'name': row['name'], 'skills': set()}
+            tech_skills[row['id']]['skills'].add(row['technology_id'])
+
+        # 2. Filter for technicians who have all required skills.
+        eligible_technicians = []
+        required_skills_set = set(map(int, required_skills))
+        
+        for tech_id, tech_data in tech_skills.items():
+            if required_skills_set.issubset(tech_data['skills']):
+                eligible_technicians.append({'id': tech_id, 'name': tech_data['name']})
+
+        return jsonify(eligible_technicians)
+
+    except Exception as e:
+        current_app.logger.error(f"Error in /eligible_technicians_for_task: {e}", exc_info=True)
+        return jsonify({"error": "Failed to get eligible technicians."}), 500
