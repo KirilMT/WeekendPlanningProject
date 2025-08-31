@@ -77,3 +77,11 @@ I am aware of the future development plans outlined in `ROADMAP.md`. I will keep
 ## GitHub Issues
 
 When you ask me to work on a GitHub issue, please remember that I cannot access external websites or run the `gh` command. You will need to provide me with the description of the issue.
+
+## Working on Issues
+
+When you ask me to work on an issue, I will adhere to the following process:
+
+1.  **Follow the Workflow:** I will first consult the `GIT_WORKFLOW.md` file to understand the prescribed development workflow, including branching strategy, commit message conventions, and pull request procedures.
+2.  **Provide Commands:** Based on the workflow, I will provide you with the exact Git commands you need to run in your terminal and the steps you need to take on GitHub (e.g., creating a pull request).
+3.  **Prioritize Work:** I will consult the `issues.md` file and address the issues in the numbered order they appear, from highest priority (P1-High) to lowest (P3-Low). Please refer to an issue by its number when you want me to work on it.
