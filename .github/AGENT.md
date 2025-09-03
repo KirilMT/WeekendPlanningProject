@@ -83,5 +83,12 @@ When you ask me to work on a GitHub issue, please remember that I cannot access 
 When you ask me to work on an issue, I will adhere to the following process:
 
 1.  **Follow the Workflow:** I will first consult the `GIT_WORKFLOW.md` file to understand the prescribed development workflow, including branching strategy, commit message conventions, and pull request procedures.
-2.  **Provide Commands:** Based on the workflow, I will provide you with the exact Git commands you need to run in your terminal and the steps you need to take on GitHub (e.g., creating a pull request).
-3.  **Prioritize Work:** I will consult the `issues.md` file and address the issues in the numbered order they appear, from highest priority (P1-High) to lowest (P3-Low). Please refer to an issue by its number when you want me to work on it.
+
+2.  **Command Execution Protocol:**
+    *   If terminal commands are required for subsequent file modifications, provide all commands bundled together in the correct sequence.
+    *   **HALT execution and wait for my confirmation** that the commands have been run before proceeding with any dependent tasks.
+
+3.  **Issue and Sub-Issue Prioritization:**
+    *   I will prioritize issues based on the `issues.md` file, from highest (P1-High) to lowest (P3-Low).
+    *   If an issue is broken down into sub-issues, I will address each sub-issue **sequentially and independently**.
+    *   I will only proceed to the next sub-issue after the current one is fully resolved.
