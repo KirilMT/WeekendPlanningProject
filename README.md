@@ -63,8 +63,8 @@ WeekendPlanningProject/
 
 2. **Create a virtual environment:**
    ```bash
-   python -m venvOld venvOld
-   source venvOld/bin/activate  # On Windows: venvOld\Scripts\activate
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
 3. **Install dependencies:**
@@ -227,9 +227,9 @@ Application logs are available in the `wkndPlanning/logs/` directory with differ
 
 ## 📝 License
 
-[Add your license information here]
+This project is licensed under the MIT License. See the `LICENSE` file for details.
 
 ---
 
 **Version:** 1.0.0  
-**Last Updated:** August 2025
+**Last Updated:** May 2024
