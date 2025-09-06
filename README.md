@@ -76,7 +76,7 @@ WeekendPlanningProject/
    Create a `.env` file in the project root:
    ```env
    SECRET_KEY=your_secret_key_here
-   DEBUG_MODE=1
+   FLASK_DEBUG=1
    DATABASE_FILENAME=testsDB.db
    ```
 
@@ -116,7 +116,7 @@ This quick guide allows you to see the end-to-end workflow of the application, f
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `SECRET_KEY` | Flask secret key for sessions | Auto-generated |
-| `DEBUG_MODE` | Enable debug mode (1/true/yes) | 0 |
+| `FLASK_DEBUG` | Enable debug mode (1/true/yes) | 0 |
 | `DEBUG_USE_TEST_DB` | Force use of test database | 0 |
 | `DATABASE_FILENAME` | Custom database filename | Based on debug mode |
 | `CSRF_TIME_LIMIT` | CSRF token expiration (seconds) | 3600 |

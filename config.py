@@ -16,22 +16,22 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
 
     # Global debug mode toggle (string env values '1', 'true', 'True')
-    DEBUG_MODE = os.environ.get('DEBUG_MODE', '0').lower() in ('1', 'true', 'yes')
+    FLASK_DEBUG = os.environ.get('FLASK_DEBUG', '0').lower() in ('1', 'true', 'yes')
 
     # Optional separate flag just to force using test DB without enabling all debug behaviors
     DEBUG_USE_TEST_DB = os.environ.get('DEBUG_USE_TEST_DB', '0').lower() in ('1', 'true', 'yes')
 
-    # Optional fixed date (ISO formats e.g. '2025-04-19' or '2025-04-19T16:00:00') used by services when DEBUG_MODE active
+    # Optional fixed date (ISO formats e.g. '2025-04-19' or '2025-04-19T16:00:00') used by services when FLASK_DEBUG active
     DEBUG_FIXED_DATE = os.environ.get('DEBUG_FIXED_DATE')  # parsed lazily where needed
 
     # --- Flask-WTF Configuration ---
     WTF_CSRF_ENABLED = True
     WTF_CSRF_TIME_LIMIT = int(os.environ.get('CSRF_TIME_LIMIT', '3600'))  # 1 hour default
-    WTF_CSRF_SSL_STRICT = not DEBUG_MODE  # Disable SSL requirement in debug mode
+    WTF_CSRF_SSL_STRICT = not FLASK_DEBUG  # Disable SSL requirement in debug mode
 
     # --- Security Configuration ---
     PERMANENT_SESSION_LIFETIME = int(os.environ.get('SESSION_LIFETIME', '1800'))  # 30 minutes default
-    SESSION_COOKIE_SECURE = not DEBUG_MODE  # Only send cookies over HTTPS in production
+    SESSION_COOKIE_SECURE = not FLASK_DEBUG  # Only send cookies over HTTPS in production
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
 
@@ -43,7 +43,7 @@ class Config:
     # 3. 'weekend_planning.db' as the default production database.
     if 'DATABASE_FILENAME' in os.environ:
         _db_filename = os.environ['DATABASE_FILENAME']
-    elif DEBUG_MODE or DEBUG_USE_TEST_DB:
+    elif FLASK_DEBUG or DEBUG_USE_TEST_DB:
         _db_filename = 'testsDB.db'
     else:
         _db_filename = 'weekend_planning.db'
@@ -68,14 +68,14 @@ class Config:
     @classmethod
     def is_debug(cls):
         """Check if application is in debug mode."""
-        return cls.DEBUG_MODE
+        return cls.FLASK_DEBUG
 
     @classmethod
     def get_fixed_datetime(cls):
-        """Return a datetime override if DEBUG_MODE and a fixed date is set; else None.
-        If DEBUG_FIXED_DATE not set but DEBUG_MODE is true, returns canonical test date.
+        """Return a datetime override if FLASK_DEBUG and a fixed date is set; else None.
+        If DEBUG_FIXED_DATE not set but FLASK_DEBUG is true, returns canonical test date.
         """
-        if not cls.DEBUG_MODE:
+        if not cls.FLASK_DEBUG:
             return None
         from datetime import datetime
         if cls.DEBUG_FIXED_DATE:
@@ -93,7 +93,7 @@ class Config:
         errors = []
 
         # Check if SECRET_KEY is properly set in production
-        if not cls.DEBUG_MODE and cls.SECRET_KEY == secrets.token_hex(32):
+        if not cls.FLASK_DEBUG and cls.SECRET_KEY == secrets.token_hex(32):
             errors.append("SECRET_KEY should be explicitly set in production")
 
         # Validate file upload size

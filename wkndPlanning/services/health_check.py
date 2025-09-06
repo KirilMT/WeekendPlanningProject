@@ -67,8 +67,8 @@ class HealthChecker:
                 return False, f"Missing configuration: {', '.join(missing)}"
 
             # Check if in debug mode for production warning
-            if current_app.config.get('DEBUG_MODE'):
-                return True, "Configuration valid (DEBUG MODE ACTIVE)"
+            if current_app.config.get('FLASK_DEBUG'):
+                return True, "Configuration valid (FLASK_DEBUG ACTIVE)"
 
             return True, "Configuration healthy"
 

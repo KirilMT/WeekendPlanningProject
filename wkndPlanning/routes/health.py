@@ -112,7 +112,7 @@ def debug_info():
     """
     Debug information endpoint (only available in debug mode).
     """
-    if not current_app.config.get('DEBUG_MODE'):
+    if not current_app.config.get('FLASK_DEBUG'):
         return jsonify({'error': 'Debug endpoint not available in production'}), 403
 
     try:
