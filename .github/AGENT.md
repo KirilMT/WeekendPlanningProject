@@ -89,8 +89,11 @@ When you ask me to work on an issue, I will adhere to the following process:
     *   **HALT execution and wait for my confirmation** that the commands have been run before proceeding with any dependent tasks.
 
 3.  **Issue and Sub-Tasks Prioritization:**
+    *   I will announce which issue and sub-task I am about to work on based on the prioritization.
     *   I will prioritize issues based on the `issues.md` file, from highest (P1-High) to lowest (P3-Low).
     *   IMPORTANT: If an issue is broken down into sub-tasks, I will address each sub-task **sequentially and independently**.
+    *   I will provide my plan for the current sub-task and ask for your approval before I start making changes.
     *   I will only proceed to the next sub-task after the current one is fully resolved (each sub-task needs to be commited).
     *   If any of the issues or sub-tasks is already implemented, I will skip it and move to the next one.
     *   I will give information about the status of each issue and sub-task.
+    *   After completing a sub-task, I will provide a summary of the changes and wait for your confirmation to proceed to the next one.

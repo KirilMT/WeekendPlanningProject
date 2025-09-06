@@ -567,7 +567,6 @@ function populateTaskTechnicians(task) {
 
     techniciansContainer.innerHTML = '';
 
-    // Get eligible technicians for this task
     const taskEligibleTechnicians = eligibleTechnicians[task.id] || [];
 
     if (taskEligibleTechnicians.length === 0) {
@@ -594,47 +593,64 @@ function populateTaskTechnicians(task) {
         checkbox.style.marginRight = '8px';
 
         const label = document.createElement('label');
-        // REMOVED: label.htmlFor = `tech_${tech.name}`; - This was causing the conflict
         label.className = 'tech-name';
         label.textContent = tech.name;
         label.style.cursor = 'pointer';
         label.style.flex = '1';
         label.style.margin = '0';
-        label.style.userSelect = 'none'; // Prevent text selection when clicking
+        label.style.userSelect = 'none';
 
-        // Make the entire div clickable - improved event handler
-        techDiv.addEventListener('click', function(e) {
-            // If clicking directly on the checkbox, let it handle its own state
-            if (e.target === checkbox) {
-                // Don't prevent default behavior for checkbox clicks
-                // Just update the visual feedback after the checkbox state changes
-                setTimeout(() => {
-                    updateVisualFeedback();
-                }, 0);
-                return;
-            }
+        const forceCheckbox = document.createElement('input');
+        forceCheckbox.type = 'checkbox';
+        forceCheckbox.id = `force_tech_${tech.name}`;
+        forceCheckbox.name = `force_tech_${tech.name}`; // Give it a unique name
+        forceCheckbox.style.marginLeft = 'auto';
+        forceCheckbox.style.marginRight = '5px';
+        forceCheckbox.style.display = 'none'; // Hide by default
 
-            // For clicks anywhere else in the div, toggle the checkbox
-            e.preventDefault();
-            e.stopPropagation();
+        const forceLabel = document.createElement('label');
+        forceLabel.textContent = 'Force';
+        forceLabel.htmlFor = forceCheckbox.id;
+        forceLabel.style.cursor = 'pointer';
+        forceLabel.style.userSelect = 'none';
+        forceLabel.style.display = 'none'; // Hide by default
 
-            checkbox.checked = !checkbox.checked;
-            updateVisualFeedback();
-        });
-
-        // Function to update visual feedback based on checkbox state
         function updateVisualFeedback() {
             if (checkbox.checked) {
                 techDiv.style.backgroundColor = '#e3f2fd';
                 techDiv.style.borderColor = '#2196f3';
+                forceCheckbox.style.display = 'inline-block';
+                forceLabel.style.display = 'inline-block';
             } else {
                 techDiv.style.backgroundColor = '';
                 techDiv.style.borderColor = '#ddd';
+                forceCheckbox.style.display = 'none';
+                forceLabel.style.display = 'none';
+                forceCheckbox.checked = false; // Uncheck force when technician is deselected
             }
         }
 
+        // Use a single click listener on the container div
+        techDiv.addEventListener('click', function(e) {
+            // If the click was on the force checkbox or its label, do nothing.
+            // The browser will handle checking the box.
+            if (e.target === forceCheckbox || e.target === forceLabel) {
+                return;
+            }
+
+            // If the click was not on the main checkbox, toggle its state.
+            if (e.target !== checkbox) {
+                checkbox.checked = !checkbox.checked;
+            }
+            
+            // Update visuals based on the new state of the main checkbox.
+            updateVisualFeedback();
+        });
+
         techDiv.appendChild(checkbox);
         techDiv.appendChild(label);
+        techDiv.appendChild(forceCheckbox);
+        techDiv.appendChild(forceLabel);
         techniciansContainer.appendChild(techDiv);
     });
 }
@@ -1185,51 +1201,53 @@ document.addEventListener('DOMContentLoaded', function() {
     const validateAssignmentBtn = document.getElementById('validateAssignment');
     if (validateAssignmentBtn) {
         validateAssignmentBtn.addEventListener('click', function() {
-            const selectedCheckboxes = document.querySelectorAll('#availableTechnicians input[type="checkbox"]:checked');
-            const selectedTechnicians = Array.from(selectedCheckboxes).map(cb => cb.value);
+            const selectedCheckboxes = document.querySelectorAll('#availableTechnicians input[name="selectedTechnicians"]:checked');
+            const selectedTechnicianNames = Array.from(selectedCheckboxes).map(cb => cb.value);
             const currentTask = repTasks[currentRepTaskIndex];
             const requiredTechnicians = parseInt(currentTask.mitarbeiter_pro_aufgabe) || 1;
 
-            // CRITICAL: Check if selected technicians count is less than required count
-            if (selectedTechnicians.length < requiredTechnicians) {
+            if (selectedTechnicianNames.length < requiredTechnicians) {
                 let message;
-                if (selectedTechnicians.length === 0) {
+                if (selectedTechnicianNames.length === 0) {
                     message = `This task requires ${requiredTechnicians} technician${requiredTechnicians > 1 ? 's' : ''}. Please select ${requiredTechnicians} technician${requiredTechnicians > 1 ? 's' : ''}.`;
                 } else {
-                    message = `You have selected ${selectedTechnicians.length} technician${selectedTechnicians.length > 1 ? 's' : ''}, but this task requires ${requiredTechnicians} technician${requiredTechnicians > 1 ? 's' : ''}. Please select ${requiredTechnicians - selectedTechnicians.length} more technician${(requiredTechnicians - selectedTechnicians.length) > 1 ? 's' : ''}.`;
+                    message = `You have selected ${selectedTechnicianNames.length} technician${selectedTechnicianNames.length > 1 ? 's' : ''}, but this task requires ${requiredTechnicians} technician${requiredTechnicians > 1 ? 's' : ''}. Please select ${requiredTechnicians - selectedTechnicianNames.length} more technician${(requiredTechnicians - selectedTechnicianNames.length) > 1 ? 's' : ''}.`;
                 }
                 showMessage(message, 'error');
-                return; // Stop here, don't close modal
+                return;
             }
 
-            // CRITICAL: Store assignment data with exact counts for backend processing
+            const technicianAssignments = selectedTechnicianNames.map(techName => {
+                const forceCheckbox = document.getElementById(`force_tech_${techName}`);
+                return {
+                    name: techName,
+                    force_assign: forceCheckbox ? forceCheckbox.checked : false
+                };
+            });
+
             repAssignments.push({
                 task_id: currentTask.id,
                 task_name: currentTask.name || currentTask.scheduler_group_task,
-                technicians: selectedTechnicians, // Backend expects 'technicians' field
-                required_technicians: requiredTechnicians, // CRITICAL: Backend needs to know required count
-                selected_count: selectedTechnicians.length, // CRITICAL: Backend needs to know selected count
-                skipped: false // Explicitly mark as not skipped
+                technicians: technicianAssignments,
+                required_technicians: requiredTechnicians,
+                selected_count: selectedTechnicianNames.length,
+                skipped: false
             });
 
             console.log('Task assigned:', {
                 task_id: currentTask.id,
                 task_name: currentTask.name || currentTask.scheduler_group_task,
-                technicians: selectedTechnicians,
+                technicians: technicianAssignments,
                 required_count: requiredTechnicians,
-                selected_count: selectedTechnicians.length
+                selected_count: selectedTechnicianNames.length
             });
 
             currentRepTaskIndex++;
 
-            // Check if this was the last task
             if (currentRepTaskIndex >= repTasks.length) {
-                // Close REP modal before showing progress
                 hideTaskAssignmentModal();
-                // Submit final assignments which will show progress bar
                 submitFinalAssignments();
             } else {
-                // Show next task directly without closing modal
                 showTaskAssignmentModal();
             }
         });
