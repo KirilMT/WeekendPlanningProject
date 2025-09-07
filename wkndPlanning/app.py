@@ -103,7 +103,7 @@ def create_app():
     if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
         with app.app_context():
             try:
-                init_db(DATABASE_PATH, app.logger)
+                init_db(DATABASE_PATH, app.logger, app.config['DEBUG_USE_TEST_DB'])
                 load_app_config(DATABASE_PATH, app.logger)
                 app.logger.info("Application initialized successfully")
             except Exception as e:

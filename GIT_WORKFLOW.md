@@ -114,15 +114,52 @@ On the GitHub PR page, you can see your changes, and others can review them. Onc
 
 ---
 
-### 5. Cleaning Up After Merging
+### 5. Handling Work-in-Progress (Creating a Draft Pull Request)
+
+If your work is not yet finished but you want to get feedback, or simply want to see your changes on GitHub, you should create a **Draft Pull Request**. This signals to others that the work is still in progress.
+
+**Why Use a Draft Pull Request?**
+
+*   **Clear Communication:** It makes it obvious that the code is not ready for a final review or merging.
+*   **Early Feedback:** You can ask for feedback on your approach before you are too far into the work.
+*   **Track Your Work:** It provides a clear link between your branch and the issue you are working on (e.g., issue #33).
+
+**Step 5.1: How to Create a Draft Pull Request**
+
+1.  Follow the same steps as opening a regular pull request (Step 4.1).
+2.  On the "Open a pull request" screen, instead of clicking the "Create pull request" button, click the dropdown arrow next to it.
+3.  Select **"Create draft pull request"** from the dropdown menu.
+4.  In the title or description, it's a good practice to add "WIP:" (Work in Progress) and link the issue you are working on (e.g., `Fixes #33`).
+
+**Step 5.2: How to Continue Working on a Draft PR**
+
+1.  Continue to make commits to your local branch as usual (`git commit -m "..."`).
+2.  When you are ready to update the draft PR on GitHub, simply push your changes:
+    ```sh
+    git push
+    ```
+3.  Your new commits will be automatically added to the draft pull request.
+
+**Step 5.3: Marking the PR as Ready for Review**
+
+Once you have finished your work and the draft PR is ready for a final review, you can convert it to a regular pull request.
+
+1.  Go to the pull request page on GitHub.
+2.  Click the **"Ready for review"** button.
+
+This will change the status of the PR and notify reviewers that it is ready to be merged.
+
+---
+
+### 6. Cleaning Up After Merging
 
 After your PR is merged, the final step is to clean up your local and remote branches.
 
-**Step 5.1: Delete the Remote Branch**
+**Step 6.1: Delete the Remote Branch**
 
 After merging on GitHub, a **"Delete branch"** button will appear. Click it to delete the remote feature branch. This keeps the repository clean.
 
-**Step 5.2: Update Your Local Repository**
+**Step 6.2: Update Your Local Repository**
 
 Now, update your local `master` branch with the changes you just merged on GitHub.
 
@@ -134,7 +171,7 @@ git checkout master
 git pull origin master
 ```
 
-**Step 5.3: Prune Stale Remote Branches**
+**Step 6.3: Prune Stale Remote Branches**
 
 Your local repository might still be tracking the remote branch you just deleted. Run the following command to clean up these stale branches.
 
@@ -143,7 +180,7 @@ Your local repository might still be tracking the remote branch you just deleted
 git fetch --prune
 ```
 
-**Step 5.4: Delete Your Local Branch**
+**Step 6.4: Delete Your Local Branch**
 
 Finally, delete the local feature branch as it is no longer needed.
 

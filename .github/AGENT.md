@@ -6,6 +6,11 @@ This document provides instructions for Gemini Code Assist to help it provide th
 
 -   **Efficiency is Key:** Please perform all necessary edits for a given task in a single step. Avoid making multiple, sequential edits to the same file for the same topic.
 -   **Be Concise:** Do not repeat the same information or plans multiple times. Provide important information when necessary—not less, not more.
+-   **Single Edit Rule:** When editing a file, apply *all planned changes in one unified edit*. Do not split the edit into multiple smaller patches. Do not re-edit the same file again for the same request.
+-   **No Repetition:** Never repeat the same text, instructions, or edits in multiple replies. Each reply must be unique and progress the task forward.
+-   **Atomic Updates:** For each request, complete all necessary modifications in one atomic update per file. Do not provide partial or incremental changes.
+-   **One-time Summary:** After making changes, provide a short summary of what was modified. Do not restate the same summary in following replies.
+-   **No Restating Code:** If you’ve already shown the final code once, do not output the same code again unless explicitly asked.
 
 ## Project Overview
 

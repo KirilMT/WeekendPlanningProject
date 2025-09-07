@@ -540,7 +540,7 @@ def get_satellite_points_api():
                 point = cursor.fetchone()
                 return jsonify(dict(point)), 201 # Return the created or existing point
             except sqlite3.IntegrityError: # Should be caught by get_or_create if it tries to insert duplicate
-                return jsonify({"message": f"Satellite point '{name}' may already exist or another integrity issue."}), 409
+                return jsonify({"message": f"Satellite point '{name}' may already exist or other integrity issue."}), 409
             except Exception as e:
                 current_app.logger.error(f"Error creating satellite point: {e}", exc_info=True)
                 return jsonify({"message": f"Server error: {str(e)}"}), 500
@@ -939,10 +939,16 @@ def add_task_api():
         task_manager = TaskManager(g.db)
         cursor = g.db.cursor()
 
+        # Get all parent IDs
+        cursor.execute("SELECT DISTINCT parent_id FROM technologies WHERE parent_id IS NOT NULL")
+        parent_ids = {row[0] for row in cursor.fetchall()}
+
         # Validate all technology IDs
         for tech_id in technology_ids:
             try:
                 tech_id_int = int(tech_id)
+                if tech_id_int in parent_ids:
+                    return jsonify({"message": f"Cannot assign parent technology ID {tech_id_int} to a task."}), 400
                 cursor.execute("SELECT id FROM technologies WHERE id = ?", (tech_id_int,))
                 if not cursor.fetchone():
                     return jsonify({"message": f"Technology ID {tech_id_int} not found."}), 400
@@ -1000,10 +1006,16 @@ def update_task_api(task_id):
         if not cursor.fetchone():
             return jsonify({"message": f"Task ID {task_id} not found."}), 404
 
+        # Get all parent IDs
+        cursor.execute("SELECT DISTINCT parent_id FROM technologies WHERE parent_id IS NOT NULL")
+        parent_ids = {row[0] for row in cursor.fetchall()}
+
         # Validate all new technology IDs
         for tech_id in new_technology_ids:
             try:
                 tech_id_int = int(tech_id)
+                if tech_id_int in parent_ids:
+                    return jsonify({"message": f"Cannot assign parent technology ID {tech_id_int} to a task."}), 400
                 cursor.execute("SELECT id FROM technologies WHERE id = ?", (tech_id_int,))
                 if not cursor.fetchone():
                     return jsonify({"message": f"Technology ID {tech_id_int} not found."}), 400
@@ -1149,7 +1161,7 @@ def get_eligible_technicians_for_task():
         tech_skills = {}
         for row in cursor.fetchall():
             if row['id'] not in tech_skills:
-                tech_skills[row['id']] = {'name': row['name'], 'skills': set()}
+                tech_skills[row['id']['name']] = {'name': row['name'], 'skills': set()}
             tech_skills[row['id']]['skills'].add(row['technology_id'])
 
         # 2. Filter for technicians who have all required skills.
