@@ -72,16 +72,15 @@ WeekendPlanningProject/
    pip install -r requirements.txt
    ```
 
-4. **Set up environment variables (optional):**
-   Create a `.env` file in the project root:
-   ```env
-   SECRET_KEY=your_secret_key_here
-   FLASK_DEBUG=1
-   DATABASE_FILENAME=testsDB.db
-   ```
+4. **Set up environment variables:**
+   Create a `.env` file in the project root by copying the `.env.example` file. This is recommended for setting debug flags and other configurations.
+    ```bash
+    cp .env.example .env
+    ```
+   Then, edit the `.env` file as needed.
 
 5. **Initialize the database:**
-   The database will be automatically initialized on first run.
+   The database will be automatically initialized on the first run.
 
 6. **Run the application:**
    ```bash
@@ -91,23 +90,53 @@ WeekendPlanningProject/
 7. **Access the application:**
    Open your browser and navigate to `http://127.0.0.1:5000`
 
-## 🚀 Quick Test Guide
+## 🚀 Testing Guide
 
-To help you quickly explore the features of the Weekend Planning application, follow these steps. On the first run, the application will create a new, empty database. You can use the sample Excel files located in the `Excels_Testing/` directory to populate it with data.
+The testing process involves two main stages: automatic data population from a JSON file, followed by manual data import from Excel files.
 
-1.  **Start the Application**: If it's not already running, start the application with `python run.py`.
-2.  **Navigate to Management Page**: Open your browser and go to `http://127.0.0.1:5000/manage_mappings`. This is the main interface for managing technicians, tasks, and skills.
-3.  **Import Sample Data**:
+### Stage 1: Automatic Dummy Data Population
+
+This first stage provides the foundational data for the application (technicians, skills, tasks, etc.).
+
+1.  **Enable Test Database Mode**: In your `.env` file, ensure the following variable is set:
+    ```env
+    DEBUG_USE_TEST_DB=1
+    ```
+
+2.  **Delete the Old Test Database (First Time Only)**: If you have previously run the application, delete the `testsDB.db` file located in the `wkndPlanning/` directory. This ensures a fresh database is created.
+
+3.  **Run the Application**: Start the application from the project root:
+    ```bash
+    python run.py
+    ```
+    On the first run with these settings, the application will automatically create a new test database (`testsDB.db`) and populate it with the contents of `dummy_data.json`.
+
+### Stage 2: Testing with Excel Files
+
+After the initial data has been loaded, you can test the application's data import and processing capabilities.
+
+1.  **Navigate to the Main Page**: Open your browser and go to `http://127.0.0.1:5000/`.
+2.  **Import Sample Data**:
     *   Use the file upload functionality on the page to import `testsExcel.xlsb` and `testsExcel2.xlsb` from the `Excels_Testing/` directory.
-    *   This will populate the database with sample technicians, tasks, and their required skills.
-4.  **Run Task Assignment**:
+    *   This will add to or modify the initial data in the database.
+3.  **Run Task Assignment**:
     *   Once the data is imported, you can trigger the task assignment process from the UI.
     *   The application will use its skill-based algorithm to assign the tasks to the most suitable technicians.
-5.  **View the Dashboards**:
+4.  **View the Dashboards**:
     *   **Supervisor Dashboard**: Navigate to the supervisor dashboard to get an overview of all task assignments, schedules, and workloads.
     *   **Technician Dashboard**: Check the individual technician dashboards to see their specific schedules and assigned tasks.
 
-This quick guide allows you to see the end-to-end workflow of the application, from data import to final schedule visualization.
+### Testing with a Fixed Date
+
+For consistent testing of scheduling logic, you can force the application to use a fixed date and time for all calculations.
+
+- **Set the Fixed Date**: Add the `DEBUG_FIXED_DATE` variable to your `.env` file. The value should be in ISO format (e.g., `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`).
+
+  ```env
+  # Example: Set the date to April 19, 2025, at 4:00 PM
+  DEBUG_FIXED_DATE=2025-04-19T16:00:00
+  ```
+- If `DEBUG_FIXED_DATE` is not set, the application will default to a canonical test date (`2025-04-19 16:00:00`) when in debug mode.
 
 ## 🔧 Configuration
 
@@ -117,7 +146,8 @@ This quick guide allows you to see the end-to-end workflow of the application, f
 |----------|-------------|---------|
 | `SECRET_KEY` | Flask secret key for sessions | Auto-generated |
 | `FLASK_DEBUG` | Enable debug mode (1/true/yes) | 0 |
-| `DEBUG_USE_TEST_DB` | Force use of test database | 0 |
+| `DEBUG_USE_TEST_DB` | Force use of test database and load dummy data | 0 |
+| `DEBUG_FIXED_DATE` | Fixed date for testing (ISO format) | `2025-04-19T16:00:00` (in debug) |
 | `DATABASE_FILENAME` | Custom database filename | Based on debug mode |
 | `CSRF_TIME_LIMIT` | CSRF token expiration (seconds) | 3600 |
 | `SESSION_LIFETIME` | Session timeout (seconds) | 1800 |
@@ -205,6 +235,8 @@ The application uses SQLite with the following key tables:
 - `task_required_skills` - Task skill requirements
 - `technician_task_assignments` - Final task assignments
 
+When `DEBUG_USE_TEST_DB` is enabled, this schema is automatically populated from `dummy_data.json` on the first run.
+
 ## 🚨 Troubleshooting
 
 ### Common Issues
@@ -231,5 +263,5 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 
 ---
 
-**Version:** 1.0.0  
+**Version:** 1.1.0  
 **Last Updated:** May 2024
