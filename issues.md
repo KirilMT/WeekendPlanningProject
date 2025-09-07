@@ -6,12 +6,15 @@
 **Category:** `Task Assignment and Scheduling Logic`
 
 **Sub-tasks:**
-- Force specific technicians to work on designated tasks.
-- For tasks requiring fewer technicians than planned, provide an option to update technician mappings or proceed with database updates.
-- Allow assignment of unskilled technicians with skilled ones, ensuring compatibility with general skills.
-- Prioritize certain task types (e.g., repair tasks) over others for specific technician groups (e.g., PLC technicians).
+- In REP tasks modal -> Force specific technicians to work on designated tasks. It would be nice if I select a technician or technicians, then appear next to the technician a checkbox if I want to force him to work on that task, taking priority over other tasks.
+- If, for PM tasks (backend), fewer technicians can work on a task than the expected (from planning), I think while assigning PM and REP tasks to technicians and generating dashboard, give option to go to technician mappings to rearrange mappings so that more technicians are available for that task and then return; or, if not possible to add more technicians, proceed as normal.
+- Allow assignment of unskilled technicians with skilled ones, ensuring compatibility with general skills. This is an extreme situation, so only apply to A priority tasks. This is to make sure that in the A priority tasks we always have the right amount of technicians so the task can be completed as planned.
+- Prioritise certain task types (e.g., repair tasks) over others for specific technician groups (e.g., PLC technicians). For example, PLC technicians will work first on REP tasks and later, if they have time, will continue on PM tasks (situation where REP task and PM task are A priority and this PLC technician is assigned to the REP task because it is a PLC task and has the skills to work on the PM task).
 - Implement a "help" concept where idle technicians can assist others on full-shift tasks after completing their own.
-- Assign tickets or miscellaneous tasks to remaining available slots after primary scheduling.
+     - Help concept:
+		- Task A is assigned to technician A -> Full shift
+		- Technician B has task c -> finish at 25% of the shift -> doesn't do anything else
+		- Technician B could help technician A -> How could we implement this?
 
 2. ### Database integration with external APIs (#29)
 **Category:** `Database and Data Management`

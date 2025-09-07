@@ -9,7 +9,7 @@ services:
       - "5000:5000"
     environment:
       - SECRET_KEY=${SECRET_KEY:-your_secret_key_here}
-      - DEBUG_MODE=${DEBUG_MODE:-0}
+      - FLASK_DEBUG=${FLASK_DEBUG:-0}
       - DATABASE_FILENAME=${DATABASE_FILENAME:-weekend_planning.db}
       - CSRF_TIME_LIMIT=${CSRF_TIME_LIMIT:-3600}
       - SESSION_LIFETIME=${SESSION_LIFETIME:-1800}
@@ -68,7 +68,7 @@ version: '3.8'
 services:
   weekend-planning-app:
     environment:
-      - DEBUG_MODE=1
+      - FLASK_DEBUG=1
       - DATABASE_FILENAME=testsDB.db
     volumes:
       # Mount source code for live reloading in development

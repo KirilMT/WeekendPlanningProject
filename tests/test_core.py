@@ -156,7 +156,7 @@ class TestConfigurationValidation:
             # Should not raise exception
             Config.validate_config()
 
-    @patch('config.Config.DEBUG_MODE', False)
+    @patch('config.Config.FLASK_DEBUG', False)
     def test_production_config_warnings(self):
         """Test production configuration validation warnings."""
         from config import Config

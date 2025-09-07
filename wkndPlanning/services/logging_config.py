@@ -146,10 +146,10 @@ class LoggingConfig:
         os.makedirs(log_dir, exist_ok=True)
 
         # Set log level based on debug mode
-        log_level = logging.DEBUG if Config.DEBUG_MODE else logging.INFO
+        log_level = logging.DEBUG if Config.FLASK_DEBUG else logging.INFO
 
         # Create formatters
-        if Config.DEBUG_MODE:
+        if Config.FLASK_DEBUG:
             # Human-readable format for development
             formatter = logging.Formatter(
                 '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -188,7 +188,7 @@ class LoggingConfig:
         root_logger.addHandler(error_handler)
 
         # Performance log file for production
-        if not Config.DEBUG_MODE:
+        if not Config.FLASK_DEBUG:
             perf_log_file = os.path.join(log_dir, 'performance.log')
             perf_handler = logging.FileHandler(perf_log_file)
             perf_handler.setLevel(logging.WARNING)  # For slow operations
@@ -229,7 +229,7 @@ class LoggingConfig:
                     )
 
                 # Add performance headers for debugging
-                if Config.DEBUG_MODE:
+                if Config.FLASK_DEBUG:
                     response.headers['X-Response-Time'] = f"{duration:.3f}s"
 
             return response

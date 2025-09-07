@@ -8,6 +8,15 @@ from .config_manager import TASK_NAME_MAPPING, TECHNICIAN_TASKS, TECHNICIAN_LINE
 # 7! = 5040, 8! = 40320. Keep this value mindful of performance.
 MAX_PERMUTATION_TASKS = 3
 
+# Performance tuning: Maximum number of top-skilled technicians to consider for PM task combinations.
+# This helps prevent combinatorial explosion with large numbers of eligible technicians.
+MAX_TECHS_FOR_COMBINATIONS = 12
+# Performance tuning: Range of group sizes to check around the required number of technicians.
+# e.g., a range of 1 means for a 3-tech task, we check groups of size 2, 3, and 4.
+# A smaller range reduces the number of combinations to check.
+GROUP_SIZE_SEARCH_RANGE = 1
+
+
 def _log(logger, level, message, *args):
     """Helper function to log or print."""
     if logger:
@@ -67,7 +76,6 @@ def _calculate_hp_assignment_score(hp_assignments_details, hp_tasks_in_permutati
     # So, the score tuple will be (num_fully_assigned, -penalty_score)
     # _log(logger, "debug", f"Score calc: Assigned defs: {num_fully_assigned_hp_task_definitions}, Penalty sum: {penalty_score_from_unassigned_or_incomplete}")
     return (num_fully_assigned_hp_task_definitions, -penalty_score_from_unassigned_or_incomplete)
-
 
 def _assign_task_definition_to_schedule(
     task_to_assign, present_technicians, total_work_minutes, rep_assignments, logger,
@@ -363,32 +371,42 @@ def _assign_task_definition_to_schedule(
                 _log(logger, "warning", f"      {last_known_failure_reason_for_instance} for {instance_task_display_name}")
                 continue
 
-            # Preliminary sort of eligible technicians (not strictly necessary for combinations, but can help in debugging/logging)
-            # eligible_technicians_details_pm.sort(key=lambda x: (-max(x['relevant_skills'].values() or [0]), x['name']))
+            # OPTIMIZATION: Sort technicians by skill and limit the pool for combinations
+            def get_tech_score(tech_details):
+                # Score is the sum of levels for skills required by the task
+                return sum(tech_details['relevant_skills'].values())
+
+            eligible_technicians_details_pm.sort(key=get_tech_score, reverse=True)
+
+            if len(eligible_technicians_details_pm) > MAX_TECHS_FOR_COMBINATIONS:
+                _log(logger, "debug", f"      Limiting eligible tech pool for PM task {task_name_excel} from {len(eligible_technicians_details_pm)} to {MAX_TECHS_FOR_COMBINATIONS}.")
+                eligible_technicians_details_pm = eligible_technicians_details_pm[:MAX_TECHS_FOR_COMBINATIONS]
+
 
             sorted_eligible_tech_names_pm = [d['name'] for d in eligible_technicians_details_pm]
             tech_details_map_pm = {d['name']: d for d in eligible_technicians_details_pm}
 
             viable_groups_with_scores_pm = []
-            # Iterate through possible group sizes, prioritizing closeness to num_technicians_needed
+            
+            # OPTIMIZATION: Limit the range of group sizes to check
             possible_sizes_to_try = []
             if num_technicians_needed > 0 and len(sorted_eligible_tech_names_pm) > 0:
-                # Generate a list of sizes to try: num_technicians_needed first, then others by closeness.
-                # Max possible size is len(sorted_eligible_tech_names_pm).
-                # Min possible size is 1.
+                
+                min_size = max(1, num_technicians_needed - GROUP_SIZE_SEARCH_RANGE)
+                max_size = min(len(sorted_eligible_tech_names_pm), num_technicians_needed + GROUP_SIZE_SEARCH_RANGE)
+                
                 unique_sizes = set()
-                # Add planned size first if possible
+                for i in range(min_size, max_size + 1):
+                    unique_sizes.add(i)
+                
+                # Ensure the planned number of technicians is always considered if possible
                 if num_technicians_needed <= len(sorted_eligible_tech_names_pm):
                     unique_sizes.add(num_technicians_needed)
 
-                # Add other sizes, from 1 up to number of eligible techs
-                for i in range(1, len(sorted_eligible_tech_names_pm) + 1):
-                    unique_sizes.add(i)
-
-                # Sort these unique sizes: first by absolute difference to num_technicians_needed, then by the size itself (smaller preferred if diff is same)
                 possible_sizes_to_try = sorted(list(unique_sizes), key=lambda s: (abs(s - num_technicians_needed), s))
+            
+            _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Optimized group sizes to try: {possible_sizes_to_try} for num_needed={num_technicians_needed} from {len(sorted_eligible_tech_names_pm)} eligible techs.")
 
-            # _log(logger, "debug", f"    PM Instance {instance_task_display_name} - Possible group sizes to try (sorted by preference): {possible_sizes_to_try} for num_needed={num_technicians_needed} from {len(sorted_eligible_tech_names_pm)} eligible techs.")
 
             for r_actual_group_size in possible_sizes_to_try:
                 # This check is implicitly handled by combinations if r_actual_group_size > len(sorted_eligible_tech_names_pm)
@@ -621,24 +639,39 @@ def _assign_task_definition_to_schedule(
                 _log(logger, "warning", f"      Failed to assign PM instance {instance_task_display_name}. Reason: {last_known_failure_reason_for_instance}")
 
         elif task_type == 'REP':
-            # --- REP Task Logic (Copied and adapted from original) ---
-            # _log(logger, "debug", f"    (Helper) Assigning REP instance: {instance_task_display_name}")
+            # --- REP Task Logic (Modified for Force Assign) ---
+            _log(logger, "debug", f"    (Helper) Assigning REP instance: {instance_task_display_name}")
             rep_assignments_map = {item['task_id']: item for item in rep_assignments} if rep_assignments else {}
             assignment_info_rep = rep_assignments_map.get(task_id)
 
             if not assignment_info_rep:
                 last_known_failure_reason_for_instance = "Skipped (REP): Task data not received from UI."
-                unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance; continue
+                unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                continue
             if assignment_info_rep.get('skipped'):
                 last_known_failure_reason_for_instance = assignment_info_rep.get('skip_reason', "Skipped by user.")
-                unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance; continue
+                unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                continue
 
-            selected_techs_from_ui_rep = assignment_info_rep.get('technicians', [])
-            raw_user_selection_count_rep = len(selected_techs_from_ui_rep)
+            # Handle new structure of technicians payload
+            selected_tech_assignments_from_ui = assignment_info_rep.get('technicians', [])
+            raw_user_selection_count_rep = len(selected_tech_assignments_from_ui)
+            
+            # Extract names from the list of dicts
+            selected_tech_names_from_ui = [tech['name'] for tech in selected_tech_assignments_from_ui]
+            
+            # Filter for eligible technicians (present and correct line)
             eligible_user_selected_techs_rep = [
-                tech for tech in selected_techs_from_ui_rep
-                if tech in present_technicians and (not task_lines_list or any(line in TECHNICIAN_LINES.get(tech, []) for line in task_lines_list))
+                tech_name for tech_name in selected_tech_names_from_ui
+                if tech_name in present_technicians and
+                   (not task_lines_list or any(line in TECHNICIAN_LINES.get(tech_name, []) for line in task_lines_list))
             ]
+
+            # Identify which of the eligible technicians were forced
+            forced_tech_names = {
+                tech['name'] for tech in selected_tech_assignments_from_ui
+                if tech.get('force_assign') and tech['name'] in eligible_user_selected_techs_rep
+            }
 
             if num_technicians_needed == 0 and base_duration == 0:
                 all_task_assignments_details.append({
@@ -653,19 +686,28 @@ def _assign_task_definition_to_schedule(
 
             if not eligible_user_selected_techs_rep and num_technicians_needed > 0:
                 last_known_failure_reason_for_instance = "Skipped (REP): None of the user-selected technicians are eligible."
-                unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance; continue
+                unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                continue
 
             viable_groups_with_scores_rep = []
-            if eligible_user_selected_techs_rep:
-                for r_size in range(1, len(eligible_user_selected_techs_rep) + 1):
-                    for group_tuple in combinations(eligible_user_selected_techs_rep, r_size):
-                        group = list(group_tuple)
-                        workload = sum(sum(end - start for start, end, _ in technician_schedules[tn]) for tn in group)
-                        viable_groups_with_scores_rep.append({'group': group, 'len': len(group), 'workload': workload})
+            
+            # Separate the eligible technicians into forced and non-forced
+            other_eligible_techs = [tech for tech in eligible_user_selected_techs_rep if tech not in forced_tech_names]
+            forced_tech_list = list(forced_tech_names)
+
+            # Generate groups. All groups MUST contain the forced technicians.
+            for r_size in range(len(other_eligible_techs) + 1):
+                for other_group_tuple in combinations(other_eligible_techs, r_size):
+                    group = forced_tech_list + list(other_group_tuple)
+                    if not group: continue
+
+                    workload = sum(sum(end - start for start, end, _ in technician_schedules[tn]) for tn in group)
+                    viable_groups_with_scores_rep.append({'group': group, 'len': len(group), 'workload': workload})
 
             if not viable_groups_with_scores_rep and num_technicians_needed > 0:
-                last_known_failure_reason_for_instance = "Skipped (REP): No viable groups from eligible UI-selected techs."
-                unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance; continue
+                last_known_failure_reason_for_instance = "Skipped (REP): No viable groups could be formed from eligible UI-selected techs."
+                unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
+                continue
 
             viable_groups_with_scores_rep.sort(key=lambda x: (abs(x['len'] - num_technicians_needed), x['workload'], ''.join(sorted(x['group']))))
 
@@ -673,7 +715,7 @@ def _assign_task_definition_to_schedule(
             final_chosen_group_for_rep_instance = None
             final_start_time_for_rep_instance = 0
             final_assigned_duration_for_rep_instance = 0
-            final_resource_mismatch_note_rep = None # Store the note for the chosen group
+            final_resource_mismatch_note_rep = None
 
             for group_candidate_data_rep in viable_groups_with_scores_rep:
                 current_candidate_group_rep = group_candidate_data_rep['group']
@@ -686,11 +728,10 @@ def _assign_task_definition_to_schedule(
                 if num_technicians_needed > 0:
                     if current_actual_num_assigned_rep != num_technicians_needed:
                         current_resource_mismatch_note_rep_candidate = f"Task requires {num_technicians_needed}. Assigned to {current_actual_num_assigned_rep} from UI pool of {raw_user_selection_count_rep} ({len(eligible_user_selected_techs_rep)} eligible)."
-                    elif raw_user_selection_count_rep != num_technicians_needed: # Assigned optimally but UI selection was different
+                    elif raw_user_selection_count_rep != num_technicians_needed:
                          current_resource_mismatch_note_rep_candidate = f"Task requires {num_technicians_needed}. User selected {raw_user_selection_count_rep} ({len(eligible_user_selected_techs_rep)} eligible). Assigned to optimal {current_actual_num_assigned_rep}."
                 elif num_technicians_needed == 0 and current_actual_num_assigned_rep > 0:
                      current_resource_mismatch_note_rep_candidate = f"Task planned for 0 techs. Assigned to {current_actual_num_assigned_rep}."
-
 
                 search_start_time_rep = 0
                 while search_start_time_rep <= total_work_minutes:
@@ -710,21 +751,19 @@ def _assign_task_definition_to_schedule(
                         final_chosen_group_for_rep_instance = current_candidate_group_rep
                         final_start_time_for_rep_instance = search_start_time_rep
                         assigned_duration_gantt_rep = current_effective_duration_rep
-                        is_incomplete_task_flag_rep = False
-
+                        
                         if current_effective_duration_rep > 0 and (final_start_time_for_rep_instance + current_effective_duration_rep > total_work_minutes):
                             remaining_time = max(0, total_work_minutes - final_start_time_for_rep_instance)
-                            min_acceptable_partial = current_effective_duration_rep * 0.75 # 75% rule
+                            min_acceptable_partial = current_effective_duration_rep * 0.75
                             if remaining_time >= min_acceptable_partial and remaining_time > 0:
                                 assigned_duration_gantt_rep = remaining_time
-                                is_incomplete_task_flag_rep = True
                                 if instance_id_str not in incomplete_tasks_instance_ids: incomplete_tasks_instance_ids.append(instance_id_str)
-                            else: # Not enough time for a meaningful partial assignment
-                                all_techs_in_rep_group_available = False # Force trying next slot/group
+                            else:
+                                all_techs_in_rep_group_available = False
 
-                        if all_techs_in_rep_group_available: # Re-check after partial assignment logic
+                        if all_techs_in_rep_group_available:
                             final_assigned_duration_for_rep_instance = assigned_duration_gantt_rep
-                            final_resource_mismatch_note_rep = current_resource_mismatch_note_rep_candidate # Capture note for chosen group
+                            final_resource_mismatch_note_rep = current_resource_mismatch_note_rep_candidate
                             assignment_successful_this_instance_rep = True; break
                     search_start_time_rep += 15
                 if assignment_successful_this_instance_rep: break
@@ -741,14 +780,13 @@ def _assign_task_definition_to_schedule(
                         'technician': tech_assigned_name_rep, 'task_name': instance_task_display_name,
                         'start': final_start_time_for_rep_instance, 'duration': final_assigned_duration_for_rep_instance,
                         'is_incomplete': instance_id_str in incomplete_tasks_instance_ids,
-                        'original_duration': base_duration, # Original planned duration of one instance
+                        'original_duration': base_duration,
                         'instance_id': instance_id_str,
-                        'technician_task_info': 'N/A_REP', # Corrected key
+                        'technician_task_info': 'N/A_REP',
                         'resource_mismatch_info': final_resource_mismatch_note_rep
                     })
-                # _log(logger, "info", f"    (Helper) Successfully scheduled (REP) {instance_task_display_name} for group {final_chosen_group_for_rep_instance}...")
             else:
-                if not last_known_failure_reason_for_instance or "Could not find a suitable time slot" in last_known_failure_reason_for_instance : # if default or not specific enough
+                if not last_known_failure_reason_for_instance or "Could not find a suitable time slot" in last_known_failure_reason_for_instance:
                     last_known_failure_reason_for_instance = "No group/slot for REP task from UI selection."
                 unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
 

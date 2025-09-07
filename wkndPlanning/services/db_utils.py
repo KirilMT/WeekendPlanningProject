@@ -1,4 +1,6 @@
 # wkndPlanning/db_utils.py
+import os
+import json
 import sqlite3
 
 # --- Database Helper Functions ---
@@ -7,8 +9,107 @@ def get_db_connection(database_path):
     conn.row_factory = sqlite3.Row  # Access columns by name
     return conn
 
-def init_db(db_path, logger=None):
-    conn = sqlite3.connect(db_path)
+def populate_dummy_data(conn, logger):
+    """Populates the database with dummy data from dummy_data.json."""
+    logger.info("Populating database with dummy data.")
+    
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    dummy_data_path = os.path.join(current_dir, '..', '..', 'dummy_data.json')
+
+    try:
+        with open(dummy_data_path, 'r') as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        logger.error(f"Dummy data file not found at {dummy_data_path}")
+        return
+    except json.JSONDecodeError:
+        logger.error(f"Error decoding JSON from {dummy_data_path}")
+        return
+
+    cursor = conn.cursor()
+    tech_manager = TechnologyManager(conn)
+    task_manager = TaskManager(conn)
+
+    satellite_points = {}
+    technicians = {}
+    technologies = {}
+    tasks = {}
+    tech_groups = {}
+
+    # Populate satellite_points
+    for sp_name in data.get("satellite_points", []):
+        sp_id = get_or_create_satellite_point(conn, sp_name)
+        satellite_points[sp_name] = sp_id
+    logger.info(f"Populated {len(satellite_points)} satellite points.")
+
+    # Populate lines
+    for line in data.get("lines", []):
+        sp_id = satellite_points.get(line["satellite_point"])
+        if sp_id:
+            add_line(conn, line["name"], sp_id)
+    logger.info(f"Populated lines.")
+
+    # Populate technology_groups
+    for group_name in data.get("technology_groups", []):
+        group_id = tech_manager.get_or_create_group(group_name)
+        tech_groups[group_name] = group_id
+    logger.info(f"Populated {len(tech_groups)} technology groups.")
+
+    # Populate technologies (first pass for parent-less techs)
+    for tech_data in data.get("technologies", []):
+        if "parent" not in tech_data:
+            tech_name = tech_data["name"]
+            group_id = tech_groups.get(tech_data.get("group"))
+            tech_id = tech_manager.get_or_create(tech_name, group_id=group_id)
+            technologies[tech_name] = tech_id
+            
+    # Second pass for technologies with parents
+    for tech_data in data.get("technologies", []):
+        if "parent" in tech_data:
+            tech_name = tech_data["name"]
+            group_id = tech_groups.get(tech_data.get("group"))
+            parent_id = technologies.get(tech_data.get("parent"))
+            tech_id = tech_manager.get_or_create(tech_name, group_id=group_id, parent_id=parent_id)
+            technologies[tech_name] = tech_id
+    logger.info(f"Populated {len(technologies)} technologies.")
+
+    # Populate technicians and their skills
+    for tech_data in data.get("technicians", []):
+        tech_name = tech_data["name"]
+        sp_id = satellite_points.get(tech_data["satellite_point"])
+        cursor.execute("INSERT OR IGNORE INTO technicians (name, satellite_point_id) VALUES (?, ?)", (tech_name, sp_id))
+        cursor.execute("SELECT id FROM technicians WHERE name = ?", (tech_name,))
+        tech_id_result = cursor.fetchone()
+        if tech_id_result:
+            tech_id = tech_id_result[0] # Access by index to fix tuple error
+            technicians[tech_name] = tech_id
+            
+            for skill_data in tech_data.get("skills", []):
+                skill_name = skill_data["name"]
+                level = skill_data["level"]
+                tech_id_for_skill = technologies.get(skill_name)
+                if tech_id_for_skill:
+                    update_technician_skill(conn, tech_id, tech_id_for_skill, level)
+    logger.info(f"Populated {len(technicians)} technicians and their skills.")
+
+    # Populate tasks and their required skills
+    for task_data in data.get("tasks", []):
+        task_name = task_data["name"]
+        task_id = task_manager.get_or_create(task_name)
+        tasks[task_name] = task_id
+        for skill_name in task_data.get("required_skills", []):
+            skill_id = technologies.get(skill_name)
+            if skill_id:
+                task_manager.add_required_skill(task_id, skill_id)
+    logger.info(f"Populated {len(tasks)} tasks and their required skills.")
+
+    conn.commit()
+    logger.info("Dummy data population complete.")
+
+def init_db(db_path, logger=None, debug_use_test_db=False):
+    db_exists = os.path.exists(db_path)
+    
+    conn = get_db_connection(db_path)
     cursor = conn.cursor()
 
     # Create satellite_points table
@@ -20,12 +121,13 @@ def init_db(db_path, logger=None):
     ''')
     logger.info("Table 'satellite_points' ensured.") if logger else None
 
-    # Add a default satellite point if the table is empty
-    cursor.execute("SELECT COUNT(*) FROM satellite_points")
-    if cursor.fetchone()[0] == 0:
-        cursor.execute("INSERT INTO satellite_points (name) VALUES (?)", ("Default Satellite Point",))
-        conn.commit()  # Commit immediately for critical default data
-        if logger: logger.info("Added 'Default Satellite Point' as no satellite points were found.")
+    # Add a default satellite point if the table is empty and not in test mode
+    if not debug_use_test_db:
+        cursor.execute("SELECT COUNT(*) FROM satellite_points")
+        if cursor.fetchone()[0] == 0:
+            cursor.execute("INSERT INTO satellite_points (name) VALUES (?)", ("Default Satellite Point",))
+            conn.commit()  # Commit immediately for critical default data
+            if logger: logger.info("Added 'Default Satellite Point' as no satellite points were found.")
 
     # Create lines table
     cursor.execute('''
@@ -203,6 +305,11 @@ def init_db(db_path, logger=None):
     ''')
 
     conn.commit()
+
+    # Populate with dummy data if the DB was just created and we are in debug mode
+    if not db_exists and debug_use_test_db:
+        populate_dummy_data(conn, logger)
+
     conn.close()
 
 def get_or_create_satellite_point(conn, name):
@@ -210,7 +317,7 @@ def get_or_create_satellite_point(conn, name):
     cursor.execute("SELECT id FROM satellite_points WHERE name = ?", (name,))
     row = cursor.fetchone()
     if row:
-        return row['id']
+        return row[0] # Access by index to fix tuple error
     else:
         cursor.execute("INSERT INTO satellite_points (name) VALUES (?)", (name,))
         conn.commit()
@@ -332,7 +439,7 @@ class TechnologyManager:
         self.cursor.execute("SELECT id FROM technologies WHERE name = ?", (technology_name,))
         row = self.cursor.fetchone()
         if row:
-            return row['id']
+            return row[0] # Access by index to fix tuple error
         else:
             self.cursor.execute("INSERT INTO technologies (name, group_id, parent_id) VALUES (?, ?, ?)",
                                 (technology_name, group_id, parent_id))
@@ -352,7 +459,7 @@ class TechnologyManager:
         self.cursor.execute("SELECT id FROM technology_groups WHERE name = ?", (group_name,))
         row = self.cursor.fetchone()
         if row:
-            return row['id']
+            return row[0] # Access by index to fix tuple error
         else:
             self.cursor.execute("INSERT INTO technology_groups (name) VALUES (?)", (group_name,))
             self.conn.commit()
@@ -375,7 +482,7 @@ class TaskManager:
         self.cursor.execute("SELECT id FROM tasks WHERE name = ?", (task_name,))
         row = self.cursor.fetchone()
         if row:
-            return row['id']
+            return row[0] # Access by index to fix tuple error
         else:
             self.cursor.execute("INSERT INTO tasks (name) VALUES (?)", (task_name,))
             self.conn.commit()

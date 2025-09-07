@@ -47,7 +47,7 @@ class TestHealthEndpoints:
         assert 'performance_metrics' in data
         assert 'timestamp' in data
 
-    def test_debug_endpoint_in_debug_mode(self, client):
+    def test_debug_endpoint_in_flask_debug_mode(self, client):
         """Test debug endpoint accessibility in debug mode."""
         response = client.get('/health/debug')
         assert response.status_code == 200
@@ -59,7 +59,7 @@ class TestHealthEndpoints:
     @patch('wkndPlanning.routes.health.current_app')
     def test_debug_endpoint_in_production(self, mock_app, client):
         """Test debug endpoint is blocked in production mode."""
-        mock_app.config.get.return_value = False  # DEBUG_MODE = False
+        mock_app.config.get.return_value = False  # FLASK_DEBUG = False
 
         response = client.get('/health/debug')
         assert response.status_code == 403
@@ -118,7 +118,7 @@ class TestHealthChecker:
 
     def test_get_application_metrics(self, app, test_db):
         """Test application metrics collection."""
-        from wkndPlanning.services.health_check import HealthChecker
+        from wkndPlanning.services.health_.health_check import HealthChecker
 
         with app.app_context():
             checker = HealthChecker()
