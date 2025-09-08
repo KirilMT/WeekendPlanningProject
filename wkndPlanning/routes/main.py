@@ -294,14 +294,17 @@ def generate_dashboard_route():
             if conn: conn.close()
 
         all_tasks_for_dashboard = list(final_tasks_map.values())
-        available_time_result = generate_html_files(
+        available_time_summary, under_resourced_pm_tasks = generate_html_files(
             all_tasks_for_dashboard, present_technicians, rep_assignments_from_ui,
             current_app.jinja_env, current_app.config['OUTPUT_FOLDER'], TECHNICIANS, TECHNICIAN_GROUPS, current_app.logger, technician_skills_map
         )
         dashboard_url = url_for('main.output_file_route', filename='technician_dashboard.html', _external=True) + f'?cache_bust={random.randint(1,100000)}'
         return jsonify({
-            "message": "Dashboard generated.", "html_files": available_time_result.get('html_files', []),
-            "session_id": session_id, "dashboard_url": dashboard_url
+            "message": "Dashboard generated.",
+            "available_time": available_time_summary,
+            "under_resourced_tasks": under_resourced_pm_tasks,
+            "session_id": session_id,
+            "dashboard_url": dashboard_url
         })
     except Exception as e:
         current_app.logger.error(f"Error in generate_dashboard_route: {e}", exc_info=True)

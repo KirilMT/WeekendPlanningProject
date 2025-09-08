@@ -1344,7 +1344,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 repTasks.push(taskData);
                 hideAdditionalTaskModal();
                 additionalTaskForm.reset();
+                // Show the success message first
                 showMessage('Additional task created successfully!', 'success');
+                // Then refresh the main task assignment modal to update the progress counter
+                showTaskAssignmentModal();
             })
             .catch(error => {
                 console.error('Error fetching eligible technicians for additional task:', error);

@@ -83,7 +83,8 @@ def _assign_task_definition_to_schedule(
     unassigned_tasks_reasons_dict, incomplete_tasks_instance_ids,
     all_pm_task_names_from_excel_normalized_set, # Passed through
     # New parameter for technician skills
-    technician_technology_skills=None
+    technician_technology_skills=None,
+    under_resourced_tasks=None
     # TASK_NAME_MAPPING, TECHNICIAN_TASKS, TECHNICIAN_LINES are accessed from global/module scope
 ):
     """
@@ -370,6 +371,18 @@ def _assign_task_definition_to_schedule(
                 unassigned_tasks_reasons_dict[instance_id_str] = last_known_failure_reason_for_instance
                 _log(logger, "warning", f"      {last_known_failure_reason_for_instance} for {instance_task_display_name}")
                 continue
+
+            if num_technicians_needed > 0 and len(eligible_technicians_details_pm) < num_technicians_needed:
+                if under_resourced_tasks is not None:
+                    is_already_added = any(t['task_id'] == task_id for t in under_resourced_tasks)
+                    if not is_already_added:
+                        under_resourced_tasks.append({
+                            'task_id': task_id,
+                            'task_name': task_name_excel,
+                            'needed': num_technicians_needed,
+                            'available': len(eligible_technicians_details_pm),
+                            'eligible_technicians': [d['name'] for d in eligible_technicians_details_pm]
+                        })
 
             # OPTIMIZATION: Sort technicians by skill and limit the pool for combinations
             def get_tech_score(tech_details):
@@ -806,6 +819,7 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
 
     priority_order = {'A': 1, 'B': 2, 'C': 3, 'DEFAULT': 4}
     all_tasks_combined = []
+    under_resourced_tasks = []
     for task in tasks:
         task_type = task.get('task_type', '').upper()
         if task_type in ['PM', 'REP']:
@@ -877,7 +891,8 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                     current_perm_schedules, current_perm_assignments,
                     current_perm_unassigned_reasons, current_perm_incomplete_ids,
                     all_pm_task_names_from_excel_normalized_set,
-                    technician_technology_skills=technician_technology_skills # Pass skills
+                    technician_technology_skills=technician_technology_skills, # Pass skills
+                    under_resourced_tasks=under_resourced_tasks
                 )
 
             current_score = _calculate_hp_assignment_score(current_perm_assignments, hp_tasks, current_perm_unassigned_reasons, logger)
@@ -917,7 +932,8 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                 final_technician_schedules, final_all_task_assignments_details,
                 final_unassigned_tasks_reasons_dict, final_incomplete_tasks_instance_ids,
                 all_pm_task_names_from_excel_normalized_set,
-                technician_technology_skills=technician_technology_skills # Pass skills
+                technician_technology_skills=technician_technology_skills, # Pass skills
+                under_resourced_tasks=under_resourced_tasks
             )
 
     # Assign other_tasks based on the schedule resulting from HP task assignments
@@ -937,7 +953,8 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
             final_technician_schedules, final_all_task_assignments_details,
             final_unassigned_tasks_reasons_dict, final_incomplete_tasks_instance_ids,
             all_pm_task_names_from_excel_normalized_set,
-            technician_technology_skills=technician_technology_skills # Pass skills
+            technician_technology_skills=technician_technology_skills, # Pass skills
+            under_resourced_tasks=under_resourced_tasks
         )
 
     # --- Final available time calculation ---
@@ -965,5 +982,8 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
     if final_incomplete_tasks_instance_ids:
         _log(logger, "info", f"Incomplete task instances (due to shift end): {len(final_incomplete_tasks_instance_ids)} -> {final_incomplete_tasks_instance_ids}")
 
+    if under_resourced_tasks:
+        _log(logger, "warning", f"Under-resourced PM tasks detected: {under_resourced_tasks}")
+
     # _log(logger, "debug", f"Final Technician Schedules at end of assign_tasks: {final_technician_schedules}")
-    return final_all_task_assignments_details, final_unassigned_tasks_reasons_dict, final_incomplete_tasks_instance_ids, final_available_time_summary_map
+    return final_all_task_assignments_details, final_unassigned_tasks_reasons_dict, final_incomplete_tasks_instance_ids, final_available_time_summary_map, under_resourced_tasks
