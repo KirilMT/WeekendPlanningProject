@@ -29,6 +29,7 @@ This is a professional Flask-based web application for managing weekend technici
 
 - **Programming Language:** Python
 - **Framework:** Flask
+- **Database:** SQLite
 - **Dependencies:**
     - Flask==3.1.1
     - pandas==2.3.0
@@ -36,21 +37,36 @@ This is a professional Flask-based web application for managing weekend technici
     - numpy==2.2.6
     - pyxlsb==1.0.10
     - and others listed in `requirements.txt`.
+- **Containerization:** Docker, Docker Compose
+- **Testing:** Pytest
 
 ## Project Structure
 
 ```
 WeekendPlanningProject/
-├── wkndPlanning/              # Main application package
-│   ├── routes/                # Flask blueprints and routing
-│   ├── services/              # Business logic and utilities (core logic here)
-│   ├── static/                # CSS, JavaScript, and static assets
-│   ├── templates/             # Jinja2 HTML templates
-│   └── app.py                 # Flask application factory
-├── config.py                  # Application configuration
-├── requirements.txt           # Python dependencies
-├── run.py                     # Application entry point
-└── README.md                  # Project documentation
+├── wkndPlanning/                  # Main application package
+│   ├── routes/                    # Flask blueprints and routing
+│   ├── services/                  # Business logic and utilities (core logic here)
+│   ├── static/                    # CSS, JavaScript, and static assets
+│   ├── templates/                 # Jinja2 HTML templates
+│   ├── app.py                     # Flask application factory
+│   ├── testsDB.db                 # SQLite test database
+│   ├── weekend_planning.db        # Main SQLite database
+│   ├── logs/                      # Application and error logs
+│   ├── output/                    # Generated HTML outputs
+├── config.py                      # Application configuration
+├── requirements.txt               # Python dependencies
+├── run.py                         # Application entry point
+├── README.md                      # Project documentation
+├── ROADMAP.md                     # Development roadmap and future plans
+├── issues.md                      # Issue tracking and prioritization
+├── technician_dashboard_manual.md # Manual for technician dashboard usage
+├── dummy_data.json                # Dummy data for testing
+├── Dockerfile                     # Docker container configuration
+├── docker-compose.yml             # Docker Compose setup
+├── Excels_Testing/                # Excel files for testing and import
+├── tests/                         # Pytest-based unit and integration tests
+├── uploads/                       # Uploaded files (Excel, etc.)
 ```
 
 ## Quick Test Guide
@@ -61,16 +77,17 @@ To test the application's end-to-end workflow:
 3.  Import `testsExcel.xlsb` and `testsExcel2.xlsb` from the `Excels_Testing/` directory to populate the database.
 4.  Trigger the task assignment process from the UI.
 5.  View the generated schedules on the supervisor and technician dashboards.
+6.  (Optional) Run automated tests with `pytest` in the `tests/` directory: `pytest tests/`
 
 ## Development Roadmap Highlights
 
-I am aware of the future development plans outlined in `ROADMAP.md`. I will keep these in mind when providing assistance. Key areas include:
+I am aware of the future development plans outlined in `ROADMAP.md` and tracked in `issues.md`. I will keep these in mind when providing assistance. Key areas include:
 
 -   **Database & Data Management:** Improving Excel data extraction, removing task priorities from the database, and integrating with external APIs.
 -   **UI/UX Enhancements:** Improving the technician dashboard (sticky headers, scrolling), and enhancing the Gantt chart (live time indicator, better interactivity).
 -   **Task Assignment Logic:** Documenting the current algorithm, fixing bugs, and exploring performance optimizations.
 -   **Generalization:** Making the application more modular and configurable (e.g., custom terminology, pluggable data sources).
--   **Testing:** Creating a more robust dummy data seeding mechanism.
+-   **Testing:** Creating a more robust dummy data seeding mechanism and expanding automated test coverage.
 
 ## How to Interact with Me
 
@@ -78,6 +95,7 @@ I am aware of the future development plans outlined in `ROADMAP.md`. I will keep
 -   **Use the available tools:** I will use my tools to get information about the project before asking you.
 -   **Ask for clarification:** If I am unsure about something, I will ask for clarification.
 -   **Follow modern development practices:** I will adopt modern development practices where applicable, but consistency with your code and style is more important.
+-   **Documentation Update Requirement:** When working on issues, before committing and pushing, I will update documentation files (README.md, AGENT.md, copilot-instructions.md, and any other relevant files) to reflect all changes.
 
 ## GitHub Issues
 
