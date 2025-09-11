@@ -566,19 +566,33 @@ async function updateTaskMapping(taskId, newName, newTechnologyIds) { // Changed
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: newName, technology_ids: newTechnologyIds }), // Send technology_ids
         });
-        const result = await response.json();
-        if (response.ok) {
-            displayMessage(`Task '${escapeHtml(result.name)}' updated successfully.`, 'success');
-            await fetchAllTasksForMapping();
-
-            // If a technician is selected, refresh their details to reflect updated task skills
-            if (selectedTechnician && typeof fetchMappings === 'function') {
-                await fetchMappings(selectedTechnician);
+        let result;
+        let isJson = false;
+        try {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                result = await response.json();
+                isJson = true;
+            } else {
+                result = await response.text();
             }
-
-        } else {
-            throw new Error(result.message || `Server error ${response.status}`);
+        } catch (err) {
+            result = await response.text();
         }
+        if (response.ok && isJson) {
+            displayMessage(`Task '${escapeHtml(result.name)}' updated successfully.`, 'success');
+        } else if (isJson) {
+            displayMessage(`Error updating task: ${escapeHtml(result.message || 'Unknown error')}`, 'error');
+        } else {
+            displayMessage('Server error: ' + result, 'error');
+        }
+        await fetchAllTasksForMapping();
+
+        // If a technician is selected, refresh their details to reflect updated task skills
+        if (selectedTechnician && typeof fetchMappings === 'function') {
+            await fetchMappings(selectedTechnician);
+        }
+
     } catch (error) {
         displayMessage(`Error updating task: ${error.message}`, 'error');
         console.error('Error in updateTaskMapping:', error);

@@ -12,7 +12,8 @@ from ..services.db_utils import (
     add_line,
     get_all_lines,
     update_line,
-    delete_line
+    delete_line,
+    get_db_connection
 )
 from ..services.config_manager import load_app_config, TECHNICIAN_GROUPS
 from ..services.security import InputValidator, validate_request, require_json_fields
@@ -989,7 +990,9 @@ def add_task_api():
 def update_task_api(task_id):
     """Update an existing task's details and required technologies."""
     try:
-        data = request.get_json()
+        data = request.get_json(force=True, silent=True)
+        if not data:
+            return jsonify({"message": "Invalid or missing JSON payload."}), 400
         new_name = data.get('name', '').strip()
         new_technology_ids = data.get('technology_ids', []) # Expect a list of technology IDs
 
@@ -1037,14 +1040,10 @@ def update_task_api(task_id):
         required_skills_objects = task_manager.get_required_skills(task_id)
 
         response_data = dict(updated_task_data)
-        response_data['required_skills'] = required_skills_objects # Keep for detailed info
-        response_data['technology_ids'] = [skill['technology_id'] for skill in required_skills_objects] # Add for frontend compatibility
-
+        response_data['technology_ids'] = [skill['technology_id'] for skill in required_skills_objects]
         return jsonify(response_data), 200
     except Exception as e:
-        if g.db: g.db.rollback()
-        current_app.logger.error(f"Error updating task {task_id}: {e}", exc_info=True)
-        return jsonify({"message": f"Server error: {str(e)}"}), 500
+        return jsonify({"message": "Unexpected error during task update.", "details": str(e)}), 500
 
 @api_bp.route('/tasks/<int:task_id>', methods=['DELETE'])
 def delete_task_api(task_id):
@@ -1137,7 +1136,7 @@ def get_eligible_technicians_for_task():
             placeholders = ', '.join('?' for _ in present_technicians_names)
             query = f"SELECT id, name FROM technicians WHERE name IN ({placeholders})"
             cursor.execute(query, present_technicians_names)
-            all_present_technicians = [{"id": row['id'], "name": row['name']} for row in cursor.fetchall()]
+            all_present_technicians = [{'id': row['id'], 'name': row['name']} for row in cursor.fetchall()]
             return jsonify(all_present_technicians)
 
         # 1. Get all present technicians and their skills.
@@ -1172,3 +1171,25 @@ def get_eligible_technicians_for_task():
     except Exception as e:
         current_app.logger.error(f"Error in /eligible_technicians_for_task: {e}", exc_info=True)
         return jsonify({"error": "Failed to get eligible technicians."}), 500
+
+@api_bp.route('/technician_skill_upgrade_logs/<int:technician_id>', methods=['GET'])
+def get_technician_skill_upgrade_logs(technician_id):
+    """
+    Returns all skill upgrade logs for a technician.
+    Each entry includes: technology_id, task_id, previous_skill_level, new_skill_level, message, timestamp.
+    """
+    try:
+        conn = get_db_connection(current_app.config['DATABASE_PATH'])
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT technology_id, task_id, previous_skill_level, new_skill_level, message, timestamp
+            FROM technician_skill_update_log
+            WHERE technician_id = ?
+            ORDER BY timestamp DESC
+        ''', (technician_id,))
+        logs = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify({'success': True, 'logs': logs})
+    except Exception as e:
+        current_app.logger.error(f"Error fetching skill upgrade logs for technician {technician_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500

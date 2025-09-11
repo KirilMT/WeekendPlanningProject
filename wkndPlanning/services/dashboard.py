@@ -122,7 +122,7 @@ def _log(logger, level, message, *args):
     else:
         print(f"[{level.upper()}] {message % args if args else message}")
 
-def generate_html_files(all_tasks, present_technicians, rep_assignments, env, output_folder, all_technicians_global, technician_groups_global, logger, technician_technology_skills=None): # Added technician_technology_skills
+def generate_html_files(all_tasks, present_technicians, rep_assignments, env, output_folder, all_technicians_global, technician_groups_global, db_conn, logger, technician_technology_skills=None):
     if logger is None:
         # Basic fallback logger if none is provided
         logger = logging.getLogger(__name__)
@@ -156,6 +156,7 @@ def generate_html_files(all_tasks, present_technicians, rep_assignments, env, ou
         tasks_for_processing,
         present_technicians,
         total_work_minutes,
+        db_conn,
         rep_assignments, # Pass the filtered and structured REP assignments
         logger,
         technician_technology_skills=technician_technology_skills # Pass skills

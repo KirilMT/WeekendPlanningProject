@@ -1,10 +1,35 @@
 // --- Technician Skill Management ---
+let technicianSkillUpgradeLogs = {};
+
+async function fetchTechnicianSkillUpgradeLogs(technicianId) {
+    try {
+        const response = await fetch(`/api/technician_skill_upgrade_logs/${technicianId}`);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        if (data.success && Array.isArray(data.logs)) {
+            technicianSkillUpgradeLogs = {};
+            data.logs.forEach(log => {
+                // Only keep the latest log per technology
+                if (!technicianSkillUpgradeLogs[log.technology_id]) {
+                    technicianSkillUpgradeLogs[log.technology_id] = log.message;
+                }
+            });
+        } else {
+            technicianSkillUpgradeLogs = {};
+        }
+    } catch (error) {
+        technicianSkillUpgradeLogs = {};
+        console.error('Error fetching skill upgrade logs:', error);
+    }
+}
+
 async function fetchTechnicianSkills(technicianName) {
     if (!technicianName || !currentSelectedTechnicianId) {
         renderTechnicianSkills();
         return;
     }
     try {
+        await fetchTechnicianSkillUpgradeLogs(currentSelectedTechnicianId);
         const response = await fetch(`/api/technician_skills/${currentSelectedTechnicianId}`);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const skillsData = await response.json();
@@ -56,7 +81,12 @@ function renderTechnicianSkills() {
             const badge = document.createElement('span');
             badge.classList.add('level-badge', `level-${currentLevel}`);
             badge.textContent = currentLevel;
-            badge.title = `Level: ${SKILL_LEVEL_NAMES[currentLevel]}`;
+            // Use log message if available, otherwise default
+            if (technicianSkillUpgradeLogs[technology.id]) {
+                badge.title = technicianSkillUpgradeLogs[technology.id];
+            } else {
+                badge.title = `Level: ${SKILL_LEVEL_NAMES[currentLevel]}`;
+            }
             levelDisplay.appendChild(badge);
             
             container.appendChild(levelDisplay);
@@ -207,11 +237,25 @@ async function updateTechnicianSkill(technicianName, technicianId, technologyId,
 
             displayMessage(`Skill '${escapeHtml(technologyName)}' for technician '${escapeHtml(techNameForMsg)}' updated to level ${escapeHtml(SKILL_LEVEL_TEXTS[skillLevel] || skillLevel)}.`, 'success');
 
-            if (typeof fetchMappings === 'function' && technicianName) {
-                await fetchMappings(technicianName);
-            } else {
-                console.error('fetchMappings function is not available or technicianName is missing. Cannot refresh full technician details.');
+            // FIX: Update local data and re-render instead of fetching, to prevent 429 errors.
+            if (currentMappings.technicians[technicianName]) {
+                if (!currentMappings.technicians[technicianName].skills) {
+                    currentMappings.technicians[technicianName].skills = {};
+                }
+                currentMappings.technicians[technicianName].skills[technologyId] = skillLevel;
+                
+                // We don't refetch logs, but we can clear the old one for the updated skill if we want.
+                if (technicianSkillUpgradeLogs && technicianSkillUpgradeLogs[technologyId]) {
+                    delete technicianSkillUpgradeLogs[technologyId]; // The old log message is now likely irrelevant
+                }
+
                 renderTechnicianSkills();
+            } else {
+                 console.error('Could not find technician in local mappings to update skill.');
+                 // Fallback to fetching if local data is inconsistent
+                 if (typeof fetchTechnicianSkills === 'function' && technicianName) {
+                    await fetchTechnicianSkills(technicianName);
+                }
             }
         } else {
             throw new Error(result.message || `Server error ${response.status}`);
@@ -219,10 +263,9 @@ async function updateTechnicianSkill(technicianName, technicianId, technologyId,
     } catch (error) {
         displayMessage(`Error updating skill: ${error.message}`, 'error');
         console.error(error);
-        if (typeof fetchMappings === 'function' && selectedTechnician) { 
-            await fetchMappings(selectedTechnician);
-        } else {
-            await fetchTechnicianSkills(selectedTechnician); 
+        // On error, re-fetch to ensure UI is consistent with the backend state.
+        if (typeof fetchTechnicianSkills === 'function' && selectedTechnician) { 
+            await fetchTechnicianSkills(selectedTechnician);
         }
     }
 }

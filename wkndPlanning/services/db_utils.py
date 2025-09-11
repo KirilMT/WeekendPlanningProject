@@ -571,3 +571,29 @@ def get_technician_skills_by_id(conn, technician_id):
     for row in cursor.fetchall():
         skills[row['technology_id']] = row['skill_level']
     return skills
+
+def ensure_skill_update_log_table(conn):
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS technician_skill_update_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            technician_id INTEGER,
+            technology_id INTEGER,
+            task_id TEXT,
+            previous_skill_level INTEGER,
+            new_skill_level INTEGER,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            message TEXT
+        )
+    ''')
+    conn.commit()
+
+
+def log_technician_skill_update(conn, technician_id, technology_id, task_id, previous_skill_level, new_skill_level, message):
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO technician_skill_update_log (
+            technician_id, technology_id, task_id, previous_skill_level, new_skill_level, message
+        ) VALUES (?, ?, ?, ?, ?, ?)
+    ''', (technician_id, technology_id, task_id, previous_skill_level, new_skill_level, message))
+    conn.commit()

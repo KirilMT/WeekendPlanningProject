@@ -3,6 +3,7 @@
 from itertools import combinations, permutations # Ensure permutations is imported
 from .data_processing import normalize_string
 from .config_manager import TASK_NAME_MAPPING, TECHNICIAN_TASKS, TECHNICIAN_LINES # Corrected relative import
+from ..services.db_utils import update_technician_skill, log_technician_skill_update
 
 # Maximum number of high-priority tasks to consider for permutation-based optimization.
 # 7! = 5040, 8! = 40320. Keep this value mindful of performance.
@@ -82,6 +83,7 @@ def _assign_task_definition_to_schedule(
     technician_schedules, all_task_assignments_details,
     unassigned_tasks_reasons_dict, incomplete_tasks_instance_ids,
     all_pm_task_names_from_excel_normalized_set, # Passed through
+    db_conn, # Pass the database connection
     # New parameter for technician skills
     technician_technology_skills=None,
     under_resourced_tasks=None
@@ -483,15 +485,95 @@ def _assign_task_definition_to_schedule(
                         'size_diff': abs(r_actual_group_size - num_technicians_needed) # Store difference for primary sort
                     })
 
-            # Ensure 0-tech, 0-duration PM tasks still get a dummy group if no other groups were formed
-            # This handles cases where num_technicians_needed might have been >0 but no eligible techs were found, or num_technicians_needed was 0 initially.
-            if num_technicians_needed == 0 and base_duration == 0 and not viable_groups_with_scores_pm:
-                 viable_groups_with_scores_pm.append({ # Add a dummy group for 0-tech tasks
-                    'group': [], 'len': 0, 'per_skill_avg': {},
-                    'combined_avg_skill': 0, 'workload': 0,
-                    'size_diff': 0 # No difference for 0-tech tasks
-                })
+            # --- If A-priority PM has insufficient skilled techs, create mixed groups to meet requirement ---
+            if str(task_to_assign.get('priority', 'C')).upper() == 'A' and 0 < len(sorted_eligible_tech_names_pm) < num_technicians_needed:
+                _log(logger, "info", f"Task {task_name_excel} is Prio 'A' with {len(sorted_eligible_tech_names_pm)}/{num_technicians_needed} skilled techs. Seeking helpers.")
 
+                # Find all technicians who are present and match lines but are NOT skilled for this task
+                helper_technicians_details_pm = []
+                skilled_names_set = set(sorted_eligible_tech_names_pm)
+                for tech_cand_pm in present_technicians:
+                    if tech_cand_pm in skilled_names_set:
+                        continue # Skip already skilled technicians
+                    
+                    tech_lines_pm = TECHNICIAN_LINES.get(tech_cand_pm, [])
+                    line_match = not task_lines_list or any(line in tech_lines_pm for line in task_lines_list)
+                    if line_match:
+                        helper_technicians_details_pm.append({'name': tech_cand_pm})
+                
+                all_helper_names = [d['name'] for d in helper_technicians_details_pm]
+                
+                # Strategy: try to form a group with the MOST skilled technicians possible + helpers
+                # We iterate from all skilled techs down to 1.
+                for num_skilled in range(len(sorted_eligible_tech_names_pm), 0, -1):
+                    num_helpers_needed = num_technicians_needed - num_skilled
+                    if num_helpers_needed <= 0 or len(all_helper_names) < num_helpers_needed:
+                        continue # Not enough helpers, or no helpers needed
+
+                    # Create combinations of skilled techs of size `num_skilled`
+                    for skilled_group_tuple in combinations(sorted_eligible_tech_names_pm, num_skilled):
+                        skilled_names = list(skilled_group_tuple)
+                        
+                        # Check if this skilled subgroup covers all required skills
+                        group_skills_possessed_by_id = set()
+                        for tech_name_in_group in skilled_names:
+                            group_skills_possessed_by_id.update(tech_details_map_pm[tech_name_in_group]['relevant_skills'].keys())
+                        
+                        if not set(task_technology_ids).issubset(group_skills_possessed_by_id):
+                            continue # This skilled core cannot do the task, even with helpers
+
+                        # If skills are covered, find helpers to fill the group
+                        for helper_group_tuple in combinations(all_helper_names, num_helpers_needed):
+                            group_tech_names = skilled_names + list(helper_group_tuple)
+                            
+                            # --- Start of copied scoring logic ---
+                            # This logic is for the combined group (skilled + helpers)
+                            # Note: skill scores are based ONLY on the skilled members
+                            
+                            per_skill_avg_levels = {}
+                            for req_skill_id in task_technology_ids:
+                                techs_with_this_skill_in_group = [
+                                    tech_name for tech_name in skilled_names # Only check skilled members
+                                    if req_skill_id in tech_details_map_pm[tech_name]['relevant_skills']
+                                ]
+                                if techs_with_this_skill_in_group:
+                                    avg_level_for_skill = sum(
+                                        tech_details_map_pm[tech_name]['relevant_skills'][req_skill_id]
+                                        for tech_name in techs_with_this_skill_in_group
+                                    ) / len(techs_with_this_skill_in_group)
+                                    per_skill_avg_levels[req_skill_id] = avg_level_for_skill
+                                else:
+                                    per_skill_avg_levels[req_skill_id] = 0
+
+                            total_skill_points_in_group_for_required_skills = 0
+                            count_of_possessed_required_skills_in_group = 0
+                            for tech_name_in_group in skilled_names: # Only skilled members contribute to skill points
+                                for req_skill_id in task_technology_ids:
+                                    if req_skill_id in tech_details_map_pm[tech_name_in_group]['relevant_skills']:
+                                        total_skill_points_in_group_for_required_skills += tech_details_map_pm[tech_name_in_group]['relevant_skills'][req_skill_id]
+                                        count_of_possessed_required_skills_in_group += 1
+
+                            combined_avg_skill_level_group = 0
+                            if count_of_possessed_required_skills_in_group > 0:
+                                combined_avg_skill_level_group = total_skill_points_in_group_for_required_skills / count_of_possessed_required_skills_in_group
+
+                            workload = sum(sum(end - start for start, end, _ in technician_schedules[tn]) for tn in group_tech_names)
+                            
+                            viable_groups_with_scores_pm.append({
+                                'group': group_tech_names,
+                                'len': num_technicians_needed,
+                                'per_skill_avg': per_skill_avg_levels,
+                                'combined_avg_skill': combined_avg_skill_level_group,
+                                'workload': workload,
+                                'size_diff': 0, # By definition, these groups match the required size
+                                'is_helper_group': True
+                            })
+                            # --- End of copied scoring logic ---
+                    
+                    # If we have found groups with the current `num_skilled`, we don't need to try groups with fewer skilled techs
+                    # because the sorting will always prefer more skill. So we can break.
+                    if any(g.get('is_helper_group') for g in viable_groups_with_scores_pm):
+                        break
 
             # Sort viable groups:
             # 1. Closeness to num_technicians_needed (ascending, using 'size_diff').
@@ -529,6 +611,7 @@ def _assign_task_definition_to_schedule(
             final_assigned_duration_for_instance = 0
             # final_actual_num_assigned_for_instance = 0 # Will be num_technicians_needed or 0
             final_technician_task_info = 'Skill_Based' # Generic info
+            final_is_helper_group = False
 
             for group_candidate_data in viable_groups_with_scores_pm:
                 current_candidate_group = group_candidate_data['group']
@@ -587,6 +670,7 @@ def _assign_task_definition_to_schedule(
                         final_start_time_for_instance = search_start_time
                         final_assigned_duration_for_instance = duration_to_check if current_effective_duration > 0 else 0 # Actual assigned duration
 
+                        final_is_helper_group = group_candidate_data.get('is_helper_group', False)
                         assignment_successful_this_instance = True
                         slot_found_for_this_group = True
                         if is_incomplete_for_slot:
@@ -608,6 +692,39 @@ def _assign_task_definition_to_schedule(
                 assigned_this_instance_flag = True
                 if instance_id_str in unassigned_tasks_reasons_dict:
                     del unassigned_tasks_reasons_dict[instance_id_str]
+
+                if final_is_helper_group:
+                    helpers_in_group = [tech for tech in final_chosen_group_for_instance if tech not in tech_details_map_pm]
+                    if helpers_in_group:
+                        helper_names_str = ', '.join(helpers_in_group)
+                        _log(logger, "info", f"Helper(s) assigned to task {task_name_excel} (ID: {task_id}): {helper_names_str}")
+                        try:
+                            cursor = db_conn.cursor()
+                            for helper_name in helpers_in_group:
+                                cursor.execute("SELECT id FROM technicians WHERE name = ?", (helper_name,))
+                                helper_row = cursor.fetchone()
+                                if not helper_row:
+                                    continue
+                                helper_id = helper_row[0]
+                                for tech_id in task_technology_ids:
+                                    cursor.execute("SELECT skill_level FROM technician_technology_skills WHERE technician_id = ? AND technology_id = ?", (helper_id, tech_id))
+                                    skill_row = cursor.fetchone()
+                                    prev_level = skill_row[0] if skill_row else 0
+                                    if prev_level == 0:
+                                        update_technician_skill(db_conn, helper_id, tech_id, 1)
+                                        log_technician_skill_update(
+                                            db_conn,
+                                            helper_id,
+                                            tech_id,
+                                            task_id,
+                                            prev_level,
+                                            1,
+                                            f"Worked on task {task_name_excel} and level updated: 0 -> 1"
+                                        )
+                                        _log(logger, "info", f"Helper {helper_name} skill for technology {tech_id} updated from 0 to 1 due to assignment to {task_name_excel}")
+                            db_conn.commit()
+                        except Exception as e:
+                            _log(logger, "warning", f"Helper skill update/logging failed for task {task_name_excel} (ID: {task_id}): {e}")
 
                 resource_mismatch_note_pm = None
                 if num_technicians_needed > 0: # Only note mismatch if techs were planned
@@ -809,7 +926,7 @@ def _assign_task_definition_to_schedule(
             # _log(logger, "warning", f"    (Helper) Failed to assign {instance_task_display_name} (Type: {task_type}). Reason: {last_known_failure_reason_for_instance}")
     # End of instance loop
 
-def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments=None, logger=None, technician_technology_skills=None):
+def assign_tasks(tasks, present_technicians, total_work_minutes, db_conn, rep_assignments=None, logger=None, technician_technology_skills=None):
     _log(logger, "info",
         f"Unified Assigning (Global Opt Mode): {len(tasks)} tasks with {len(present_technicians)} technicians. Total work minutes: {total_work_minutes}"
     )
@@ -891,6 +1008,7 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                     current_perm_schedules, current_perm_assignments,
                     current_perm_unassigned_reasons, current_perm_incomplete_ids,
                     all_pm_task_names_from_excel_normalized_set,
+                    db_conn, # Pass connection
                     technician_technology_skills=technician_technology_skills, # Pass skills
                     under_resourced_tasks=under_resourced_tasks
                 )
@@ -932,6 +1050,7 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
                 final_technician_schedules, final_all_task_assignments_details,
                 final_unassigned_tasks_reasons_dict, final_incomplete_tasks_instance_ids,
                 all_pm_task_names_from_excel_normalized_set,
+                db_conn, # Pass connection
                 technician_technology_skills=technician_technology_skills, # Pass skills
                 under_resourced_tasks=under_resourced_tasks
             )
@@ -953,6 +1072,7 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, rep_assignments
             final_technician_schedules, final_all_task_assignments_details,
             final_unassigned_tasks_reasons_dict, final_incomplete_tasks_instance_ids,
             all_pm_task_names_from_excel_normalized_set,
+            db_conn, # Pass connection
             technician_technology_skills=technician_technology_skills, # Pass skills
             under_resourced_tasks=under_resourced_tasks
         )

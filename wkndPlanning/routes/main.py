@@ -231,72 +231,70 @@ def generate_dashboard_route():
         form_data = request.form
         session_id = form_data.get('session_id')
 
-        # Use new session validation
         if not session_id or not is_session_valid(session_id):
             current_app.logger.warning(f"Session validation failed for dashboard generation: {session_id}")
             return jsonify({"message": "Invalid session. Re-upload Excel."}), 400
 
-        # Get cached data using new session management
         excel_data_from_cache = get_session_data(session_id)
         if excel_data_from_cache is None:
             current_app.logger.warning(f"No session data found for dashboard generation: {session_id}")
             return jsonify({"message": "Invalid session. Re-upload Excel."}), 400
 
-        # Update session timestamp to extend session life
         update_session_timestamp(session_id)
 
         present_technicians = json.loads(form_data.get('present_technicians', '[]'))
         rep_assignments_from_ui = json.loads(form_data.get('rep_assignments', '[]'))
         all_processed_tasks_from_ui = json.loads(form_data.get('all_processed_tasks', '[]'))
 
-        conn = get_db_connection(current_app.config['DATABASE_PATH'])
-        task_manager = TaskManager(conn)
-        try:
-            technician_skills_map = get_all_technician_skills_by_name(conn)
-            final_tasks_map = {}
-            # default_technology_id = get_or_create_technology(conn, "Default Technology") # Default tech not used this way anymore
+        task_manager = TaskManager(g.db)
+        technician_skills_map = get_all_technician_skills_by_name(g.db)
+        final_tasks_map = {}
 
-            for task_from_ui in all_processed_tasks_from_ui:
-                task_id_ui = str(task_from_ui.get('id'))
-                if not task_id_ui: continue
-                task_to_add = task_from_ui.copy()
-                task_name = task_to_add.get('name', task_to_add.get('scheduler_group_task', f'Unknown Task UI {task_id_ui}'))
+        for task_from_ui in all_processed_tasks_from_ui:
+            task_id_ui = str(task_from_ui.get('id'))
+            if not task_id_ui: continue
+            task_to_add = task_from_ui.copy()
+            task_name = task_to_add.get('name', task_to_add.get('scheduler_group_task', f'Unknown Task UI {task_id_ui}'))
+            if not task_to_add.get('name'): task_to_add['name'] = task_name
+            db_task_id = task_manager.get_or_create(task_name)
+            task_to_add.update({'db_task_id': db_task_id})
+
+            required_skills_objects = task_manager.get_required_skills(db_task_id)
+            technology_ids_for_task = [skill['technology_id'] for skill in required_skills_objects]
+            task_to_add['technology_ids'] = technology_ids_for_task
+
+            final_tasks_map[task_id_ui] = task_to_add
+
+        for task_from_cache in excel_data_from_cache:
+            cache_task_id_ui = str(task_from_cache.get('id'))
+            if not cache_task_id_ui or cache_task_id_ui in final_tasks_map: continue
+            if task_from_cache.get('task_type', '').upper() == 'PM':
+                task_to_add = task_from_cache.copy()
+                task_name = task_to_add.get('name', task_to_add.get('scheduler_group_task', f'Unknown Cache PM {cache_task_id_ui}'))
                 if not task_to_add.get('name'): task_to_add['name'] = task_name
+                task_to_add['isAdditionalTask'] = False
                 db_task_id = task_manager.get_or_create(task_name)
-                task_to_add.update({'db_task_id': db_task_id}) # Store db_task_id
+                task_to_add.update({'db_task_id': db_task_id})
 
-                # Fetch and add technology_ids for the task
                 required_skills_objects = task_manager.get_required_skills(db_task_id)
                 technology_ids_for_task = [skill['technology_id'] for skill in required_skills_objects]
                 task_to_add['technology_ids'] = technology_ids_for_task
 
-                final_tasks_map[task_id_ui] = task_to_add
-
-            for task_from_cache in excel_data_from_cache:
-                cache_task_id_ui = str(task_from_cache.get('id'))
-                if not cache_task_id_ui or cache_task_id_ui in final_tasks_map: continue
-                if task_from_cache.get('task_type', '').upper() == 'PM':
-                    task_to_add = task_from_cache.copy()
-                    task_name = task_to_add.get('name', task_to_add.get('scheduler_group_task', f'Unknown Cache PM {cache_task_id_ui}'))
-                    if not task_to_add.get('name'): task_to_add['name'] = task_name
-                    task_to_add['isAdditionalTask'] = False
-                    db_task_id = task_manager.get_or_create(task_name)
-                    task_to_add.update({'db_task_id': db_task_id})
-
-                    # Fetch and add technology_ids for the task
-                    required_skills_objects = task_manager.get_required_skills(db_task_id)
-                    technology_ids_for_task = [skill['technology_id'] for skill in required_skills_objects]
-                    task_to_add['technology_ids'] = technology_ids_for_task
-
-                    final_tasks_map[cache_task_id_ui] = task_to_add
-            conn.commit()
-        finally:
-            if conn: conn.close()
+                final_tasks_map[cache_task_id_ui] = task_to_add
+        g.db.commit()
 
         all_tasks_for_dashboard = list(final_tasks_map.values())
         available_time_summary, under_resourced_pm_tasks = generate_html_files(
-            all_tasks_for_dashboard, present_technicians, rep_assignments_from_ui,
-            current_app.jinja_env, current_app.config['OUTPUT_FOLDER'], TECHNICIANS, TECHNICIAN_GROUPS, current_app.logger, technician_skills_map
+            all_tasks=all_tasks_for_dashboard, 
+            present_technicians=present_technicians, 
+            rep_assignments=rep_assignments_from_ui,
+            env=current_app.jinja_env, 
+            output_folder=current_app.config['OUTPUT_FOLDER'], 
+            all_technicians_global=TECHNICIANS, 
+            technician_groups_global=TECHNICIAN_GROUPS, 
+            db_conn=g.db, # Pass the connection here
+            logger=current_app.logger, 
+            technician_technology_skills=technician_skills_map
         )
         dashboard_url = url_for('main.output_file_route', filename='technician_dashboard.html', _external=True) + f'?cache_bust={random.randint(1,100000)}'
         return jsonify({
@@ -308,4 +306,6 @@ def generate_dashboard_route():
         })
     except Exception as e:
         current_app.logger.error(f"Error in generate_dashboard_route: {e}", exc_info=True)
+        if hasattr(g, 'db') and g.db is not None:
+            g.db.rollback()
         return jsonify({"message": f"Error generating dashboard: {str(e)}"}), 500
