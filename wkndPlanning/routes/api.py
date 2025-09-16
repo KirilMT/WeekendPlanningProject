@@ -1193,3 +1193,121 @@ def get_technician_skill_upgrade_logs(technician_id):
     except Exception as e:
         current_app.logger.error(f"Error fetching skill upgrade logs for technician {technician_id}: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/task_types', methods=['GET'])
+def get_task_types():
+    cursor = g.db.cursor()
+    cursor.execute("SELECT id, name FROM tasks ORDER BY name")
+    task_types = [{'id': row['id'], 'name': row['name']} for row in cursor.fetchall()]
+    return jsonify(task_types)
+
+
+@api_bp.route('/technician_groups', methods=['GET'])
+def get_technician_groups():
+    cursor = g.db.cursor()
+    cursor.execute("SELECT id, name FROM technician_groups ORDER BY name")
+    groups = [{'id': row['id'], 'name': row['name']} for row in cursor.fetchall()]
+    return jsonify(groups)
+
+
+@api_bp.route('/technician_groups', methods=['POST'])
+def add_technician_group():
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    if not name:
+        return jsonify({'message': 'Group name is required.'}), 400
+
+    cursor = g.db.cursor()
+    try:
+        cursor.execute("INSERT INTO technician_groups (name) VALUES (?) RETURNING id, name", (name,))
+        new_group = cursor.fetchone()
+        g.db.commit()
+        return jsonify(dict(new_group)), 201
+    except sqlite3.IntegrityError:
+        g.db.rollback()
+        return jsonify({'message': f'Group "{name}" already exists.'}), 409
+
+
+@api_bp.route('/technician_groups/<int:group_id>', methods=['DELETE'])
+def delete_technician_group(group_id):
+    cursor = g.db.cursor()
+    cursor.execute("DELETE FROM technician_groups WHERE id = ?", (group_id,))
+    g.db.commit()
+    if cursor.rowcount == 0:
+        return jsonify({'message': 'Group not found.'}), 404
+    return jsonify({'message': 'Group deleted successfully.'}), 200
+
+
+@api_bp.route('/technician_groups/<int:group_id>/technicians', methods=['GET'])
+def get_technician_group_members(group_id):
+    cursor = g.db.cursor()
+    cursor.execute("""
+        SELECT t.id, t.name 
+        FROM technicians t
+        JOIN technician_group_members tgm ON t.id = tgm.technician_id
+        WHERE tgm.group_id = ?
+        ORDER BY t.name
+    """, (group_id,))
+    members = [{'id': row['id'], 'name': row['name']} for row in cursor.fetchall()]
+    return jsonify(members)
+
+
+@api_bp.route('/technician_group_members', methods=['POST', 'DELETE'])
+def manage_technician_group_members():
+    data = request.get_json()
+    technician_id = data.get('technician_id')
+    group_id = data.get('group_id')
+
+    if not all([technician_id, group_id]):
+        return jsonify({'message': 'Technician ID and Group ID are required.'}), 400
+
+    cursor = g.db.cursor()
+    if request.method == 'POST':
+        try:
+            cursor.execute("INSERT INTO technician_group_members (technician_id, group_id) VALUES (?, ?)",
+                           (technician_id, group_id))
+            g.db.commit()
+            return jsonify({'message': 'Technician added to group.'}), 201
+        except sqlite3.IntegrityError:
+            g.db.rollback()
+            return jsonify({'message': 'Technician already in group or invalid ID.'}), 409
+    elif request.method == 'DELETE':
+        cursor.execute("DELETE FROM technician_group_members WHERE technician_id = ? AND group_id = ?",
+                       (technician_id, group_id))
+        g.db.commit()
+        return jsonify({'message': 'Technician removed from group.'}), 200
+
+
+@api_bp.route('/technician_groups/<int:group_id>/priorities', methods=['GET'])
+def get_group_priorities(group_id):
+    cursor = g.db.cursor()
+    cursor.execute("""
+        SELECT task_type_id, priority
+        FROM technician_group_priorities
+        WHERE group_id = ?
+        ORDER BY priority
+    """, (group_id,))
+    priorities = [{'task_type_id': row['task_type_id'], 'priority': row['priority']} for row in cursor.fetchall()]
+    return jsonify(priorities)
+
+
+@api_bp.route('/technician_groups/<int:group_id>/priorities', methods=['PUT'])
+def update_group_priorities(group_id):
+    data = request.get_json()
+    priorities = data.get('priorities')
+    if not isinstance(priorities, list):
+        return jsonify({'message': 'Invalid data format.'}), 400
+
+    cursor = g.db.cursor()
+    try:
+        cursor.execute("DELETE FROM technician_group_priorities WHERE group_id = ?", (group_id,))
+        if priorities:
+            priority_data = [(group_id, p['task_type_id'], p['priority']) for p in priorities]
+            cursor.executemany("INSERT INTO technician_group_priorities (group_id, task_type_id, priority) VALUES (?, ?, ?)",
+                               priority_data)
+        g.db.commit()
+        return jsonify({'success': True, 'message': 'Priorities updated successfully.'})
+    except sqlite3.Error as e:
+        g.db.rollback()
+        return jsonify({'success': False, 'message': f'Database error: {e}'}), 500

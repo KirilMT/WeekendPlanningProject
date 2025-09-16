@@ -264,6 +264,42 @@ def init_db(db_path, logger=None, debug_use_test_db=False):
     ''')
     logger.info("Table 'task_required_skills' ensured.") if logger else None
 
+    # Technician Groups Table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS technician_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL
+        )
+    ''')
+    logger.info("Table 'technician_groups' ensured.") if logger else None
+
+    # Technician Group Members Table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS technician_group_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            technician_id INTEGER NOT NULL,
+            group_id INTEGER NOT NULL,
+            FOREIGN KEY (technician_id) REFERENCES technicians (id) ON DELETE CASCADE,
+            FOREIGN KEY (group_id) REFERENCES technician_groups (id) ON DELETE CASCADE,
+            UNIQUE (technician_id, group_id)
+        )
+    ''')
+    logger.info("Table 'technician_group_members' ensured.") if logger else None
+
+    # Technician Group Priorities Table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS technician_group_priorities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id INTEGER NOT NULL,
+            task_type_id INTEGER NOT NULL,
+            priority INTEGER NOT NULL,
+            FOREIGN KEY (group_id) REFERENCES technician_groups (id) ON DELETE CASCADE,
+            FOREIGN KEY (task_type_id) REFERENCES tasks (id) ON DELETE CASCADE,
+            UNIQUE (group_id, task_type_id)
+        )
+    ''')
+    logger.info("Table 'technician_group_priorities' ensured.") if logger else None
+
     # 3. Create Indexes (idempotently)
     cursor.execute('''
         CREATE INDEX IF NOT EXISTS idx_technician_task_assignments_technician_id
