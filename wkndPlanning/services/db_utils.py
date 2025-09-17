@@ -264,6 +264,30 @@ def init_db(db_path, logger=None, debug_use_test_db=False):
     ''')
     logger.info("Table 'task_required_skills' ensured.") if logger else None
 
+    # Technician Groups Table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS technician_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL
+        )
+    ''')
+    logger.info("Table 'technician_groups' ensured.") if logger else None
+
+    # Technician Group Members Table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS technician_group_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            technician_id INTEGER NOT NULL,
+            group_id INTEGER NOT NULL,
+            FOREIGN KEY (technician_id) REFERENCES technicians (id) ON DELETE CASCADE,
+            FOREIGN KEY (group_id) REFERENCES technician_groups (id) ON DELETE CASCADE,
+            UNIQUE (technician_id, group_id)
+        )
+    ''')
+    logger.info("Table 'technician_group_members' ensured.") if logger else None
+
+    
+
     # 3. Create Indexes (idempotently)
     cursor.execute('''
         CREATE INDEX IF NOT EXISTS idx_technician_task_assignments_technician_id
@@ -571,3 +595,29 @@ def get_technician_skills_by_id(conn, technician_id):
     for row in cursor.fetchall():
         skills[row['technology_id']] = row['skill_level']
     return skills
+
+def ensure_skill_update_log_table(conn):
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS technician_skill_update_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            technician_id INTEGER,
+            technology_id INTEGER,
+            task_id TEXT,
+            previous_skill_level INTEGER,
+            new_skill_level INTEGER,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            message TEXT
+        )
+    ''')
+    conn.commit()
+
+
+def log_technician_skill_update(conn, technician_id, technology_id, task_id, previous_skill_level, new_skill_level, message):
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO technician_skill_update_log (
+            technician_id, technology_id, task_id, previous_skill_level, new_skill_level, message
+        ) VALUES (?, ?, ?, ?, ?, ?)
+    ''', (technician_id, technology_id, task_id, previous_skill_level, new_skill_level, message))
+    conn.commit()

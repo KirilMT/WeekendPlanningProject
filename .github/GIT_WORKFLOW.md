@@ -62,9 +62,9 @@ git add .
 git commit -m "Add a clear and concise commit message here"
 ```
 
-**Step 3.2: Keep Your Branch Updated (Optional but Recommended)**
+**Step 3.2: Keep Your Branch Updated**
 
-Periodically, and especially before creating a pull request, you should update your branch with the latest changes from `master`. This helps resolve merge conflicts early.
+To prevent merge conflicts and ensure your feature branch has the latest changes from `master`, you should sync it regularly. This is especially important before creating a pull request.
 
 ```sh
 # Switch to the master branch and pull the latest changes
@@ -78,7 +78,6 @@ git checkout new-feature-name
 git merge master
 
 # If there are any conflicts, resolve them now, then commit the merge.
-# If there are no conflicts, you can proceed.
 ```
 
 **Step 3.3: Push Your Branch to the Remote**
@@ -92,11 +91,25 @@ git push -u origin new-feature-name
 
 ---
 
-### 4. Finishing Your Work (Creating a Pull Request)
+### 4. Versioning
+
+This project follows Semantic Versioning (SemVer). When you create a pull request, you should update the version number in the `README.md` file according to the changes you've made.
+
+**Format:** `MAJOR.MINOR.PATCH` (e.g., `1.1.0`)
+
+-   **MAJOR (`1.x.x`):** Increment for incompatible API changes.
+-   **MINOR (`x.1.x`):** Increment for new, backward-compatible features.
+-   **PATCH (`x.x.1`):** Increment for backward-compatible bug fixes.
+
+This version number reflects the state of the application and will be used for creating Git tags and releases.
+
+---
+
+### 5. Finishing Your Work (Creating a Pull Request)
 
 Once your feature is complete and pushed to GitHub, you will create a Pull Request (PR) to merge it into the `master` branch. This is the standard way to propose changes and allow for review.
 
-**Step 4.1: Open a Pull Request on GitHub**
+**Step 5.1: Open a Pull Request on GitHub**
 
 1.  Go to your repository on GitHub in your web browser.
 2.  You will likely see a yellow banner with your recently pushed branch and a button that says **"Compare & pull request"**. Click it.
@@ -105,7 +118,7 @@ Once your feature is complete and pushed to GitHub, you will create a Pull Reque
 5.  Give the PR a clear title (e.g., "Fixes #32: Error in REP tasks modal") and a description of the changes.
 6.  Click **"Create pull request"**.
 
-**Step 4.2: Review and Merge the Pull Request**
+**Step 5.2: Review and Merge the Pull Request**
 
 On the GitHub PR page, you can see your changes, and others can review them. Once it's approved and passes any checks, you can merge it.
 
@@ -114,7 +127,7 @@ On the GitHub PR page, you can see your changes, and others can review them. Onc
 
 ---
 
-### 5. Handling Work-in-Progress (Creating a Draft Pull Request)
+### 6. Handling Work-in-Progress (Creating a Draft Pull Request)
 
 If your work is not yet finished but you want to get feedback, or simply want to see your changes on GitHub, you should create a **Draft Pull Request**. This signals to others that the work is still in progress.
 
@@ -124,14 +137,14 @@ If your work is not yet finished but you want to get feedback, or simply want to
 *   **Early Feedback:** You can ask for feedback on your approach before you are too far into the work.
 *   **Track Your Work:** It provides a clear link between your branch and the issue you are working on (e.g., issue #33).
 
-**Step 5.1: How to Create a Draft Pull Request**
+**Step 6.1: How to Create a Draft Pull Request**
 
-1.  Follow the same steps as opening a regular pull request (Step 4.1).
+1.  Follow the same steps as opening a regular pull request (Step 5.1).
 2.  On the "Open a pull request" screen, instead of clicking the "Create pull request" button, click the dropdown arrow next to it.
 3.  Select **"Create draft pull request"** from the dropdown menu.
 4.  In the title or description, it's a good practice to add "WIP:" (Work in Progress) and link the issue you are working on (e.g., `Fixes #33`).
 
-**Step 5.2: How to Continue Working on a Draft PR**
+**Step 6.2: How to Continue Working on a Draft PR**
 
 1.  Continue to make commits to your local branch as usual (`git commit -m "..."`).
 2.  When you are ready to update the draft PR on GitHub, simply push your changes:
@@ -140,7 +153,7 @@ If your work is not yet finished but you want to get feedback, or simply want to
     ```
 3.  Your new commits will be automatically added to the draft pull request.
 
-**Step 5.3: Marking the PR as Ready for Review**
+**Step 6.3: Marking the PR as Ready for Review**
 
 Once you have finished your work and the draft PR is ready for a final review, you can convert it to a regular pull request.
 
@@ -151,15 +164,15 @@ This will change the status of the PR and notify reviewers that it is ready to b
 
 ---
 
-### 6. Cleaning Up After Merging
+### 7. Cleaning Up After Merging
 
 After your PR is merged, the final step is to clean up your local and remote branches.
 
-**Step 6.1: Delete the Remote Branch**
+**Step 7.1: Delete the Remote Branch**
 
 After merging on GitHub, a **"Delete branch"** button will appear. Click it to delete the remote feature branch. This keeps the repository clean.
 
-**Step 6.2: Update Your Local Repository**
+**Step 7.2: Update Your Local Repository**
 
 Now, update your local `master` branch with the changes you just merged on GitHub.
 
@@ -171,7 +184,7 @@ git checkout master
 git pull origin master
 ```
 
-**Step 6.3: Prune Stale Remote Branches**
+**Step 7.3: Prune Stale Remote Branches**
 
 Your local repository might still be tracking the remote branch you just deleted. Run the following command to clean up these stale branches.
 
@@ -180,7 +193,7 @@ Your local repository might still be tracking the remote branch you just deleted
 git fetch --prune
 ```
 
-**Step 6.4: Delete Your Local Branch**
+**Step 7.4: Delete Your Local Branch**
 
 Finally, delete the local feature branch as it is no longer needed.
 

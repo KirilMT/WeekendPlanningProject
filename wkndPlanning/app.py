@@ -1,6 +1,6 @@
 import os
 import sys
-from flask import Flask, g
+from flask import Flask, g, jsonify
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -63,6 +63,7 @@ def create_app():
 
     # Configure CSRF exemptions after blueprint registration
     csrf.exempt(main_bp)
+    csrf.exempt(api_bp)
 
     # Security middleware
     @app.after_request
@@ -93,10 +94,23 @@ def create_app():
         app.logger.warning(f"404 error: {error}")
         return "Page not found", 404
 
+    @app.errorhandler(400)
+    def handle_400_error(error):
+        response = jsonify({
+            "message": "Bad request",
+            "details": str(error)
+        })
+        response.status_code = 400
+        return response
+
     @app.errorhandler(500)
-    def internal_error(error):
-        app.logger.error(f"500 error: {error}", exc_info=True)
-        return "Internal server error", 500
+    def handle_500_error(error):
+        response = jsonify({
+            "message": "Internal server error",
+            "details": str(error)
+        })
+        response.status_code = 500
+        return response
 
     # Only initialize database and config if we're in the main reloader process
     # This prevents double initialization when Flask's auto-reloader is enabled
@@ -104,6 +118,10 @@ def create_app():
         with app.app_context():
             try:
                 init_db(DATABASE_PATH, app.logger, app.config['DEBUG_USE_TEST_DB'])
+                from .services.db_utils import get_db_connection, ensure_skill_update_log_table
+                conn = get_db_connection(DATABASE_PATH)
+                ensure_skill_update_log_table(conn)
+                conn.close()
                 load_app_config(DATABASE_PATH, app.logger)
                 app.logger.info("Application initialized successfully")
             except Exception as e:

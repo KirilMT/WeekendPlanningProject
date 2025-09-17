@@ -117,6 +117,7 @@ body {
     align-items: center;
     transition: var(--transition);
     user-select: none;
+    border-style: none !important;
 }
 
 .section-header:hover {
@@ -917,4 +918,101 @@ label.required::after {
     .section-content {
         display: block !important;
     }
+}
+
+.technician-transfer-lists {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: var(--spacing-lg);
+    align-items: center;
+}
+
+.technician-list-container {
+    background-color: #f8fafc;
+    border-radius: var(--border-radius);
+    padding: var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #e2e8f0;
+}
+
+.search-wrapper {
+    position: relative;
+    margin-bottom: var(--spacing-sm);
+}
+
+.search-wrapper .search-input {
+    padding-left: 2.5rem;
+}
+
+.search-wrapper .search-icon {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--secondary-color);
+}
+
+.technician-transfer-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.technician-transfer-actions .btn {
+    background-color: #fff;
+    color: var(--primary-color);
+    border: 1px solid #e2e8f0;
+    font-size: 1.5rem;
+    padding: 0.5rem 1rem;
+    transition: all 0.2s ease;
+    border-radius: var(--border-radius);
+}
+
+.technician-transfer-actions .btn:hover {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.technician-transfer-actions .btn:disabled {
+    background-color: #f8fafc;
+    color: #94a3b8;
+    border-color: #e2e8f0;
+    transform: none;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+.technician-list {
+    flex-grow: 1;
+    height: 200px;
+    overflow-y: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: var(--border-radius);
+    padding: var(--spacing-sm);
+    background-color: white;
+}
+
+.technician-card {
+    padding: 0.5rem;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid transparent;
+}
+
+.technician-card:hover {
+    background-color: #f0f0f0;
+}
+
+.technician-card.selected {
+    background-color: #dbeafe;
+    border-color: var(--primary-color);
 }

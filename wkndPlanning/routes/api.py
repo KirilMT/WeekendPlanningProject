@@ -12,7 +12,8 @@ from ..services.db_utils import (
     add_line,
     get_all_lines,
     update_line,
-    delete_line
+    delete_line,
+    get_db_connection
 )
 from ..services.config_manager import load_app_config, TECHNICIAN_GROUPS
 from ..services.security import InputValidator, validate_request, require_json_fields
@@ -862,16 +863,10 @@ def delete_technology_group_api(group_id):
         if not cursor.fetchone():
             return jsonify({"message": f"Technology group ID {group_id} not found."}), 404
 
-        # Optional: Check if any technologies are using this group
-        cursor.execute("SELECT COUNT(*) FROM technologies WHERE group_id = ?", (group_id,))
-        if cursor.fetchone()[0] > 0:
-            # Decide on behavior: disallow deletion, or nullify group_id in technologies
-            # For now, let's disallow if in use, or you can change to set group_id = NULL
-            return jsonify({"message": f"Technology group ID {group_id} is in use and cannot be deleted."}), 400
-            # To nullify instead:
-            # cursor.execute("UPDATE technologies SET group_id = NULL WHERE group_id = ?", (group_id,))
-            # g.db.commit()
-
+        # Nullify the group_id for technologies in this group
+        cursor.execute("UPDATE technologies SET group_id = NULL WHERE group_id = ?", (group_id,))
+        
+        # Now, delete the group
         cursor.execute("DELETE FROM technology_groups WHERE id = ?", (group_id,))
         g.db.commit()
 
@@ -989,7 +984,9 @@ def add_task_api():
 def update_task_api(task_id):
     """Update an existing task's details and required technologies."""
     try:
-        data = request.get_json()
+        data = request.get_json(force=True, silent=True)
+        if not data:
+            return jsonify({"message": "Invalid or missing JSON payload."}), 400
         new_name = data.get('name', '').strip()
         new_technology_ids = data.get('technology_ids', []) # Expect a list of technology IDs
 
@@ -1037,14 +1034,10 @@ def update_task_api(task_id):
         required_skills_objects = task_manager.get_required_skills(task_id)
 
         response_data = dict(updated_task_data)
-        response_data['required_skills'] = required_skills_objects # Keep for detailed info
-        response_data['technology_ids'] = [skill['technology_id'] for skill in required_skills_objects] # Add for frontend compatibility
-
+        response_data['technology_ids'] = [skill['technology_id'] for skill in required_skills_objects]
         return jsonify(response_data), 200
     except Exception as e:
-        if g.db: g.db.rollback()
-        current_app.logger.error(f"Error updating task {task_id}: {e}", exc_info=True)
-        return jsonify({"message": f"Server error: {str(e)}"}), 500
+        return jsonify({"message": "Unexpected error during task update.", "details": str(e)}), 500
 
 @api_bp.route('/tasks/<int:task_id>', methods=['DELETE'])
 def delete_task_api(task_id):
@@ -1127,42 +1120,37 @@ def get_eligible_technicians_for_task():
         required_skills = data.get('required_skills', [])
         present_technicians_names = data.get('present_technicians', [])
 
+        if not present_technicians_names:
+            return jsonify([])
+
+        cursor = g.db.cursor()
+
         if not required_skills:
             # Return all present technicians if no skills are required
-            cursor = g.db.cursor()
-            # Ensure we only return technicians who are in the present_technicians_names list
-            if not present_technicians_names:
-                return jsonify([]) # Or handle as an error/empty case
-
-            # Create a placeholder string for the IN clause
             placeholders = ', '.join('?' for _ in present_technicians_names)
             query = f"SELECT id, name FROM technicians WHERE name IN ({placeholders})"
             cursor.execute(query, present_technicians_names)
-            all_present_technicians = [{"id": row['id'], "name": row['name']} for row in cursor.fetchall()]
+            all_present_technicians = [{'id': row['id'], 'name': row['name']} for row in cursor.fetchall()]
             return jsonify(all_present_technicians)
 
-        if not present_technicians_names:
-             return jsonify([])
-
-
-        cursor = g.db.cursor()
-        
-        # Find technicians who have all the required skills.
-        # This is a bit complex with SQL, so we can do it in parts.
-        
-        # 1. Get all technicians and their skills.
-        cursor.execute("""
+        # 1. Get all present technicians and their skills.
+        placeholders = ', '.join('?' for _ in present_technicians_names)
+        query = f"""
             SELECT t.id, t.name, tts.technology_id
             FROM technicians t
-            JOIN technician_technology_skills tts ON t.id = tts.technician_id
-            WHERE t.name IN ({})
-        """.format(', '.join('?' for _ in present_technicians_names)), present_technicians_names)
+            LEFT JOIN technician_technology_skills tts ON t.id = tts.technician_id
+            WHERE t.name IN ({placeholders})
+        """
+        cursor.execute(query, present_technicians_names)
         
         tech_skills = {}
         for row in cursor.fetchall():
-            if row['id'] not in tech_skills:
-                tech_skills[row['id']['name']] = {'name': row['name'], 'skills': set()}
-            tech_skills[row['id']]['skills'].add(row['technology_id'])
+            tech_id = row['id']
+            if tech_id not in tech_skills:
+                tech_skills[tech_id] = {'name': row['name'], 'skills': set()}
+            
+            if row['technology_id'] is not None:
+                tech_skills[tech_id]['skills'].add(row['technology_id'])
 
         # 2. Filter for technicians who have all required skills.
         eligible_technicians = []
@@ -1177,3 +1165,97 @@ def get_eligible_technicians_for_task():
     except Exception as e:
         current_app.logger.error(f"Error in /eligible_technicians_for_task: {e}", exc_info=True)
         return jsonify({"error": "Failed to get eligible technicians."}), 500
+
+@api_bp.route('/technician_skill_upgrade_logs/<int:technician_id>', methods=['GET'])
+def get_technician_skill_upgrade_logs(technician_id):
+    """
+    Returns all skill upgrade logs for a technician.
+    Each entry includes: technology_id, task_id, previous_skill_level, new_skill_level, message, timestamp.
+    """
+    try:
+        conn = get_db_connection(current_app.config['DATABASE_PATH'])
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT technology_id, task_id, previous_skill_level, new_skill_level, message, timestamp
+            FROM technician_skill_update_log
+            WHERE technician_id = ?
+            ORDER BY timestamp DESC
+        ''', (technician_id,))
+        logs = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify({'success': True, 'logs': logs})
+    except Exception as e:
+        current_app.logger.error(f"Error fetching skill upgrade logs for technician {technician_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_bp.route('/technology_groups/<int:group_id>/technicians', methods=['GET'])
+def get_technology_group_members_api(group_id):
+    """Get all technicians in a specific technology group."""
+    try:
+        cursor = g.db.cursor()
+        cursor.execute("""
+            SELECT t.id, t.name FROM technicians t
+            JOIN technician_group_members tgm ON t.id = tgm.technician_id
+            WHERE tgm.group_id = ?
+            ORDER BY t.name
+        """, (group_id,))
+        members = [{'id': row['id'], 'name': row['name']} for row in cursor.fetchall()]
+        return jsonify(members)
+    except sqlite3.Error as e:
+        current_app.logger.error(f"Database error fetching group members for group {group_id}: {e}")
+        return jsonify({"message": f"Database error: {e}"}), 500
+    except Exception as e:
+        current_app.logger.error(f"Server error fetching group members for group {group_id}: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+
+@api_bp.route('/technician_group_members', methods=['POST'])
+def add_technician_to_group_api():
+    """Add a technician to a technology group."""
+    try:
+        data = request.get_json()
+        technician_id = data.get('technician_id')
+        group_id = data.get('group_id')
+
+        if technician_id is None or group_id is None:
+            return jsonify({"message": "technician_id and group_id are required."}), 400
+
+        cursor = g.db.cursor()
+        cursor.execute("INSERT INTO technician_group_members (technician_id, group_id) VALUES (?, ?)", (technician_id, group_id))
+        g.db.commit()
+
+        return jsonify({"message": "Technician added to group successfully."}), 201
+    except sqlite3.IntegrityError:
+        g.db.rollback()
+        return jsonify({"message": "Technician is already in this group or invalid ID provided."}), 409
+    except Exception as e:
+        g.db.rollback()
+        current_app.logger.error(f"Error adding technician to group: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+
+@api_bp.route('/technician_group_members', methods=['DELETE'])
+def remove_technician_from_group_api():
+    """Remove a technician from a technology group."""
+    try:
+        data = request.get_json()
+        technician_id = data.get('technician_id')
+        group_id = data.get('group_id')
+
+        if technician_id is None or group_id is None:
+            return jsonify({"message": "technician_id and group_id are required."}), 400
+
+        cursor = g.db.cursor()
+        cursor.execute("DELETE FROM technician_group_members WHERE technician_id = ? AND group_id = ?", (technician_id, group_id))
+        g.db.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Technician removed from group successfully."}), 200
+        else:
+            return jsonify({"message": "Technician was not a member of this group."}), 404
+    except Exception as e:
+        g.db.rollback()
+        current_app.logger.error(f"Error removing technician from group: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+
+
+

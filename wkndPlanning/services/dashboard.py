@@ -122,7 +122,7 @@ def _log(logger, level, message, *args):
     else:
         print(f"[{level.upper()}] {message % args if args else message}")
 
-def generate_html_files(all_tasks, present_technicians, rep_assignments, env, output_folder, all_technicians_global, technician_groups_global, logger, technician_technology_skills=None): # Added technician_technology_skills
+def generate_html_files(all_tasks, present_technicians, rep_assignments, env, output_folder, all_technicians_global, technician_groups_global, db_conn, logger, technician_technology_skills=None):
     if logger is None:
         # Basic fallback logger if none is provided
         logger = logging.getLogger(__name__)
@@ -152,10 +152,11 @@ def generate_html_files(all_tasks, present_technicians, rep_assignments, env, ou
 
 
     # Call the unified assign_tasks function
-    assigned_tasks_details, unassigned_tasks_reasons, incomplete_tasks_ids, available_time_summary = assign_tasks(
+    assigned_tasks_details, unassigned_tasks_reasons, incomplete_tasks_ids, available_time_summary, under_resourced_pm_tasks = assign_tasks(
         tasks_for_processing,
         present_technicians,
         total_work_minutes,
+        db_conn,
         rep_assignments, # Pass the filtered and structured REP assignments
         logger,
         technician_technology_skills=technician_technology_skills # Pass skills
@@ -195,7 +196,8 @@ def generate_html_files(all_tasks, present_technicians, rep_assignments, env, ou
         week_date_day_shift=week_date_day_shift,
         all_technicians_config=all_technicians_global,
         technician_groups_config=technician_groups_global,
-        original_task_id_to_display_id_map=original_task_id_to_display_id_map # Pass the map
+        original_task_id_to_display_id_map=original_task_id_to_display_id_map, # Pass the map
+        under_resourced_pm_tasks=under_resourced_pm_tasks
     )
 
     output_path = os.path.join(output_folder, "technician_dashboard.html")
@@ -203,4 +205,4 @@ def generate_html_files(all_tasks, present_technicians, rep_assignments, env, ou
         f.write(technician_html)
     _log(logger, "info", f"Written output to {output_path} via dashboard.py")
 
-    return available_time_summary
+    return available_time_summary, under_resourced_pm_tasks
