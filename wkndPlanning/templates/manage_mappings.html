@@ -220,6 +220,85 @@
             </div>
         </section>
 
+        <!-- Manage Technician Groups Section -->
+        <section id="manageTechnicianGroupsSection" class="management-section">
+            <header class="section-header" role="button" tabindex="0" aria-expanded="false">
+                <div class="section-title">
+                    <h2>👥 Technician Groups & Priorities</h2>
+                    <p class="section-description">Manage technician groups, members, and task priorities</p>
+                </div>
+                <span class="toggle-icon" aria-label="Toggle section">▼</span>
+            </header>
+            <div class="section-content" id="technicianGroupsContent">
+                <div class="subsection">
+                    <h3>Create New Technician Group</h3>
+                    <form class="inline-form" id="technicianGroupForm">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div class="form-group">
+                            <input type="text" id="newTechnicianGroupName" name="groupName"
+                                   placeholder="New group name"
+                                   aria-label="New technician group name"
+                                   class="form-control" maxlength="50" required>
+                        </div>
+                        <button type="submit" id="addTechnicianGroupBtn" class="btn btn-success">
+                            <span class="btn-icon">➕</span>
+                            Add Group
+                        </button>
+                    </form>
+                    <div id="technicianGroupListContainer" class="list-container">
+                        <!-- Technician Groups will be listed here -->
+                    </div>
+                </div>
+
+                <hr class="section-divider">
+
+                <div class="subsection">
+                    <h3>Group Membership</h3>
+                    <div class="form-group">
+                        <label for="groupMembershipSelect">Select Group to Manage</label>
+                        <select id="groupMembershipSelect" class="form-control" aria-label="Select Group">
+                            <option value="">Choose a group...</option>
+                            <!-- Options populated by JavaScript -->
+                        </select>
+                    </div>
+
+                    <div id="groupMembershipDetails" style="display:none;">
+                        <h4>Edit Members for <strong id="selectedGroupName"></strong></h4>
+                        <div class="technician-transfer-lists">
+                            <div class="technician-list-container">
+                                <label for="availableTechniciansSearch">Available Technicians <span id="availableTechniciansCount">(0)</span></label>
+                                <div class="search-wrapper">
+                                    <span class="search-icon">🔍</span>
+                                    <input type="text" id="availableTechniciansSearch" class="form-control search-input" placeholder="Search...">
+                                </div>
+                                <div id="availableTechniciansList" class="technician-list">
+                                    <!-- Available technicians will be listed here -->
+                                </div>
+                            </div>
+                            <div class="technician-transfer-actions">
+                                <button id="addTechnicianToGroupBtn" class="btn btn-primary" disabled>
+                                    <span class="btn-icon">➡️</span>
+                                </button>
+                                <button id="removeTechnicianFromGroupBtn" class="btn btn-primary" disabled>
+                                    <span class="btn-icon">⬅️</span>
+                                </button>
+                            </div>
+                            <div class="technician-list-container">
+                                <label for="groupMembersSearch">Group Members <span id="groupMembersCount">(0)</span></label>
+                                <div class="search-wrapper">
+                                    <span class="search-icon">🔍</span>
+                                    <input type="text" id="groupMembersSearch" class="form-control search-input" placeholder="Search...">
+                                </div>
+                                <div id="groupMembersList" class="technician-list">
+                                    <!-- Group members will be listed here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- Manage Technician Details Section -->
         <section id="manageTechnicianDetailsSection" class="management-section">
             <header class="section-header" role="button" tabindex="0" aria-expanded="false">
@@ -340,100 +419,6 @@
             </div>
         </section>
     </main>
-
-        <!-- Manage Technician Groups Section -->
-        <section id="manageTechnicianGroupsSection" class="management-section">
-            <header class="section-header" role="button" tabindex="0" aria-expanded="false">
-                <div class="section-title">
-                    <h2>👥 Technician Groups & Priorities</h2>
-                    <p class="section-description">Manage technician groups, memberships, and task type priorities</p>
-                </div>
-                <span class="toggle-icon" aria-label="Toggle section">▼</span>
-            </header>
-            <div class="section-content" id="technicianGroupsContent">
-                <div class="two-column-layout">
-                    <!-- Left Column: Group Management -->
-                    <div class="column">
-                        <div class="card">
-                            <div class="card-header">
-                                <h3>Technician Groups</h3>
-                            </div>
-                            <div class="card-body">
-                                <form class="inline-form" id="technicianGroupForm">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                    <div class="form-group">
-                                        <input type="text" id="newTechnicianGroupName" name="groupName"
-                                               placeholder="New group name"
-                                               aria-label="New technician group name"
-                                               class="form-control" maxlength="50" required>
-                                    </div>
-                                    <button type="submit" id="addTechnicianGroupBtn" class="btn btn-success">
-                                        <span class="btn-icon">➕</span>
-                                        Add Group
-                                    </button>
-                                </form>
-                                <div id="technicianGroupListContainer" class="list-container">
-                                    <!-- Technician Groups will be listed here -->
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Right Column: Membership and Priorities -->
-                    <div class="column">
-                        <div class="card">
-                            <div class="card-header">
-                                <h3>Group Details</h3>
-                            </div>
-                            <div class="card-body">
-                                <div class="form-group">
-                                    <label for="groupMembershipSelect">Select Group to Manage</label>
-                                    <select id="groupMembershipSelect" class="form-control" aria-label="Select Group">
-                                        <option value="">Choose a group...</option>
-                                        <!-- Options populated by JavaScript -->
-                                    </select>
-                                </div>
-
-                                <div id="groupMembershipDetails" style="display:none;">
-                                    <hr>
-                                    <h4>Edit Members for <strong id="selectedGroupName"></strong></h4>
-                                    <div class="technician-transfer-lists">
-                                        <div class="technician-list-container">
-                                            <label for="availableTechniciansSearch">Available Technicians <span id="availableTechniciansCount">(0)</span></label>
-                                            <input type="text" id="availableTechniciansSearch" class="form-control search-input" placeholder="Search...">
-                                            <div id="availableTechniciansList" class="technician-list">
-                                                <!-- Available technicians will be listed here -->
-                                            </div>
-                                        </div>
-                                        <div class="technician-transfer-actions">
-                                            <button id="addTechnicianToGroupBtn" class="btn btn-secondary" disabled>➡️</button>
-                                            <button id="removeTechnicianFromGroupBtn" class="btn btn-secondary" disabled>⬅️</button>
-                                        </div>
-                                        <div class="technician-list-container">
-                                            <label for="groupMembersSearch">Group Members <span id="groupMembersCount">(0)</span></label>
-                                            <input type="text" id="groupMembersSearch" class="form-control search-input" placeholder="Search...">
-                                            <div id="groupMembersList" class="technician-list">
-                                                <!-- Group members will be listed here -->
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <hr>
-                                    <h4>Task Type Priorities</h4>
-                                    <div id="taskTypePriorityContainer" class="list-container">
-                                        <p>Select a group to manage priorities.</p>
-                                        <!-- Task type priorities will be listed here -->
-                                    </div>
-                                    <button id="saveGroupPrioritiesBtn" class="btn btn-primary" style="display: none; margin-top: 1rem;">
-                                        <span class="btn-icon">💾</span>
-                                        Save Priorities
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
 
     <!-- Global Actions -->
     <footer class="page-footer">

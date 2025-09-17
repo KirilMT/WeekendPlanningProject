@@ -19,13 +19,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const availableTechniciansCount = document.getElementById('availableTechniciansCount');
     const groupMembersCount = document.getElementById('groupMembersCount');
 
-    // Task Priority UI Elements
-    const taskTypePriorityContainer = document.getElementById('taskTypePriorityContainer');
-    const saveGroupPrioritiesBtn = document.getElementById('saveGroupPrioritiesBtn');
-
     let allTechnicians = [];
     let allGroups = [];
-    let allTaskTypes = [];
 
     function fetchAllTechnicians() {
         fetch('/api/get_technician_mappings')
@@ -37,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function fetchTechnicianGroups() {
-        fetch('/api/technician_groups')
+        fetch('/api/technology_groups')
             .then(response => response.json())
             .then(data => {
                 allGroups = data;
@@ -45,15 +40,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 populateGroupMembershipSelect(allGroups);
             })
             .catch(error => console.error('Error fetching technician groups:', error));
-    }
-
-    function fetchAllTaskTypes() {
-        fetch('/api/task_types')
-            .then(response => response.json())
-            .then(data => {
-                allTaskTypes = data;
-            })
-            .catch(error => console.error('Error fetching task types:', error));
     }
 
     function renderTechnicianGroups(groups) {
@@ -66,8 +52,11 @@ document.addEventListener('DOMContentLoaded', function () {
             const groupElement = document.createElement('div');
             groupElement.className = 'list-item';
             groupElement.innerHTML = `
-                <span>${group.name}</span>
-                <button class="btn btn-danger btn-sm" data-group-id="${group.id}">🗑️</button>
+                <span class="group-name">${group.name}</span>
+                <div class="item-actions">
+                    <button class="btn btn-warning btn-sm edit-group-btn" data-group-id="${group.id}" data-group-name="${group.name}">✏️ Edit</button>
+                    <button class="btn btn-danger btn-sm delete-group-btn" data-group-id="${group.id}">🗑️ Delete</button>
+                </div>
             `;
             technicianGroupListContainer.appendChild(groupElement);
         });
@@ -88,7 +77,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const groupName = newTechnicianGroupNameInput.value.trim();
         if (!groupName) return;
 
-        fetch('/api/technician_groups', {
+        fetch('/api/technology_groups', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -109,10 +98,27 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     technicianGroupListContainer.addEventListener('click', function (e) {
-        if (e.target.tagName === 'BUTTON' && e.target.dataset.groupId) {
-            const groupId = e.target.dataset.groupId;
+        const editBtn = e.target.closest('.edit-group-btn');
+        const deleteBtn = e.target.closest('.delete-group-btn');
+        const saveBtn = e.target.closest('.save-group-btn');
+        const cancelBtn = e.target.closest('.cancel-edit-group-btn');
+
+        if (editBtn) {
+            const groupId = editBtn.dataset.groupId;
+            const groupName = editBtn.dataset.groupName;
+            const groupElement = editBtn.closest('.list-item');
+
+            groupElement.innerHTML = `
+                <input type="text" class="form-control" value="${groupName}" style="flex-grow: 1;"/>
+                <div class="item-actions">
+                    <button class="btn btn-success btn-sm save-group-btn" data-group-id="${groupId}">💾 Save</button>
+                    <button class="btn btn-secondary btn-sm cancel-edit-group-btn">❌ Cancel</button>
+                </div>
+            `;
+        } else if (deleteBtn) {
+            const groupId = deleteBtn.dataset.groupId;
             if (confirm('Are you sure you want to delete this group?')) {
-                fetch(`/api/technician_groups/${groupId}`, {
+                fetch(`/api/technology_groups/${groupId}`, {
                     method: 'DELETE',
                     headers: {
                         'X-CSRFToken': csrfToken
@@ -127,6 +133,31 @@ document.addEventListener('DOMContentLoaded', function () {
                 })
                 .catch(error => console.error('Error deleting technician group:', error));
             }
+        } else if (saveBtn) {
+            const groupId = saveBtn.dataset.groupId;
+            const input = saveBtn.closest('.list-item').querySelector('input');
+            const newName = input.value.trim();
+
+            if (newName) {
+                fetch(`/api/technology_groups/${groupId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({ name: newName })
+                })
+                .then(response => {
+                    if (response.ok) {
+                        fetchTechnicianGroups();
+                    } else {
+                        response.json().then(data => alert(data.message || 'Error updating group'));
+                    }
+                })
+                .catch(error => console.error('Error updating technician group:', error));
+            }
+        } else if (cancelBtn) {
+            fetchTechnicianGroups();
         }
     });
 
@@ -136,17 +167,13 @@ document.addEventListener('DOMContentLoaded', function () {
             selectedGroupNameSpan.textContent = this.options[this.selectedIndex].text;
             groupMembershipDetails.style.display = 'block';
             loadGroupMembers(groupId);
-            loadGroupPriorities(groupId);
-            saveGroupPrioritiesBtn.style.display = 'block';
         } else {
             groupMembershipDetails.style.display = 'none';
-            taskTypePriorityContainer.innerHTML = '<p>Select a group to manage priorities.</p>';
-            saveGroupPrioritiesBtn.style.display = 'none';
         }
     });
 
     function loadGroupMembers(groupId) {
-        fetch(`/api/technician_groups/${groupId}/technicians`)
+        fetch(`/api/technology_groups/${groupId}/technicians`)
             .then(response => response.json())
             .then(members => {
                 const memberIds = new Set(members.map(m => m.id));
@@ -155,83 +182,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 renderMembershipLists(availableTechnicians, members);
             })
             .catch(error => console.error(`Error fetching members for group ${groupId}:`, error));
-    }
-
-    function loadGroupPriorities(groupId) {
-        fetch(`/api/technician_groups/${groupId}/priorities`)
-            .then(response => response.json())
-            .then(priorities => {
-                renderTaskTypePriorities(priorities);
-            })
-            .catch(error => console.error(`Error fetching priorities for group ${groupId}:`, error));
-    }
-
-    function renderTaskTypePriorities(priorities) {
-        taskTypePriorityContainer.innerHTML = '';
-        const prioritizedTaskIds = new Set(priorities.map(p => p.task_type_id));
-        const unprioritizedTasks = allTaskTypes.filter(taskType => !prioritizedTaskIds.has(taskType.id));
-
-        const allTasksForGroup = [
-            ...priorities.map(p => ({...allTaskTypes.find(t => t.id === p.task_type_id), priority: p.priority})),
-            ...unprioritizedTasks.map(t => ({...t, priority: null}))
-        ];
-
-        allTasksForGroup.sort((a, b) => {
-            if (a.priority === null) return 1;
-            if (b.priority === null) return -1;
-            return a.priority - b.priority;
-        });
-
-        if (allTasksForGroup.length === 0) {
-            taskTypePriorityContainer.innerHTML = '<p>No task types found.</p>';
-            return;
-        }
-
-        allTasksForGroup.forEach((taskType, index) => {
-            const item = document.createElement('div');
-            item.className = 'list-item priority-item';
-            item.dataset.taskTypeId = taskType.id;
-            item.innerHTML = `
-                <span>${taskType.name}</span>
-                <div class="btn-group">
-                    <button class="btn btn-sm btn-outline-secondary up-btn" ${index === 0 ? 'disabled' : ''}>⬆️</button>
-                    <button class="btn btn-sm btn-outline-secondary down-btn" ${index === allTasksForGroup.length - 1 ? 'disabled' : ''}>⬇️</button>
-                </div>
-            `;
-            taskTypePriorityContainer.appendChild(item);
-        });
-    }
-
-    taskTypePriorityContainer.addEventListener('click', function(e) {
-        const target = e.target.closest('button');
-        if (!target) return;
-
-        const item = target.closest('.priority-item');
-        if (!item) return;
-
-        if (target.classList.contains('up-btn')) {
-            const prev = item.previousElementSibling;
-            if (prev) {
-                item.parentNode.insertBefore(item, prev);
-                updatePriorityButtons();
-            }
-        } else if (target.classList.contains('down-btn')) {
-            const next = item.nextElementSibling;
-            if (next) {
-                item.parentNode.insertBefore(next, item);
-                updatePriorityButtons();
-            }
-        }
-    });
-
-    function updatePriorityButtons() {
-        const items = taskTypePriorityContainer.querySelectorAll('.priority-item');
-        items.forEach((item, index) => {
-            const upBtn = item.querySelector('.up-btn');
-            const downBtn = item.querySelector('.down-btn');
-            if (upBtn) upBtn.disabled = index === 0;
-            if (downBtn) downBtn.disabled = index === items.length - 1;
-        });
     }
 
     function renderMembershipLists(available, members) {
@@ -312,39 +262,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    saveGroupPrioritiesBtn.addEventListener('click', function () {
-        const groupId = groupMembershipSelect.value;
-        if (!groupId) return;
-
-        const priorityItems = taskTypePriorityContainer.querySelectorAll('.priority-item');
-        const priorities = Array.from(priorityItems).map((item, index) => ({
-            task_type_id: item.dataset.taskTypeId,
-            priority: index + 1
-        }));
-
-        fetch(`/api/technician_groups/${groupId}/priorities`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            },
-            body: JSON.stringify({ priorities: priorities })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showStatusMessage('Priorities saved successfully!', 'success');
-                loadGroupPriorities(groupId);
-            } else {
-                showStatusMessage(data.message || 'Error saving priorities.', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error saving priorities:', error)
-            showStatusMessage('An error occurred while saving priorities.', 'error');
-        });
-    });
-
     [availableTechniciansList, groupMembersList].forEach(list => {
         list.addEventListener('click', e => {
             const card = e.target.closest('.technician-card');
@@ -358,5 +275,4 @@ document.addEventListener('DOMContentLoaded', function () {
     // Initial data load
     fetchAllTechnicians();
     fetchTechnicianGroups();
-    fetchAllTaskTypes();
 });

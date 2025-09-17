@@ -336,19 +336,7 @@ def _assign_task_definition_to_schedule(
 
             sorted_req_skill_ids_for_sorting = sorted(list(task_technology_ids))
 
-            def get_group_priority_score(group_tech_names):
-                if not technician_groups: return float('inf')
-                min_priority = float('inf')
-                for tech_name in group_tech_names:
-                    tech_group_data = technician_groups.get(tech_name)
-                    if tech_group_data:
-                        priority = tech_group_data['priorities'].get(task_id)
-                        if priority is not None and priority < min_priority:
-                            min_priority = priority
-                return min_priority
-
             viable_groups_with_scores_pm.sort(key=lambda x: (
-                get_group_priority_score(x['group']),
                 x['size_diff'],
                 tuple(-x['per_skill_avg'].get(skill_id, 0) for skill_id in sorted_req_skill_ids_for_sorting),
                 -x['combined_avg_skill'],
@@ -835,7 +823,7 @@ def _get_technician_groups(db_conn):
     
     # Get all groups
     cursor.execute("SELECT id, name FROM technician_groups")
-    groups = {row['id']: {'name': row['name'], 'members': [], 'priorities': {}} for row in cursor.fetchall()}
+    groups = {row['id']: {'name': row['name'], 'members': []} for row in cursor.fetchall()}
     
     # Get group members
     cursor.execute("SELECT g.name as group_name, t.name as tech_name FROM technician_group_members gm JOIN technicians t ON gm.technician_id = t.id JOIN technician_groups g ON gm.group_id = g.id")
@@ -845,22 +833,9 @@ def _get_technician_groups(db_conn):
             technician_to_groups[row['tech_name']] = []
         technician_to_groups[row['tech_name']].append(row['group_name'])
             
-    # Get group priorities
-    cursor.execute("SELECT g.name as group_name, p.task_type_id, p.priority FROM technician_group_priorities p JOIN technician_groups g ON p.group_id = g.id")
-    group_priorities = {}
-    for row in cursor.fetchall():
-        if row['group_name'] not in group_priorities:
-            group_priorities[row['group_name']] = {}
-        group_priorities[row['group_name']][row['task_type_id']] = row['priority']
-
-    # Combine into a technician-centric view
+    # Create a technician-centric view
     technician_groups_data = {}
     for tech_name, tech_groups in technician_to_groups.items():
-        technician_groups_data[tech_name] = {'groups': tech_groups, 'priorities': {}}
-        for group_name in tech_groups:
-            if group_name in group_priorities:
-                for task_type_id, priority in group_priorities[group_name].items():
-                    if task_type_id not in technician_groups_data[tech_name]['priorities'] or priority < technician_groups_data[tech_name]['priorities'][task_type_id]:
-                        technician_groups_data[tech_name]['priorities'][task_type_id] = priority
+        technician_groups_data[tech_name] = {'groups': tech_groups}
 
     return technician_groups_data

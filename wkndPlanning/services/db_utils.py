@@ -286,19 +286,7 @@ def init_db(db_path, logger=None, debug_use_test_db=False):
     ''')
     logger.info("Table 'technician_group_members' ensured.") if logger else None
 
-    # Technician Group Priorities Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS technician_group_priorities (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            group_id INTEGER NOT NULL,
-            task_type_id INTEGER NOT NULL,
-            priority INTEGER NOT NULL,
-            FOREIGN KEY (group_id) REFERENCES technician_groups (id) ON DELETE CASCADE,
-            FOREIGN KEY (task_type_id) REFERENCES tasks (id) ON DELETE CASCADE,
-            UNIQUE (group_id, task_type_id)
-        )
-    ''')
-    logger.info("Table 'technician_group_priorities' ensured.") if logger else None
+    
 
     # 3. Create Indexes (idempotently)
     cursor.execute('''
