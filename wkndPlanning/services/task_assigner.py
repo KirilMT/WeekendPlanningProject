@@ -796,6 +796,18 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, db_conn, rep_as
         if final_available_time_summary_map[tech_name_final] < 0:
             final_available_time_summary_map[tech_name_final] = 0
 
+    # Balance workload with helpers
+    final_all_task_assignments_details, final_technician_schedules, final_available_time_summary_map = balance_workload_with_helpers(
+        final_all_task_assignments_details,
+        final_technician_schedules,
+        final_available_time_summary_map,
+        present_technicians,
+        total_work_minutes,
+        technician_technology_skills,
+        all_tasks_combined,
+        rep_assignments,
+        logger
+    )
 
     _log(logger, "info", f"Unified task assignment process completed. Assigned {len(final_all_task_assignments_details)} task segments.")
     if final_unassigned_tasks_reasons_dict:
@@ -817,6 +829,137 @@ def assign_tasks(tasks, present_technicians, total_work_minutes, db_conn, rep_as
 
     return final_all_task_assignments_details, final_unassigned_tasks_reasons_dict, final_incomplete_tasks_instance_ids, final_available_time_summary_map, under_resourced_tasks
 
+
+def balance_workload_with_helpers(
+    assignments,
+    technician_schedules,
+    available_time,
+    present_technicians,
+    total_work_minutes,
+    technician_technology_skills,
+    tasks,
+    rep_assignments,
+    logger
+):
+    _log(logger, "info", "Starting workload balancing with helpers.")
+
+    overloaded_threshold = total_work_minutes * 0.8
+    idle_threshold = total_work_minutes * 0.5
+
+    overloaded_techs = {tech for tech, time in available_time.items() if (total_work_minutes - time) > overloaded_threshold}
+    idle_techs = {tech for tech, time in available_time.items() if time > idle_threshold}
+
+    _log(logger, "info", f"Overloaded techs (>{overloaded_threshold / 60:.1f}h scheduled): {overloaded_techs}")
+    _log(logger, "info", f"Idle techs (>{idle_threshold / 60:.1f}h free): {idle_techs}")
+
+    if not overloaded_techs or not idle_techs:
+        _log(logger, "info", "No overloaded or idle technicians found, skipping balancing.")
+        return assignments, technician_schedules, available_time
+
+    rep_assignments_map = {item['task_id']: item for item in rep_assignments} if rep_assignments else {}
+
+    # Find tasks to help with
+    for overloaded_tech in overloaded_techs:
+        for task_assignment in list(assignments):
+            if task_assignment['technician'] == overloaded_tech:
+                # Find a helper
+                for idle_tech in idle_techs:
+                    if idle_tech == overloaded_tech:
+                        continue
+
+                    # Check if idle_tech has time
+                    if available_time[idle_tech] < task_assignment['duration'] / 2: # Heuristic
+                        continue
+
+                    # Check skills
+                    task_id = task_assignment['instance_id'].split('_')[0]
+                    
+                    original_task = next((t for t in tasks if str(t.get('id')) == task_id), None)
+                    if not original_task:
+                        continue
+
+                    can_help = False
+                    task_type = original_task.get('task_type_upper')
+
+                    if task_type == 'REP':
+                        rep_assignment_info = rep_assignments_map.get(original_task.get('id'))
+                        if rep_assignment_info:
+                            qualified_techs = {tech['name'] for tech in rep_assignment_info.get('technicians', [])}
+                            if idle_tech in qualified_techs:
+                                can_help = True
+                    else: # For PM tasks
+                        required_skills = original_task.get('technology_ids', [])
+                        if not required_skills:
+                            continue # Cannot help if no skills are defined
+
+                        helper_skills = technician_technology_skills.get(idle_tech, {})
+                        if all(skill_id in helper_skills and helper_skills[skill_id] > 0 for skill_id in required_skills):
+                            can_help = True
+
+                    if can_help:
+                        _log(logger, "info", f"Found helper '{idle_tech}' for task '{task_assignment['task_name']}' of technician '{overloaded_tech}'")
+
+                        # Re-schedule the task for the group
+                        original_start = task_assignment['start']
+                        original_duration = task_assignment['duration']
+                        new_duration = original_duration / 2  # Simple assumption for now
+
+                        # Check if both are free
+                        is_overloaded_tech_free = all(
+                            sch_end <= original_start or sch_start >= original_start + new_duration
+                            for sch_start, sch_end, _ in technician_schedules[overloaded_tech]
+                            if _ != task_assignment['task_name']
+                        )
+                        is_idle_tech_free = all(
+                            sch_end <= original_start or sch_start >= original_start + new_duration
+                            for sch_start, sch_end, _ in technician_schedules[idle_tech]
+                        )
+
+                        if is_overloaded_tech_free and is_idle_tech_free:
+                            # Remove old assignment
+                            assignments.remove(task_assignment)
+                            technician_schedules[overloaded_tech] = [
+                                s for s in technician_schedules[overloaded_tech] if s[2] != task_assignment['task_name']
+                            ]
+
+                            # Add new assignments for both
+                            for tech in [overloaded_tech, idle_tech]:
+                                assignments.append({
+                                    'technician': tech,
+                                    'task_name': task_assignment['task_name'],
+                                    'start': original_start,
+                                    'duration': new_duration,
+                                    'is_incomplete': task_assignment.get('is_incomplete', False),
+                                    'original_duration': task_assignment.get('original_duration'),
+                                    'instance_id': task_assignment['instance_id'],
+                                    'technician_task_info': 'Helper',
+                                    'resource_mismatch_info': 'Helped by ' + idle_tech if tech == overloaded_tech else 'Helping ' + overloaded_tech
+                                })
+                                technician_schedules[tech].append(
+                                    (original_start, original_start + new_duration, task_assignment['task_name'])
+                                )
+                                technician_schedules[tech].sort()
+
+                            # Update available time
+                            available_time[overloaded_tech] += original_duration - new_duration
+                            available_time[idle_tech] -= new_duration
+
+                            _log(logger, "info", f"Task '{task_assignment['task_name']}' rescheduled with helper '{idle_tech}'.")
+                            # Move to next task
+                            break
+                else:
+                    continue
+                break
+    
+    _log(logger, "info", "Workload balancing finished.")
+
+    _log(logger, "debug", "Final workload after balancing:")
+    for tech in present_technicians:
+        occupied_time = total_work_minutes - available_time.get(tech, total_work_minutes)
+        percentage_occupied = (occupied_time / total_work_minutes) * 100 if total_work_minutes > 0 else 0
+        _log(logger, "debug", f"  - {tech}: {occupied_time:.2f} minutes occupied ({percentage_occupied:.2f}%)")
+
+    return assignments, technician_schedules, available_time
 
 def _get_technician_groups(db_conn):
     cursor = db_conn.cursor()
