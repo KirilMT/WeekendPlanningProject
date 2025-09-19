@@ -82,33 +82,62 @@ WeekendPlanningProject/
    ```
 
 2. **Create a virtual environment:**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```powershell
+   py -3 -m venv .venv
    ```
+   This creates a `.venv` directory in your project root.
+
+   **Activate the virtual environment:**
+   - On **Windows (PowerShell)**:
+     ```powershell
+     .\.venv\Scripts\Activate.ps1
+     ```
+   - On **Windows (Command Prompt)**:
+     ```cmd
+     .venv\Scripts\activate
+     ```
+   - On **macOS/Linux (bash/zsh):**
+     ```bash
+     source .venv/bin/activate
+     ```
+
+   > **If you encounter issues with the virtual environment or Python interpreter in PyCharm:**
+   > - Delete the `.venv` folder.
+   > - Repeat the steps above to recreate and activate the environment.
 
 3. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Set up environment variables:**
+4. **Set the Python interpreter in PyCharm:**
+   - Go to `File > Settings > Project: <your_project> > Python Interpreter`.
+   - Click the gear icon > `Add...` > `Existing environment`.
+   - Browse to `.venv\Scripts\python.exe` and select it.
+   - If you see `[invalid]` next to the interpreter, try restarting PyCharm. If the issue persists, delete the `.venv` folder and repeat steps 2–4.
+
+5. **Set up environment variables:**
    Create a `.env` file in the project root by copying the `.env.example` file. This is recommended for setting debug flags and other configurations.
     ```bash
     cp .env.example .env
     ```
    Then, edit the `.env` file as needed.
 
-5. **Initialize the database:**
+6. **Initialize the database:**
    The database will be automatically initialized on the first run.
 
-6. **Run the application:**
+7. **Run the application:**
    ```bash
    python run.py
    ```
 
-7. **Access the application:**
+8. **Access the application:**
    Open your browser and navigate to `http://127.0.0.1:5000`
+
+---
+
+**Note for PyCharm users:**  
+If you encounter issues with the Python interpreter showing as `[invalid]`, ensure the virtual environment was created with the correct Python version, and that you have activated it before installing dependencies. Restarting PyCharm often resolves interpreter detection issues.
 
 ## 🚀 Testing Guide
 
@@ -281,5 +310,5 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 
 ---
 
-**Version:** 1.1.0  
-**Last Updated:** May 2024
+**Version:** 1.2.0  
+**Last Updated:** September 2025
