@@ -2,6 +2,8 @@ import os
 import secrets
 
 SRC_DIR = os.path.abspath(os.path.dirname(__file__))
+ROOT_DIR = os.path.abspath(os.path.join(SRC_DIR, '..'))
+INSTANCE_DIR = os.path.join(ROOT_DIR, 'instance')
 
 class Config:
     """
@@ -47,12 +49,11 @@ class Config:
     else:
         _db_filename = 'weekend_planning.db'
 
-    # The database is located inside the 'src' package directory.
-    DATABASE_PATH = os.path.join(SRC_DIR, _db_filename)
+    # The database is located in the instance directory.
+    DATABASE_PATH = os.path.join(INSTANCE_DIR, _db_filename)
 
     # --- Paths ---
-    UPLOAD_FOLDER = os.path.join(SRC_DIR, 'uploads')
-    OUTPUT_FOLDER = os.path.join(SRC_DIR, 'output')
+    OUTPUT_FOLDER = os.path.join(ROOT_DIR, 'output')
     TEMPLATES_FOLDER = os.path.join(SRC_DIR, 'templates')
     STATIC_FOLDER = os.path.join(SRC_DIR, 'static')
 
@@ -61,7 +62,7 @@ class Config:
     ALLOWED_EXTENSIONS = {'xlsx', 'xls', 'xlsb', 'csv'}
 
     # Ensure these directories exist
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    os.makedirs(INSTANCE_DIR, exist_ok=True)
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
     @classmethod

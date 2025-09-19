@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 from functools import wraps
 from flask import request, g, current_app
-from src.config import Config
+from src.config import Config, ROOT_DIR
 
 
 class StructuredFormatter(logging.Formatter):
@@ -142,7 +142,7 @@ class LoggingConfig:
         """Configure application logging with appropriate levels and formatting."""
 
         # Create logs directory if it doesn't exist
-        log_dir = os.path.join(os.path.dirname(Config.DATABASE_PATH), 'logs')
+        log_dir = os.path.join(ROOT_DIR, 'logs')
         os.makedirs(log_dir, exist_ok=True)
 
         # Set log level based on debug mode

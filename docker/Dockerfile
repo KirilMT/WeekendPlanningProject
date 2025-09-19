@@ -30,7 +30,7 @@ RUN adduser --disabled-password --gecos '' appuser \
 USER appuser
 
 # Create necessary directories
-RUN mkdir -p src/logs src/uploads src/output
+RUN mkdir -p instance logs output
 
 # Expose port
 EXPOSE 5000

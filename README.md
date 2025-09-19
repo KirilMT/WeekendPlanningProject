@@ -19,30 +19,25 @@ A professional Flask-based web application for managing weekend technician task 
 
 ```
 WeekendPlanningProject/
-├── wkndPlanning/              # Main application package
-│   ├── routes/                # Flask blueprints and routing
-│   │   ├── api.py            # API endpoints for skill-based assignments
-│   │   ├── health.py         # Health check endpoints
-│   │   └── main.py           # Main web routes
-│   ├── services/              # Business logic and utilities
-│   │   ├── config_manager.py # Configuration management
-│   │   ├── dashboard.py      # Dashboard generation
-│   │   ├── data_processing.py # Data processing utilities
-│   │   ├── db_utils.py       # Database operations and schema
-│   │   ├── extract_data.py   # Excel data extraction
-│   │   ├── health_check.py   # System health monitoring
-│   │   ├── logging_config.py # Logging configuration
-│   │   ├── security.py       # Security utilities
-│   │   └── task_assigner.py  # Skill-based assignment algorithms
-│   ├── static/               # CSS, JavaScript, and static assets
-│   ├── templates/            # Jinja2 HTML templates
-│   ├── uploads/              # File upload directory
-│   ├── output/               # Generated output files
+├── src/                     # Main application package
+│   ├── routes/              # Flask blueprints and routing
+│   ├── services/            # Business logic and utilities
+│   ├── static/              # CSS, JavaScript, and static assets
+│   ├── templates/           # Jinja2 HTML templates
 │   └── app.py               # Flask application factory
-├── config.py                 # Application configuration
-├── requirements.txt          # Python dependencies
-├── run.py                   # Application entry point
-└── README.md                # This file
+├── instance/                # Instance folder for database
+│   ├── weekend_planning.db  # Production database
+│   └── testsDB.db           # Test database
+├── logs/                    # Application and error logs
+├── output/                  # Generated output files
+├── docs/                    # Documentation
+├── docker/                  # Docker configuration
+├── tests/                   # Tests
+├── test_data/               # Test data
+├── .gitignore
+├── requirements.txt
+├── run.py
+└── README.md
 ```
 
 ## ⚙️ Setup and Installation
@@ -103,7 +98,7 @@ This first stage provides the foundational data for the application (technicians
     DEBUG_USE_TEST_DB=1
     ```
 
-2.  **Delete the Old Test Database (First Time Only)**: If you have previously run the application, delete the `testsDB.db` file located in the `wkndPlanning/` directory. This ensures a fresh database is created.
+2.  **Delete the Old Test Database (First Time Only)**: If you have previously run the application, delete the `testsDB.db` file located in the `instance/` directory. This ensures a fresh database is created.
 
 3.  **Run the Application**: Start the application from the project root:
     ```bash
@@ -117,7 +112,7 @@ After the initial data has been loaded, you can test the application's data impo
 
 1.  **Navigate to the Main Page**: Open your browser and go to `http://127.0.0.1:5000/`.
 2.  **Import Sample Data**:
-    *   Use the file upload functionality on the page to import `testsExcel.xlsb` and `testsExcel2.xlsb` from the `Excels_Testing/` directory.
+    *   Use the file upload functionality on the page to import `testsExcel.xlsb` and `testsExcel2.xlsb` from the `test_data/` directory.
     *   This will add to or modify the initial data in the database.
 3.  **Run Task Assignment**:
     *   Once the data is imported, you can trigger the task assignment process from the UI.
@@ -248,7 +243,7 @@ When `DEBUG_USE_TEST_DB` is enabled, this schema is automatically populated from
 
 ### Logging
 
-Application logs are available in the `wkndPlanning/logs/` directory with different log levels for debugging.
+Application logs are available in the `logs/` directory with different log levels for debugging.
 
 ## 🤝 Contributing
 

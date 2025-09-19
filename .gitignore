@@ -129,7 +129,6 @@ dmypy.json
 *.sqlite
 *.sqlite3
 logs/
-uploads/
 output/
 temp/
 .DS_Store
