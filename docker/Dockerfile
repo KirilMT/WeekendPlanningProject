@@ -30,7 +30,7 @@ RUN adduser --disabled-password --gecos '' appuser \
 USER appuser
 
 # Create necessary directories
-RUN mkdir -p wkndPlanning/logs wkndPlanning/uploads wkndPlanning/output
+RUN mkdir -p src/logs src/uploads src/output
 
 # Expose port
 EXPOSE 5000

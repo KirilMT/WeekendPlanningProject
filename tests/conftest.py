@@ -5,9 +5,9 @@ import pytest
 import os
 import tempfile
 from unittest.mock import patch
-from wkndPlanning.app import create_app
-from wkndPlanning.services.db_utils import init_db
-from wkndPlanning.config import Config
+from src.app import create_app
+from src.services.db_utils import init_db
+from src.config import Config
 
 
 class TestConfig(Config):

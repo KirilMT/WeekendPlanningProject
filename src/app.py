@@ -11,9 +11,9 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from wkndPlanning.config import Config
+from src.config import Config
 
-# Import from local services package (relative to wkndPlanning)
+# Import from local services package (relative to src)
 from .services.db_utils import init_db
 from .services.config_manager import load_app_config
 from .services.security import SecurityMiddleware
@@ -91,8 +91,9 @@ def create_app():
     # Error handlers
     @app.errorhandler(404)
     def not_found(error):
-        app.logger.warning(f"404 error: {error}")
-        return "Page not found", 404
+        from flask import request
+        app.logger.warning(f"404 Not Found: The requested URL '{request.path}' was not found on the server.")
+        return f"Page not found: {request.path}", 404
 
     @app.errorhandler(400)
     def handle_400_error(error):

@@ -16,11 +16,11 @@ services:
       - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-16777216}
     volumes:
       # Persist database and logs
-      - weekend_data:/app/wkndPlanning
+      - weekend_data:/app/src
       # Mount uploads directory for file persistence
-      - weekend_uploads:/app/wkndPlanning/uploads
+      - weekend_uploads:/app/src/uploads
       # Mount output directory
-      - weekend_output:/app/wkndPlanning/output
+      - weekend_output:/app/src/output
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health/live"]

@@ -1,4 +1,4 @@
-# wkndPlanning/task_assigner.py
+# src/task_assigner.py
 
 from itertools import combinations, permutations # Ensure permutations is imported
 from .data_processing import normalize_string

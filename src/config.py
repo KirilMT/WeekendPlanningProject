@@ -1,8 +1,7 @@
 import os
 import secrets
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-WKND_PLANNING_DIR = os.path.join(BASE_DIR, 'wkndPlanning')
+SRC_DIR = os.path.abspath(os.path.dirname(__file__))
 
 class Config:
     """
@@ -48,14 +47,14 @@ class Config:
     else:
         _db_filename = 'weekend_planning.db'
 
-    # The database is located inside the 'wkndPlanning' package directory.
-    DATABASE_PATH = os.path.join(WKND_PLANNING_DIR, _db_filename)
+    # The database is located inside the 'src' package directory.
+    DATABASE_PATH = os.path.join(SRC_DIR, _db_filename)
 
     # --- Paths ---
-    UPLOAD_FOLDER = os.path.join(WKND_PLANNING_DIR, 'uploads')
-    OUTPUT_FOLDER = os.path.join(WKND_PLANNING_DIR, 'output')
-    TEMPLATES_FOLDER = os.path.join(WKND_PLANNING_DIR, 'templates')
-    STATIC_FOLDER = os.path.join(WKND_PLANNING_DIR, 'static')
+    UPLOAD_FOLDER = os.path.join(SRC_DIR, 'uploads')
+    OUTPUT_FOLDER = os.path.join(SRC_DIR, 'output')
+    TEMPLATES_FOLDER = os.path.join(SRC_DIR, 'templates')
+    STATIC_FOLDER = os.path.join(SRC_DIR, 'static')
 
     # File upload restrictions
     MAX_CONTENT_LENGTH = int(os.environ.get('MAX_UPLOAD_SIZE', '16777216'))  # 16MB default

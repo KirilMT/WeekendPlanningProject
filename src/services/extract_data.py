@@ -2,7 +2,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import re
 try:
-    from wkndPlanning.config import Config
+    from src.config import Config
 except ImportError:  # Fallback if direct import path differs
     Config = None
 

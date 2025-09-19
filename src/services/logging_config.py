@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 from functools import wraps
 from flask import request, g, current_app
-from wkndPlanning.config import Config
+from src.config import Config
 
 
 class StructuredFormatter(logging.Formatter):
