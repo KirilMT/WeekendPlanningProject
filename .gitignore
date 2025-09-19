@@ -160,6 +160,3 @@ Thumbs.db
 ~$*.xlsx
 ~$*.xls
 ~$*.xlsb
-
-# Project exclude paths
-/Excels_Testing/

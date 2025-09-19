@@ -11,10 +11,10 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from config import Config
+from wkndPlanning.config import Config
 
 # Import from local services package (relative to wkndPlanning)
-from .services.db_utils import get_db_connection, init_db
+from .services.db_utils import init_db
 from .services.config_manager import load_app_config
 from .services.security import SecurityMiddleware
 from .services.logging_config import LoggingConfig

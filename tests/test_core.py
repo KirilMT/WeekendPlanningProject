@@ -3,7 +3,7 @@ Unit tests for core application functionality.
 """
 import pytest
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class TestDatabaseOperations:
@@ -150,7 +150,7 @@ class TestConfigurationValidation:
 
     def test_config_validation_success(self, app):
         """Test configuration validation passes for test config."""
-        from config import Config
+        from wkndPlanning.config import Config
 
         with app.app_context():
             # Should not raise exception
@@ -159,7 +159,7 @@ class TestConfigurationValidation:
     @patch('config.Config.FLASK_DEBUG', False)
     def test_production_config_warnings(self):
         """Test production configuration validation warnings."""
-        from config import Config
+        from wkndPlanning.config import Config
 
         # Test would check for production-specific validations
         # This is a placeholder for more comprehensive production checks
