@@ -15,6 +15,30 @@ A professional Flask-based web application for managing weekend technician task 
 - **Real-time Updates:** Dynamic skill mapping and assignment optimization
 - **Workload Balancing:** Automatic adjustment of task duration based on team size and skill levels
 
+## 🖼️ Screenshots
+
+Here's a glimpse of the Weekend Planning Project in action:
+
+| Main Page | Manage Mappings |
+| :---: | :---: |
+| *Users can upload Excel files and initiate the assignment process.* | *A dedicated UI for managing technicians, skills, and tasks.* |
+| ![Main Page](docs/assets/mainPage.png) | ![Manage Mappings Page](docs/assets/manageMappingsPage.png) |
+
+| Absent Technicians Modal | REP Task Assignment |
+| :---: | :---: |
+| *Easily mark technicians as absent before generating the schedule.* | *Manually assign high-priority REP tasks to eligible technicians.* |
+| ![Absent Technicians Modal](docs/assets/absentTechniciansModal.png) | ![REP Tasks Assignment Modal](docs/assets/REPTasksAssignmentModal.png) |
+
+| Additional Task Creation | Technician Dashboard - Table View |
+| :---: | :---: |
+| *Dynamically add new tasks during the assignment process.* | *A clear, tabular view of the final schedule for each technician.* |
+| ![Additional Task Creation Modal](docs/assets/additionalTaskCreationModal.png) | ![Technician Dashboard Table](docs/assets/technicianDashboardTable.png) |
+
+| Technician Dashboard - Gantt Chart View |
+| :---: |
+| *An interactive Gantt chart visualizes the entire weekend schedule.* |
+| ![Technician Dashboard Gantt Chart](docs/assets/technicianDashboardGantt.png) |
+
 ## 📁 Project Structure
 
 ```
@@ -31,6 +55,7 @@ WeekendPlanningProject/
 ├── logs/                    # Application and error logs
 ├── output/                  # Generated output files
 ├── docs/                    # Documentation
+│   └── assets/              # Image assets for documentation
 ├── docker/                  # Docker configuration
 ├── tests/                   # Tests
 ├── test_data/               # Test data
@@ -170,9 +195,7 @@ The application uses a sophisticated skill-based assignment system that:
 
 ## 📝 Documentation
 
-Detailed documentation is available in the following files:
-- `technician_dashboard_manual.md`: User manual for the technician dashboard
-- `ROADMAP.md`: Development roadmap and future features
+Detailed documentation is available in the `docs/` directory.
 
 ## 🎯 Usage
 
