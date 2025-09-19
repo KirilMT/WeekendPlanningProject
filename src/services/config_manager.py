@@ -1,4 +1,4 @@
-# wkndPlanning/config_manager.py
+# src/config_manager.py
 import sqlite3
 import traceback
 import os

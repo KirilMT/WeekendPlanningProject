@@ -15,34 +15,54 @@ A professional Flask-based web application for managing weekend technician task 
 - **Real-time Updates:** Dynamic skill mapping and assignment optimization
 - **Workload Balancing:** Automatic adjustment of task duration based on team size and skill levels
 
+## 🖼️ Screenshots
+
+Here's a glimpse of the Weekend Planning Project in action:
+
+| Main Page | Manage Mappings |
+| :---: | :---: |
+| *Users can upload Excel files and initiate the assignment process.* | *A dedicated UI for managing technicians, skills, and tasks.* |
+| ![Main Page](docs/assets/mainPage.png) | ![Manage Mappings Page](docs/assets/manageMappingsPage.png) |
+
+| Absent Technicians Modal | REP Task Assignment |
+| :---: | :---: |
+| *Easily mark technicians as absent before generating the schedule.* | *Manually assign high-priority REP tasks to eligible technicians.* |
+| ![Absent Technicians Modal](docs/assets/absentTechniciansModal.png) | ![REP Tasks Assignment Modal](docs/assets/REPTasksAssignmentModal.png) |
+
+| Additional Task Creation | Technician Dashboard - Table View |
+| :---: | :---: |
+| *Dynamically add new tasks during the assignment process.* | *A clear, tabular view of the final schedule for each technician.* |
+| ![Additional Task Creation Modal](docs/assets/additionalTaskCreationModal.png) | ![Technician Dashboard Table](docs/assets/technicianDashboardTable.png) |
+
+| Technician Dashboard - Gantt Chart View |
+| :---: |
+| *An interactive Gantt chart visualizes the entire weekend schedule.* |
+| ![Technician Dashboard Gantt Chart](docs/assets/technicianDashboardGantt.png) |
+
 ## 📁 Project Structure
 
 ```
 WeekendPlanningProject/
-├── wkndPlanning/              # Main application package
-│   ├── routes/                # Flask blueprints and routing
-│   │   ├── api.py            # API endpoints for skill-based assignments
-│   │   ├── health.py         # Health check endpoints
-│   │   └── main.py           # Main web routes
-│   ├── services/              # Business logic and utilities
-│   │   ├── config_manager.py # Configuration management
-│   │   ├── dashboard.py      # Dashboard generation
-│   │   ├── data_processing.py # Data processing utilities
-│   │   ├── db_utils.py       # Database operations and schema
-│   │   ├── extract_data.py   # Excel data extraction
-│   │   ├── health_check.py   # System health monitoring
-│   │   ├── logging_config.py # Logging configuration
-│   │   ├── security.py       # Security utilities
-│   │   └── task_assigner.py  # Skill-based assignment algorithms
-│   ├── static/               # CSS, JavaScript, and static assets
-│   ├── templates/            # Jinja2 HTML templates
-│   ├── uploads/              # File upload directory
-│   ├── output/               # Generated output files
+├── src/                     # Main application package
+│   ├── routes/              # Flask blueprints and routing
+│   ├── services/            # Business logic and utilities
+│   ├── static/              # CSS, JavaScript, and static assets
+│   ├── templates/           # Jinja2 HTML templates
 │   └── app.py               # Flask application factory
-├── config.py                 # Application configuration
-├── requirements.txt          # Python dependencies
-├── run.py                   # Application entry point
-└── README.md                # This file
+├── instance/                # Instance folder for database
+│   ├── weekend_planning.db  # Production database
+│   └── testsDB.db           # Test database
+├── logs/                    # Application and error logs
+├── output/                  # Generated output files
+├── docs/                    # Documentation
+│   └── assets/              # Image assets for documentation
+├── docker/                  # Docker configuration
+├── tests/                   # Tests
+├── test_data/               # Test data
+├── .gitignore
+├── requirements.txt
+├── run.py
+└── README.md
 ```
 
 ## ⚙️ Setup and Installation
@@ -62,33 +82,62 @@ WeekendPlanningProject/
    ```
 
 2. **Create a virtual environment:**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```powershell
+   py -3 -m venv .venv
    ```
+   This creates a `.venv` directory in your project root.
+
+   **Activate the virtual environment:**
+   - On **Windows (PowerShell)**:
+     ```powershell
+     .\.venv\Scripts\Activate.ps1
+     ```
+   - On **Windows (Command Prompt)**:
+     ```cmd
+     .venv\Scripts\activate
+     ```
+   - On **macOS/Linux (bash/zsh):**
+     ```bash
+     source .venv/bin/activate
+     ```
+
+   > **If you encounter issues with the virtual environment or Python interpreter in PyCharm:**
+   > - Delete the `.venv` folder.
+   > - Repeat the steps above to recreate and activate the environment.
 
 3. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Set up environment variables:**
+4. **Set the Python interpreter in PyCharm:**
+   - Go to `File > Settings > Project: <your_project> > Python Interpreter`.
+   - Click the gear icon > `Add...` > `Existing environment`.
+   - Browse to `.venv\Scripts\python.exe` and select it.
+   - If you see `[invalid]` next to the interpreter, try restarting PyCharm. If the issue persists, delete the `.venv` folder and repeat steps 2–4.
+
+5. **Set up environment variables:**
    Create a `.env` file in the project root by copying the `.env.example` file. This is recommended for setting debug flags and other configurations.
     ```bash
     cp .env.example .env
     ```
    Then, edit the `.env` file as needed.
 
-5. **Initialize the database:**
+6. **Initialize the database:**
    The database will be automatically initialized on the first run.
 
-6. **Run the application:**
+7. **Run the application:**
    ```bash
    python run.py
    ```
 
-7. **Access the application:**
+8. **Access the application:**
    Open your browser and navigate to `http://127.0.0.1:5000`
+
+---
+
+**Note for PyCharm users:**  
+If you encounter issues with the Python interpreter showing as `[invalid]`, ensure the virtual environment was created with the correct Python version, and that you have activated it before installing dependencies. Restarting PyCharm often resolves interpreter detection issues.
 
 ## 🚀 Testing Guide
 
@@ -103,7 +152,7 @@ This first stage provides the foundational data for the application (technicians
     DEBUG_USE_TEST_DB=1
     ```
 
-2.  **Delete the Old Test Database (First Time Only)**: If you have previously run the application, delete the `testsDB.db` file located in the `wkndPlanning/` directory. This ensures a fresh database is created.
+2.  **Delete the Old Test Database (First Time Only)**: If you have previously run the application, delete the `testsDB.db` file located in the `instance/` directory. This ensures a fresh database is created.
 
 3.  **Run the Application**: Start the application from the project root:
     ```bash
@@ -117,7 +166,7 @@ After the initial data has been loaded, you can test the application's data impo
 
 1.  **Navigate to the Main Page**: Open your browser and go to `http://127.0.0.1:5000/`.
 2.  **Import Sample Data**:
-    *   Use the file upload functionality on the page to import `testsExcel.xlsb` and `testsExcel2.xlsb` from the `Excels_Testing/` directory.
+    *   Use the file upload functionality on the page to import `testsExcel.xlsb` and `testsExcel2.xlsb` from the `test_data/` directory.
     *   This will add to or modify the initial data in the database.
 3.  **Run Task Assignment**:
     *   Once the data is imported, you can trigger the task assignment process from the UI.
@@ -175,9 +224,7 @@ The application uses a sophisticated skill-based assignment system that:
 
 ## 📝 Documentation
 
-Detailed documentation is available in the following files:
-- `technician_dashboard_manual.md`: User manual for the technician dashboard
-- `ROADMAP.md`: Development roadmap and future features
+Detailed documentation is available in the `docs/` directory.
 
 ## 🎯 Usage
 
@@ -248,7 +295,7 @@ When `DEBUG_USE_TEST_DB` is enabled, this schema is automatically populated from
 
 ### Logging
 
-Application logs are available in the `wkndPlanning/logs/` directory with different log levels for debugging.
+Application logs are available in the `logs/` directory with different log levels for debugging.
 
 ## 🤝 Contributing
 
@@ -263,5 +310,5 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 
 ---
 
-**Version:** 1.1.0  
-**Last Updated:** May 2024
+**Version:** 1.2.0  
+**Last Updated:** September 2025

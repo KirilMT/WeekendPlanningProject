@@ -38,7 +38,6 @@ class HealthChecker:
     def check_filesystem_health(self):
         """Check critical filesystem paths and permissions."""
         critical_paths = [
-            current_app.config['UPLOAD_FOLDER'],
             current_app.config['OUTPUT_FOLDER'],
             current_app.config['TEMPLATES_FOLDER'],
             current_app.config['STATIC_FOLDER']

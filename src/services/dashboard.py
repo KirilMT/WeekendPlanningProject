@@ -1,4 +1,4 @@
-# wkndPlanning/dashboard.py
+# src/dashboard.py
 import logging # Add logging import
 from .extract_data import get_current_day, get_current_shift, get_current_week_number, get_current_week # Corrected relative import
 import os

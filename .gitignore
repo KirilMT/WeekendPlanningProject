@@ -129,7 +129,6 @@ dmypy.json
 *.sqlite
 *.sqlite3
 logs/
-uploads/
 output/
 temp/
 .DS_Store
@@ -160,6 +159,3 @@ Thumbs.db
 ~$*.xlsx
 ~$*.xls
 ~$*.xlsb
-
-# Project exclude paths
-/Excels_Testing/

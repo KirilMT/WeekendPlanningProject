@@ -11,11 +11,9 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from config import Config
+from src.config import Config
 
-# Import from local services package (relative to wkndPlanning)
-from .services.db_utils import get_db_connection, init_db
-from .services.config_manager import load_app_config
+# Import from local services package (relative to src)
 from .services.security import SecurityMiddleware
 from .services.logging_config import LoggingConfig
 
@@ -23,6 +21,7 @@ from .services.logging_config import LoggingConfig
 from .routes.main import main_bp
 from .routes.api import api_bp
 from .routes.health import health_bp
+from .extensions import db_manager
 
 def create_app():
     app = Flask(__name__,
@@ -51,6 +50,8 @@ def create_app():
         storage_uri="memory://"
     )
 
+    db_manager.init_app(app)
+
     DATABASE_PATH = app.config['DATABASE_PATH']
 
     # Jinja environment for generate_html_files
@@ -69,30 +70,11 @@ def create_app():
     @app.after_request
     def after_request(response):
         return SecurityMiddleware.add_security_headers(response)
-
-    # Database connection management using Flask's application context
-    @app.before_request
-    def before_request():
-        """Open a database connection before each request."""
-        if 'db' not in g:
-            g.db = get_db_connection(DATABASE_PATH)
-
-    @app.teardown_request
-    def teardown_request(exception=None):
-        """Close the database connection at the end of each request."""
-        db = g.pop('db', None)
-        if db is not None:
-            db.close()
-
-        # Log any exceptions that occurred during request processing
-        if exception is not None:
-            app.logger.error(f"Request exception: {str(exception)}", exc_info=True)
-
-    # Error handlers
     @app.errorhandler(404)
     def not_found(error):
-        app.logger.warning(f"404 error: {error}")
-        return "Page not found", 404
+        from flask import request
+        app.logger.warning(f"404 Not Found: The requested URL '{request.path}' was not found on the server.")
+        return f"Page not found: {request.path}", 404
 
     @app.errorhandler(400)
     def handle_400_error(error):
@@ -111,22 +93,6 @@ def create_app():
         })
         response.status_code = 500
         return response
-
-    # Only initialize database and config if we're in the main reloader process
-    # This prevents double initialization when Flask's auto-reloader is enabled
-    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-        with app.app_context():
-            try:
-                init_db(DATABASE_PATH, app.logger, app.config['DEBUG_USE_TEST_DB'])
-                from .services.db_utils import get_db_connection, ensure_skill_update_log_table
-                conn = get_db_connection(DATABASE_PATH)
-                ensure_skill_update_log_table(conn)
-                conn.close()
-                load_app_config(DATABASE_PATH, app.logger)
-                app.logger.info("Application initialized successfully")
-            except Exception as e:
-                app.logger.error(f"Failed to initialize application: {e}", exc_info=True)
-                raise
 
     return app
 

@@ -4,7 +4,7 @@ import os
 # Load environment variables from .env file before anything else
 load_dotenv()
 
-from wkndPlanning.app import app
+from src.app import app
 
 if __name__ == '__main__':
     # The debug mode for the Flask server is now controlled by the FLASK_DEBUG

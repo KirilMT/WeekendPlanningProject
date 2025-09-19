@@ -3,7 +3,7 @@ version: '3.8'
 
 services:
   weekend-planning-app:
-    build: .
+    build: ..
     container_name: weekend-planning-app
     ports:
       - "5000:5000"
@@ -15,12 +15,12 @@ services:
       - SESSION_LIFETIME=${SESSION_LIFETIME:-1800}
       - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-16777216}
     volumes:
-      # Persist database and logs
-      - weekend_data:/app/wkndPlanning
-      # Mount uploads directory for file persistence
-      - weekend_uploads:/app/wkndPlanning/uploads
+      # Persist database
+      - weekend_instance:/app/instance
+      # Persist logs
+      - weekend_logs:/app/logs
       # Mount output directory
-      - weekend_output:/app/wkndPlanning/output
+      - weekend_output:/app/output
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health/live"]
@@ -50,9 +50,9 @@ services:
       - production
 
 volumes:
-  weekend_data:
+  weekend_instance:
     driver: local
-  weekend_uploads:
+  weekend_logs:
     driver: local
   weekend_output:
     driver: local
@@ -72,7 +72,7 @@ services:
       - DATABASE_FILENAME=testsDB.db
     volumes:
       # Mount source code for live reloading in development
-      - .:/app
+      - ../:/app
     command: ["python", "run.py"]
     profiles:
       - development

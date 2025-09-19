@@ -1,4 +1,4 @@
-# wkndPlanning/db_utils.py
+# src/db_utils.py
 import os
 import json
 import sqlite3
@@ -14,7 +14,7 @@ def populate_dummy_data(conn, logger):
     logger.info("Populating database with dummy data.")
     
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    dummy_data_path = os.path.join(current_dir, '..', '..', 'dummy_data.json')
+    dummy_data_path = os.path.join(current_dir, '..', '..', 'test_data', 'dummy_data.json')
 
     try:
         with open(dummy_data_path, 'r') as f:

@@ -44,29 +44,23 @@ This is a professional Flask-based web application for managing weekend technici
 
 ```
 WeekendPlanningProject/
-├── wkndPlanning/                  # Main application package
-│   ├── routes/                    # Flask blueprints and routing
-│   ├── services/                  # Business logic and utilities (core logic here)
-│   ├── static/                    # CSS, JavaScript, and static assets
-│   ├── templates/                 # Jinja2 HTML templates
-│   ├── app.py                     # Flask application factory
-│   ├── testsDB.db                 # SQLite test database
-│   ├── weekend_planning.db        # Main SQLite database
-│   ├── logs/                      # Application and error logs
-│   ├── output/                    # Generated HTML outputs
-├── config.py                      # Application configuration
-├── requirements.txt               # Python dependencies
-├── run.py                         # Application entry point
-├── README.md                      # Project documentation
-├── ROADMAP.md                     # Development roadmap and future plans
-├── issues.md                      # Issue tracking and prioritization
-├── technician_dashboard_manual.md # Manual for technician dashboard usage
-├── dummy_data.json                # Dummy data for testing
-├── Dockerfile                     # Docker container configuration
-├── docker-compose.yml             # Docker Compose setup
-├── Excels_Testing/                # Excel files for testing and import
-├── tests/                         # Pytest-based unit and integration tests
-├── uploads/                       # Uploaded files (Excel, etc.)
+├── src/                     # Main application package
+│   ├── routes/              # Flask blueprints and routing
+│   ├── services/            # Business logic and utilities (core logic here)
+│   ├── static/              # CSS, JavaScript, and static assets
+│   ├── templates/           # Jinja2 HTML templates
+│   └── app.py               # Flask application factory
+├── instance/                # Instance folder for database
+├── logs/                    # Application and error logs
+├── output/                  # Generated output files
+├── docs/                    # Documentation
+├── docker/                  # Docker configuration
+├── tests/                   # Tests
+├── test_data/               # Test data
+├── .gitignore
+├── requirements.txt
+├── run.py
+└── README.md
 ```
 
 ## Quick Test Guide
@@ -74,20 +68,10 @@ WeekendPlanningProject/
 To test the application's end-to-end workflow:
 1.  Run the application with `python run.py`.
 2.  Navigate to `http://127.0.0.1:5000/manage_mappings`.
-3.  Import `testsExcel.xlsb` and `testsExcel2.xlsb` from the `Excels_Testing/` directory to populate the database.
+3.  Import `testsExcel.xlsb` and `testsExcel2.xlsb` from the `test_data/` directory to populate the database.
 4.  Trigger the task assignment process from the UI.
 5.  View the generated schedules on the supervisor and technician dashboards.
 6.  (Optional) Run automated tests with `pytest` in the `tests/` directory: `pytest tests/`
-
-## Development Roadmap Highlights
-
-I am aware of the future development plans outlined in `ROADMAP.md` and tracked in `issues.md`. I will keep these in mind when providing assistance. Key areas include:
-
--   **Database & Data Management:** Improving Excel data extraction, removing task priorities from the database, and integrating with external APIs.
--   **UI/UX Enhancements:** Improving the technician dashboard (sticky headers, scrolling), and enhancing the Gantt chart (live time indicator, better interactivity).
--   **Task Assignment Logic:** Documenting the current algorithm, fixing bugs, and exploring performance optimizations.
--   **Generalization:** Making the application more modular and configurable (e.g., custom terminology, pluggable data sources).
--   **Testing:** Creating a more robust dummy data seeding mechanism and expanding automated test coverage.
 
 ## How to Interact with Me
 
@@ -99,7 +83,15 @@ I am aware of the future development plans outlined in `ROADMAP.md` and tracked 
 
 ## GitHub Issues
 
-When you ask me to work on a GitHub issue, please remember that I cannot access external websites or run the `gh` command. You will need to provide me with the description of the issue.
+When you ask me to work on a GitHub issue, I will use the `gh` command-line tool to get the details of the issue.
+
+You can ask me to list issues, for example:
+- "What are the open issues assigned to me?"
+- "List all open issues."
+
+I will then use the following command to retrieve the necessary information:
+- To see open issues assigned to you: `gh issue list --assignee "@me" --state open`
+- To see all open issues: `gh issue list --state open`
 
 ## Working on Issues
 
@@ -113,7 +105,6 @@ When you ask me to work on an issue, I will adhere to the following process:
 
 3.  **Issue and Sub-Tasks Prioritization:**
     *   I will announce which issue and sub-task I am about to work on based on the prioritization.
-    *   I will prioritize issues based on the `issues.md` file, from highest (P1-High) to lowest (P3-Low).
     *   IMPORTANT: If an issue is broken down into sub-tasks, I will address each sub-task **sequentially and independently**.
     *   I will provide my plan for the current sub-task and ask for your approval before I start making changes.
     *   I will only proceed to the next sub-task after the current one is fully resolved (each sub-task needs to be commited).

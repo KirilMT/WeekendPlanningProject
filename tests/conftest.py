@@ -4,11 +4,10 @@ Test configuration and fixtures for the Weekend Planning Project.
 import pytest
 import os
 import tempfile
-import sqlite3
 from unittest.mock import patch
-from wkndPlanning.app import create_app
-from wkndPlanning.services.db_utils import init_db
-from config import Config
+from src.app import create_app
+from src.services.db_utils import init_db
+from src.config import Config
 
 
 class TestConfig(Config):

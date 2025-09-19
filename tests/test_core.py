@@ -3,7 +3,7 @@ Unit tests for core application functionality.
 """
 import pytest
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class TestDatabaseOperations:
@@ -11,7 +11,7 @@ class TestDatabaseOperations:
 
     def test_database_initialization(self, app, test_db):
         """Test database tables are created correctly."""
-        from wkndPlanning.services.db_utils import get_db_connection
+        from src.services.db_utils import get_db_connection
 
         with app.app_context():
             conn = get_db_connection(app.config['DATABASE_PATH'])
@@ -33,7 +33,7 @@ class TestDatabaseOperations:
 
     def test_technician_operations(self, app, test_db):
         """Test technician CRUD operations."""
-        from wkndPlanning.services.db_utils import get_db_connection
+        from src.services.db_utils import get_db_connection
 
         with app.app_context():
             conn = get_db_connection(app.config['DATABASE_PATH'])
@@ -60,7 +60,7 @@ class TestSecurityValidation:
 
     def test_skill_level_validation(self):
         """Test skill level validation matches database schema."""
-        from wkndPlanning.services.security import InputValidator
+        from src.services.security import InputValidator
 
         # Valid skill levels (0-4)
         for level in [0, 1, 2, 3, 4]:
@@ -75,7 +75,7 @@ class TestSecurityValidation:
 
     def test_string_validation(self):
         """Test string input validation and sanitization."""
-        from wkndPlanning.services.security import InputValidator
+        from src.services.security import InputValidator
 
         # Valid string
         result = InputValidator.validate_string("  Test String  ")
@@ -114,7 +114,7 @@ class TestLoggingAndMetrics:
 
     def test_metrics_collection_initialization(self):
         """Test metrics collector initializes correctly."""
-        from wkndPlanning.services.logging_config import MetricsCollector
+        from src.services.logging_config import MetricsCollector
 
         collector = MetricsCollector()
         assert isinstance(collector.request_metrics, dict)
@@ -122,7 +122,7 @@ class TestLoggingAndMetrics:
 
     def test_performance_monitor_decorator(self):
         """Test performance monitoring decorator."""
-        from wkndPlanning.services.logging_config import performance_monitor
+        from src.services.logging_config import performance_monitor
 
         @performance_monitor("test_operation")
         def test_function():
@@ -134,7 +134,7 @@ class TestLoggingAndMetrics:
 
     def test_request_metric_recording(self):
         """Test request metrics are recorded correctly."""
-        from wkndPlanning.services.logging_config import MetricsCollector
+        from src.services.logging_config import MetricsCollector
 
         collector = MetricsCollector()
         collector.record_request_metric("test_endpoint", "GET", 0.5, 200)
@@ -150,7 +150,7 @@ class TestConfigurationValidation:
 
     def test_config_validation_success(self, app):
         """Test configuration validation passes for test config."""
-        from config import Config
+        from src.config import Config
 
         with app.app_context():
             # Should not raise exception
@@ -159,7 +159,7 @@ class TestConfigurationValidation:
     @patch('config.Config.FLASK_DEBUG', False)
     def test_production_config_warnings(self):
         """Test production configuration validation warnings."""
-        from config import Config
+        from src.config import Config
 
         # Test would check for production-specific validations
         # This is a placeholder for more comprehensive production checks

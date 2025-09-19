@@ -1,5 +1,5 @@
 """
-Weekend Planning Project - wkndPlanning Package
+Weekend Planning Project - src Package
 
 A Flask-based web application for managing weekend technician task assignments
 based on skill-based matching and workload optimization.

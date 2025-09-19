@@ -107,7 +107,7 @@ This version number reflects the state of the application and will be used for c
 
 ### 5. Finishing Your Work (Creating a Pull Request)
 
-Once your feature is complete and pushed to GitHub, you will create a Pull Request (PR) to merge it into the `master` branch. This is the standard way to propose changes and allow for review.
+Once your feature is complete and pushed to GitHub, you will create a Pull Request (PR) to merge it into the `master` branch. This is the standard way to propose changes and allow for review. For detailed guidelines on contributing, including commit message conventions and the review process, please refer to the [`CONTRIBUTING.md`](./CONTRIBUTING.md) file.
 
 **Step 5.1: Open a Pull Request on GitHub**
 
