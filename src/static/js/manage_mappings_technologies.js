@@ -80,7 +80,7 @@ function renderTechnologyTree(parentElement, technologies, parentId, level) {
     children.forEach(tech => {
         const techDiv = document.createElement('div');
         techDiv.classList.add('list-item');
-        // techDiv.classList.add('technology-tree-node'); // Class for border if needed, margin handles indent
+        techDiv.dataset.techId = tech.id;
         techDiv.style.marginLeft = `${level * 25}px`; // Indent child technologies
 
         const techNameSpan = document.createElement('span');
@@ -93,11 +93,10 @@ function renderTechnologyTree(parentElement, technologies, parentId, level) {
         const editBtn = document.createElement('button');
         editBtn.textContent = 'Edit';
         editBtn.classList.add('btn', 'btn-warning', 'btn-sm');
-        editBtn.onclick = (e) => {
-            e.stopPropagation();
-            editTechnology(tech.id, tech.name, tech.group_id, tech.parent_id);
-        };
-        actionsDiv.appendChild(editBtn);
+                    editBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        editTechnology(tech.id);
+                    };        actionsDiv.appendChild(editBtn);
 
         const deleteBtn = document.createElement('button');
         deleteBtn.textContent = 'Delete';
@@ -145,6 +144,7 @@ function renderAllTechnologies() {
 
         const techDiv = document.createElement('div');
         techDiv.classList.add('list-item');
+        techDiv.dataset.techId = topLevelTech.id;
         // techDiv.classList.add('no-parent'); // Top-level items don't need extra left margin from this class
         techDiv.style.marginLeft = '0px'; // Explicitly no indent for top-level items under a group header
 
@@ -159,7 +159,7 @@ function renderAllTechnologies() {
         editBtn.classList.add('btn', 'btn-warning', 'btn-sm');
         editBtn.onclick = (e) => {
             e.stopPropagation();
-            editTechnology(topLevelTech.id, topLevelTech.name, topLevelTech.group_id, topLevelTech.parent_id);
+            editTechnology(topLevelTech.id);
         };
         actionsDiv.appendChild(editBtn);
         const deleteBtn = document.createElement('button');
@@ -226,7 +226,16 @@ async function addNewTechnology() {
     }
 }
 
-async function editTechnology(techId, currentName, currentGroupId, currentParentId) {
+async function editTechnology(techId) {
+    const techToEdit = allTechnologies.find(tech => tech.id === techId);
+    if (!techToEdit) {
+        console.error(`Technology with ID ${techId} not found.`);
+        return;
+    }
+
+    const currentName = techToEdit.name;
+    const currentGroupId = techToEdit.group_id;
+    const currentParentId = techToEdit.parent_id;
     const techListItem = technologyListContainerDiv.querySelector(`.list-item[data-tech-id="${techId}"]`);
     if (!techListItem) {
         console.error(`Could not find list item for technology ID ${techId}`);
@@ -236,41 +245,28 @@ async function editTechnology(techId, currentName, currentGroupId, currentParent
     const originalContent = techListItem.innerHTML;
 
     // Create Group Dropdown
-    const groupSelect = document.createElement('select');
-    groupSelect.className = 'form-control';
+    let groupSelectHtml = '<select class="form-control">';
     allTechnologyGroups.forEach(group => {
-        const option = document.createElement('option');
-        option.value = group.id;
-        option.textContent = group.name;
-        if (group.id === currentGroupId) {
-            option.selected = true;
-        }
-        groupSelect.appendChild(option);
+        const isSelected = parseInt(group.id) === parseInt(currentGroupId) ? 'selected' : '';
+        groupSelectHtml += `<option value="${group.id}" ${isSelected}>${escapeHtml(group.name)}</option>`;
     });
+    groupSelectHtml += '</select>';
 
     // Create Parent Dropdown
-    const parentSelect = document.createElement('select');
-    parentSelect.className = 'form-control';
-    const noParentOption = document.createElement('option');
-    noParentOption.value = '';
-    noParentOption.textContent = 'No Parent';
-    parentSelect.appendChild(noParentOption);
+    let parentSelectHtml = '<select class="form-control">';
+    parentSelectHtml += '<option value="">No Parent</option>';
     allTechnologies.forEach(tech => {
         if (tech.id !== techId) { // Cannot be its own parent
-            const option = document.createElement('option');
-            option.value = tech.id;
-            option.textContent = tech.name;
-            if (tech.id === currentParentId) {
-                option.selected = true;
-            }
-            parentSelect.appendChild(option);
+            const isSelected = parseInt(tech.id) === parseInt(currentParentId) ? 'selected' : '';
+            parentSelectHtml += `<option value="${tech.id}" ${isSelected}>${escapeHtml(tech.name)}</option>`;
         }
     });
+    parentSelectHtml += '</select>';
 
     techListItem.innerHTML = `
         <input type="text" value="${escapeHtml(currentName)}" class="form-control" style="flex-grow: 1;"/>
-        ${groupSelect.outerHTML}
-        ${parentSelect.outerHTML}
+        ${groupSelectHtml}
+        ${parentSelectHtml}
         <div class="item-actions">
             <button class="btn btn-success btn-sm save-tech-btn">💾 Save</button>
             <button class="btn btn-secondary btn-sm cancel-edit-tech-btn">❌ Cancel</button>
@@ -298,7 +294,14 @@ async function editTechnology(techId, currentName, currentGroupId, currentParent
                 const result = await response.json();
                 if (response.ok) {
                     displayMessage(`Technology '${escapeHtml(result.name)}' updated.`, 'success');
-                    await fetchAllTechnologies();
+                    // Explicitly update the technology in the allTechnologies array
+                    const updatedTechIndex = allTechnologies.findIndex(t => t.id === techId);
+                    if (updatedTechIndex !== -1) {
+                        allTechnologies[updatedTechIndex].name = newName;
+                        allTechnologies[updatedTechIndex].group_id = newGroupId;
+                        allTechnologies[updatedTechIndex].parent_id = newParentId;
+                    }
+                    await fetchAllTechnologies(); // This should refresh allTechnologies
                     await fetchAllTasksForMapping();
                     if (selectedTechnician) {
                         await fetchMappings(selectedTechnician);
@@ -314,7 +317,7 @@ async function editTechnology(techId, currentName, currentGroupId, currentParent
     });
 
     techListItem.querySelector('.cancel-edit-tech-btn').addEventListener('click', () => {
-        techListItem.innerHTML = originalContent;
+        fetchAllTechnologies(); // Re-render all technologies to restore event listeners
     });
 }
 
@@ -374,6 +377,7 @@ function renderTechnologyGroups() {
         allTechnologyGroups.sort((a, b) => a.name.localeCompare(b.name)).forEach(group => {
             const groupDiv = document.createElement('div');
             groupDiv.classList.add('list-item');
+            groupDiv.dataset.groupId = group.id;
             const nameSpan = document.createElement('span');
             nameSpan.textContent = escapeHtml(group.name);
             groupDiv.appendChild(nameSpan);
@@ -468,6 +472,7 @@ async function editTechnologyGroup(groupId, currentName) {
                 if (response.ok) {
                     displayMessage(`Group updated to '${escapeHtml(newName)}'.`, 'success');
                     await fetchTechnologyGroups(); // Refetch all groups and re-render
+                    await fetchAllTechnologies(); // Also refresh technologies as their group names might have changed
                 } else {
                     throw new Error(result.message || `Server error ${response.status}`);
                 }
@@ -481,7 +486,7 @@ async function editTechnologyGroup(groupId, currentName) {
     });
 
     groupListItem.querySelector('.cancel-edit-group-btn').addEventListener('click', () => {
-        groupListItem.innerHTML = originalContent;
+        fetchTechnologyGroups(); // Re-render all groups to restore event listeners
     });
 }
 
