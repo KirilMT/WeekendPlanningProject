@@ -275,7 +275,11 @@ async function addNewTaskForMapping() {
             }
 
         } else {
-            throw new Error(result.message || `Server error ${response.status}`);
+            if (response.status === 409) {
+                displayMessage(`Error: Task '${taskName}' already exists.`, 'error');
+            } else {
+                throw new Error(result.message || `Server error ${response.status}`);
+            }
         }
     } catch (error) {
         displayMessage(`Error adding task: ${error.message}`, 'error');

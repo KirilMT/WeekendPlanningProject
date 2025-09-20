@@ -4,6 +4,7 @@ from flask_limiter.util import get_remote_address
 from ..services.db_utils import (
     TechnologyManager,
     TaskManager,
+    TechnicianGroupManager, # Added TechnicianGroupManager
     update_technician_skill,
     get_technician_skills_by_id,
     get_or_create_satellite_point,
@@ -582,15 +583,23 @@ def manage_satellite_point_item_api(point_id):
 
         elif request.method == 'DELETE':
             try:
+                # Before deleting the satellite point, update associated technicians and lines
+                cursor.execute("UPDATE technicians SET satellite_point_id = NULL WHERE satellite_point_id = ?", (point_id,))
+                cursor.execute("UPDATE lines SET satellite_point_id = NULL WHERE satellite_point_id = ?", (point_id,))
+                
                 success = delete_satellite_point(g.db, point_id)
                 if success:
+                    g.db.commit() # Commit all changes including the updates and delete
                     return jsonify({"message": "Satellite point deleted successfully"}), 200
                 else:
+                    g.db.rollback() # Rollback if deletion failed for some reason
                     return jsonify({"message": "Satellite point not found or could not be deleted"}), 404
             except sqlite3.IntegrityError as e: # e.g. if point is referenced by technicians
+                g.db.rollback()
                 current_app.logger.error(f"Integrity error deleting satellite point {point_id}: {e}", exc_info=True)
                 return jsonify({"message": f"Cannot delete satellite point: it is currently in use. Details: {str(e)}"}), 409
             except Exception as e:
+                g.db.rollback()
                 current_app.logger.error(f"Error deleting satellite point {point_id}: {e}", exc_info=True)
                 return jsonify({"message": f"Server error: {str(e)}"}), 500
     except Exception as e:
@@ -1188,6 +1197,135 @@ def get_technician_skill_upgrade_logs(technician_id):
         current_app.logger.error(f"Error fetching skill upgrade logs for technician {technician_id}: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+@api_bp.route('/technician_groups', methods=['GET'])
+def get_technician_groups_api():
+    """Get all technician groups."""
+    try:
+        manager = TechnicianGroupManager(g.db)
+        groups = manager.get_all_groups()
+        return jsonify(groups)
+    except Exception as e:
+        current_app.logger.error(f"Error fetching technician groups: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+
+@api_bp.route('/technician_groups', methods=['POST'])
+def add_technician_group_api():
+    """Add a new technician group."""
+    group_name = None
+    try:
+        data = request.get_json()
+        group_name = data.get('name', '').strip()
+        if not group_name:
+            return jsonify({"message": "Technician group name is required."}), 400
+
+        manager = TechnicianGroupManager(g.db)
+        group_id = manager.get_or_create_group(group_name)
+        cursor = g.db.cursor()
+        cursor.execute("SELECT id, name FROM technician_groups WHERE id = ?", (group_id,))
+        group = cursor.fetchone()
+        return jsonify(dict(group)), 201
+    except sqlite3.IntegrityError:
+        if g.db: g.db.rollback()
+        return jsonify({"message": f"Technician group '{group_name}' already exists."}), 409
+    except Exception as e:
+        if g.db: g.db.rollback()
+        current_app.logger.error(f"Error adding technician group: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+
+@api_bp.route('/technician_groups/<int:group_id>', methods=['PUT'])
+def update_technician_group_api(group_id):
+    """Update a technician group by ID."""
+    new_name = None
+    try:
+        data = request.get_json()
+        new_name = data.get('name', '').strip()
+        if not new_name:
+            return jsonify({"message": "New name for technician group is required."}), 400
+
+        manager = TechnicianGroupManager(g.db)
+        if not manager.update_group(group_id, new_name):
+            return jsonify({"message": f"Technician group with name '{new_name}' already exists or group not found."}), 409
+
+        cursor = g.db.cursor()
+        cursor.execute("SELECT id, name FROM technician_groups WHERE id = ?", (group_id,))
+        updated_group = cursor.fetchone()
+        return jsonify(dict(updated_group)), 200
+    except sqlite3.IntegrityError:
+        if g.db: g.db.rollback()
+        return jsonify({"message": f"Technician group name '{new_name}' already exists."}), 409
+    except Exception as e:
+        if g.db: g.db.rollback()
+        current_app.logger.error(f"Error updating technician group {group_id}: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+
+@api_bp.route('/technician_groups/<int:group_id>', methods=['DELETE'])
+def delete_technician_group_api(group_id):
+    """Delete a technician group by ID."""
+    try:
+        manager = TechnicianGroupManager(g.db)
+        if manager.delete_group(group_id):
+            return jsonify({"message": f"Technician group ID {group_id} deleted."}), 200
+        else:
+            return jsonify({"message": f"Technician group ID {group_id} not found."}), 404
+    except Exception as e:
+        if g.db: g.db.rollback()
+        current_app.logger.error(f"Error deleting technician group {group_id}: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+
+@api_bp.route('/technician_groups/<int:group_id>/members', methods=['GET'])
+def get_technician_group_members_api(group_id):
+    """Get all technicians in a specific technician group."""
+    try:
+        manager = TechnicianGroupManager(g.db)
+        members = manager.get_group_members(group_id)
+        return jsonify(members)
+    except Exception as e:
+        current_app.logger.error(f"Error fetching members for technician group {group_id}: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+
+@api_bp.route('/technician_groups/members', methods=['POST'])
+def add_technician_to_technician_group_api():
+    """Add a technician to a technician group."""
+    try:
+        data = request.get_json()
+        technician_id = data.get('technician_id')
+        group_id = data.get('group_id')
+
+        if technician_id is None or group_id is None:
+            return jsonify({"message": "technician_id and group_id are required."}), 400
+
+        manager = TechnicianGroupManager(g.db)
+        manager.add_member(group_id, technician_id)
+        return jsonify({"message": "Technician added to group successfully."}), 201
+    except sqlite3.IntegrityError:
+        g.db.rollback()
+        return jsonify({"message": "Technician is already in this group or invalid ID provided."}), 409
+    except Exception as e:
+        g.db.rollback()
+        current_app.logger.error(f"Error adding technician to group: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
+
+@api_bp.route('/technician_groups/members', methods=['DELETE'])
+def remove_technician_from_technician_group_api():
+    """Remove a technician from a technician group."""
+    try:
+        data = request.get_json()
+        technician_id = data.get('technician_id')
+        group_id = data.get('group_id')
+
+        if technician_id is None or group_id is None:
+            return jsonify({"message": "technician_id and group_id are required."}), 400
+
+        manager = TechnicianGroupManager(g.db)
+        if manager.remove_member(group_id, technician_id):
+            return jsonify({"message": "Technician removed from group successfully."}), 200
+        else:
+            return jsonify({"message": "Technician was not a member of this group."}), 404
+    except Exception as e:
+        g.db.rollback()
+        current_app.logger.error(f"Error removing technician from group: {e}", exc_info=True)
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
 
 @api_bp.route('/technology_groups/<int:group_id>/technicians', methods=['GET'])
 def get_technology_group_members_api(group_id):

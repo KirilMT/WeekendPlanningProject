@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function fetchTechnicianGroups() {
-        fetch('/api/technology_groups')
+        fetch('/api/technician_groups') // Corrected endpoint
             .then(response => response.json())
             .then(data => {
                 allGroups = data;
@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const groupName = newTechnicianGroupNameInput.value.trim();
         if (!groupName) return;
 
-        fetch('/api/technology_groups', {
+        fetch('/api/technician_groups', { // Corrected endpoint
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -85,16 +85,32 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             body: JSON.stringify({ name: groupName })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    if (response.status === 409) {
+                        throw new Error(`Group '${groupName}' already exists.`);
+                    }
+                    throw new Error(err.message || 'Error creating group');
+                }).catch(() => {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.id) {
                 newTechnicianGroupNameInput.value = '';
                 fetchTechnicianGroups();
+                window.displayMessage(`Group '${data.name}' created successfully.`, 'success');
             } else {
                 alert(data.message || 'Error creating group');
             }
         })
-        .catch(error => console.error('Error creating technician group:', error));
+        .catch(error => {
+            console.error('Error creating technician group:', error);
+            window.displayMessage(error.message, 'error');
+        });
     });
 
     technicianGroupListContainer.addEventListener('click', function (e) {
@@ -117,8 +133,12 @@ document.addEventListener('DOMContentLoaded', function () {
             `;
         } else if (deleteBtn) {
             const groupId = deleteBtn.dataset.groupId;
+            if (!groupId) {
+                alert('Could not find group ID. Cannot delete.');
+                return;
+            }
             if (confirm('Are you sure you want to delete this group?')) {
-                fetch(`/api/technology_groups/${groupId}`, {
+                fetch(`/api/technician_groups/${groupId}`, { // Corrected endpoint
                     method: 'DELETE',
                     headers: {
                         'X-CSRFToken': csrfToken
@@ -127,6 +147,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 .then(response => {
                     if (response.ok) {
                         fetchTechnicianGroups();
+                        groupMembershipSelect.value = '';
+                        groupMembershipDetails.style.display = 'none';
                     } else {
                         response.json().then(data => alert(data.message || 'Error deleting group'));
                     }
@@ -135,11 +157,15 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } else if (saveBtn) {
             const groupId = saveBtn.dataset.groupId;
+            if (!groupId) {
+                alert('Could not find group ID. Cannot save.');
+                return;
+            }
             const input = saveBtn.closest('.list-item').querySelector('input');
             const newName = input.value.trim();
 
             if (newName) {
-                fetch(`/api/technology_groups/${groupId}`, {
+                fetch(`/api/technician_groups/${groupId}`, { // Corrected endpoint
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
@@ -173,7 +199,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     function loadGroupMembers(groupId) {
-        fetch(`/api/technology_groups/${groupId}/technicians`)
+        fetch(`/api/technician_groups/${groupId}/members`) // Corrected endpoint
             .then(response => response.json())
             .then(members => {
                 const memberIds = new Set(members.map(m => m.id));
@@ -247,7 +273,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const technicianIds = selectedItems.map(card => card.dataset.id);
 
         const promises = technicianIds.map(technicianId => {
-            return fetch('/api/technician_group_members', {
+            return fetch('/api/technician_groups/members', { // Corrected endpoint
                 method: isAdding ? 'POST' : 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',

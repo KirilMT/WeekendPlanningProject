@@ -902,6 +902,39 @@ label.required::after {
 }
 
 /* Print Styles */
+
+/* Added for inline edit of lines */
+.edit-line-container {
+    display: flex;
+    width: 100%;
+    align-items: center;
+}
+
+.edit-line-container .edit-line-name-input {
+    flex: 1 1 60%;
+}
+
+.edit-line-container .edit-line-sp-select {
+    flex: 1 1 30%;
+    margin-left: 10px;
+}
+
+.edit-line-container .item-actions {
+    flex-shrink: 0;
+    margin-left: 10px;
+}
+
+.edit-line-container input.form-control,
+.edit-line-container select.form-control {
+    font-size: var(--font-size-base);
+    padding: 10px;
+    height: auto;
+}
+
+.edit-line-container .form-control {
+    height: 40px; /* Match button height */
+}
+
 @media print {
     .page-header,
     .page-footer,

@@ -311,44 +311,29 @@
             <div class="section-content" id="technicianDetailsContent">
                 <!-- Add New Technician -->
                 <div class="subsection">
-                    <div class="inline-form">
-                        <button id="addNewTechnicianBtn" class="btn btn-success">
-                            <span class="btn-icon">+</span>
-                            Add New Technician
-                        </button>
-                    </div>
-
-                    <!-- New Technician Form - Initially Hidden -->
-                    <form id="addNewTechnicianFormContainer" class="new-item-form" style="display:none;">
+                    <h3>Add New Technician</h3>
+                    <form id="addNewTechnicianForm" class="inline-form">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                        <h4>Add New Technician</h4>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="newTechnicianNameInput" class="required">Technician Name</label>
-                                <input type="text" id="newTechnicianNameInput" name="technicianName"
-                                       placeholder="Enter technician name"
-                                       aria-label="Technician Name"
-                                       class="form-control" maxlength="50" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="newTechnicianSatellitePointSelect">Satellite Point</label>
-                                <select id="newTechnicianSatellitePointSelect" name="satellitePointId"
-                                        class="form-control"
-                                        aria-label="Select Satellite Point">
-                                    <option value="">Select Satellite Point</option>
-                                    <!-- Options populated by JavaScript -->
-                                </select>
-                            </div>
+                        <div class="form-group">
+                            <input type="text" id="newTechnicianNameInput" name="technicianName"
+                                   placeholder="Enter technician name"
+                                   aria-label="Technician Name"
+                                   class="form-control" maxlength="50" required>
                         </div>
-                        <div class="form-actions">
-                            <button type="submit" id="saveNewTechnicianBtn" class="btn btn-success">
-                                <span class="btn-icon">💾</span>
-                                Save Technician
-                            </button>
-                            <button type="button" id="cancelNewTechnicianBtn" class="btn btn-secondary">Cancel</button>
+                        <div class="form-group">
+                            <select id="newTechnicianSatellitePointSelect" name="satellitePointId"
+                                    class="form-control"
+                                    aria-label="Select Satellite Point">
+                                <option value="">Select Satellite Point</option>
+                                <!-- Options populated by JavaScript -->
+                            </select>
                         </div>
-                        <div id="newTechnicianError" class="error-message" role="alert"></div>
+                        <button type="submit" id="saveNewTechnicianBtn" class="btn btn-success">
+                            <span class="btn-icon">💾</span>
+                            Save Technician
+                        </button>
                     </form>
+                    <div id="newTechnicianError" class="error-message" role="alert"></div>
                 </div>
 
                 <hr class="section-divider">

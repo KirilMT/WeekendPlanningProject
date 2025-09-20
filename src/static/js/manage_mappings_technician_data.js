@@ -340,48 +340,7 @@ async function handleTechSatellitePointChange() {
 // --- Placeholder functions for Technician CUD operations --- // This comment might be outdated
 // --- Technician CUD operations ---
 
-function showNewTechnicianForm() {
-    if (addNewTechnicianFormContainer) {
-        addNewTechnicianFormContainer.style.display = 'block';
-        newTechnicianNameInput.value = '';
-        newTechnicianSatellitePointSelect.value = '';
-        newTechnicianSatellitePointSelect.disabled = true;
-        if (newTechnicianError) newTechnicianError.style.display = 'none';
-        // Ensure the satellite points are loaded in this dropdown
-        // fetchAndPopulateSatellitePointsDropdowns(); // Called on page load, but ensure it covers this one.
-        // It's better to have it populated once and then just shown/hidden.
-    }
-    // Hide technician details for the currently selected technician to avoid confusion
-    if (document.getElementById('technicianDetails')) {
-        document.getElementById('technicianDetails').style.display = 'none';
-    }
-    if (document.getElementById('technicianSelect')) {
-        document.getElementById('technicianSelect').value = ''; // Deselect current technician
-    }
-     selectedTechnician = null; // Clear selected technician state
-     currentSelectedTechnicianId = null;
-    // Hide edit/delete buttons for the main technician selection
-    const editBtn = document.getElementById('editTechnicianNameBtn');
-    const deleteBtn = document.getElementById('deleteTechnicianBtn');
-    if (editBtn) editBtn.style.display = 'none';
-    if (deleteBtn) deleteBtn.style.display = 'none';
-}
 
-function hideNewTechnicianForm() {
-    if (addNewTechnicianFormContainer) {
-        addNewTechnicianFormContainer.style.display = 'none';
-        newTechnicianNameInput.value = '';
-        newTechnicianSatellitePointSelect.value = '';
-        newTechnicianSatellitePointSelect.disabled = true;
-        if (newTechnicianError) {
-            newTechnicianError.textContent = '';
-            newTechnicianError.style.display = 'none';
-        }
-    }
-    // After cancelling, we might want to re-load the previously selected technician if any,
-    // or simply leave it blank. For now, leave it blank.
-    // fetchMappings(); // Optionally refresh to show the default state.
-}
 
 function handleNewTechnicianNameInputChange() {
     if (newTechnicianNameInput && newTechnicianSatellitePointSelect) {
@@ -420,7 +379,6 @@ async function handleSaveNewTechnician() {
         if (!isNaN(satellitePointIdInt) && satellitePointIdInt > 0) {
             payload.satellite_point_id = satellitePointIdInt;
         } else {
-            // This case should ideally be prevented by the dropdown validation
             newTechErrorDiv.textContent = "Invalid satellite point selected.";
             newTechErrorDiv.style.display = 'block';
             return;
@@ -436,27 +394,26 @@ async function handleSaveNewTechnician() {
         const result = await response.json();
         if (response.ok) {
             displayMessage(`Technician '${escapeHtml(name)}' added successfully.`, 'success');
-            hideNewTechnicianForm();
+            newTechnicianNameInput.value = '';
+            newTechnicianSatellitePointSelect.value = '';
             await fetchMappings(name); // Refresh and select the new technician
         } else {
-            throw new Error(result.message || `Server error ${response.status}`);
+            if (response.status === 409) {
+                newTechErrorDiv.textContent = `Error: Technician '${name}' already exists.`;
+                newTechErrorDiv.style.display = 'block';
+            } else {
+                throw new Error(result.message || `Server error ${response.status}`);
+            }
         }
     } catch (error) {
         console.error('Error in handleSaveNewTechnician:', error);
         newTechErrorDiv.textContent = `Error adding technician: ${error.message}`;
         newTechErrorDiv.style.display = 'block';
-        // Do not display generic message if specific one is shown
-        // displayMessage(\`Error adding technician: ${error.message}\`, \'error\');
     }
 }
 
 
-// MODIFIED: This function is now primarily for showing the form.
-// The actual adding is handled by handleSaveNewTechnician
-async function handleAddTechnician() {
-    showNewTechnicianForm();
-    // The old prompt logic is removed.
-}
+
 
 async function handleEditTechnicianName() {
     if (!selectedTechnician || !currentSelectedTechnicianId) {
@@ -469,8 +426,6 @@ async function handleEditTechnicianName() {
     if (newNamePrompt && newNamePrompt.trim() !== '' && newNamePrompt.trim() !== oldName) {
         const newName = newNamePrompt.trim();
         try {
-            // When editing only the name, the current satellite_point_id is not sent.
-            // The backend should only update the name.
             const response = await fetch(`/api/technicians/${currentSelectedTechnicianId}`,
             {
                 method: 'PUT',
@@ -490,7 +445,6 @@ async function handleEditTechnicianName() {
         } catch (error) {
             displayMessage(`Error editing technician name: ${error.message}`, 'error');
             console.error('Error in handleEditTechnicianName:', error);
-            // If error, refresh with old name to revert optimistic UI changes if any
             await fetchMappings(oldName);
         }
     } else if (newNamePrompt === oldName) {

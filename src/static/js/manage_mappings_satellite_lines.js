@@ -98,7 +98,11 @@ async function handleAddSatellitePoint() {
         const responseData = await response.json().catch(() => ({ message: 'Invalid JSON response' }));
 
         if (!response.ok) {
-            window.displayMessage(`Error adding satellite point: ${responseData.message || response.status}`, 'error');
+            if (response.status === 409) {
+                window.displayMessage(`Error: Satellite point '${name}' already exists.`, 'error');
+            } else {
+                window.displayMessage(`Error adding satellite point: ${responseData.message || response.status}`, 'error');
+            }
         } else {
             window.displayMessage(`Satellite point '${window.escapeHtml(responseData.name)}' added successfully.`, 'success');
             newNameInput.value = ''; // Clear input
@@ -161,6 +165,7 @@ async function executeUpdateSatellitePoint(pointId, newName) { // newName is raw
         window.displayMessage('Failed to update satellite point. See console for details.', 'error');
     } finally {
         loadSatellitePoints();
+        loadLines(); // Refresh lines to show updated satellite point name
     }
 }
 
@@ -171,25 +176,25 @@ async function handleDeleteSatellitePoint(event) {
 
     const cleanedPointName = typeof rawPointName === 'string' ? rawPointName.replace(/\"/g, '"') : rawPointName;
 
-    if (!confirm(`Are you sure you want to delete satellite point "${cleanedPointName}"?`)) {
+    if (!confirm(`Are you sure you want to delete satellite point "${cleanedPointName}"? This may affect associated production lines.`)) {
         return;
     }
 
     try {
         const response = await window.fetch_delete(`/api/satellite_points/${pointId}`);
-        // Assuming responseData might not always be JSON or relevant for delete success message
-        await response.json().catch(() => {}); // Consume JSON if any, ignore error
+        const responseData = await response.json().catch(() => ({})); // Consume JSON if any, ignore error
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: 'Failed to parse error response.' }));
-            window.displayMessage(`Error deleting satellite point: ${errorData.message || response.status}`, 'error');
+            window.displayMessage(`Error deleting satellite point: ${responseData.message || response.status}`, 'error');
         } else {
             window.displayMessage(`Satellite point '${window.escapeHtml(rawPointName)}' deleted successfully.`, 'success');
+            loadSatellitePoints(); // Refresh the satellite points list
+            loadLines(); // Refresh the lines list
         }
     } catch (error) {
         window.displayMessage('Failed to delete satellite point. See console for details.', 'error');
-    } finally {
-        loadSatellitePoints(); // Refresh the list
+        loadSatellitePoints(); // Also refresh on error to reset UI state
+        loadLines();
     }
 }
 
@@ -331,7 +336,11 @@ async function handleAddLine() {
         const responseData = await response.json().catch(() => ({ message: 'Invalid JSON response' }));
 
         if (!response.ok) {
-            window.displayMessage(`Error adding line: ${responseData.message || response.status}`, 'error');
+            if (response.status === 409) {
+                window.displayMessage(`Error: Line '${name}' already exists for this satellite point.`, 'error');
+            } else {
+                window.displayMessage(`Error adding line: ${responseData.message || response.status}`, 'error');
+            }
         } else {
             const rawLineName = responseData.name; // raw
             const rawSpName = responseData.satellite_point_name; // raw
@@ -388,13 +397,15 @@ function handleEditLine(event) {
     }
 
     listItem.innerHTML = `
-        <input type="text" value="${window.escapeHtml(currentRawName)}" class="edit-line-name-input form-control" style="flex-grow:1; margin-right: 5px;">
-        ${spSelectElement.outerHTML}
-        <div class="item-actions" style="display: flex; align-items: center;">
-            <button class="btn btn-success btn-sm save-line-edit-button" data-id="${lineId}" data-current-name="${currentRawName}" data-current-sp-id="${currentSpId}">
-                <span class="btn-icon">💾</span> Save
-            </button>
-            <button class="btn btn-secondary btn-sm cancel-line-edit-button">Cancel</button>
+        <div class="edit-line-container">
+            <input type="text" value="${window.escapeHtml(currentRawName)}" class="edit-line-name-input form-control" style="flex-grow:1; margin-right: 5px;">
+            ${spSelectElement.outerHTML}
+            <div class="item-actions" style="display: flex; align-items: center;">
+                <button class="btn btn-success btn-sm save-line-edit-button" data-id="${lineId}" data-current-name="${currentRawName}" data-current-sp-id="${currentSpId}">
+                    <span class="btn-icon">💾</span> Save
+                </button>
+                <button class="btn btn-secondary btn-sm cancel-line-edit-button">Cancel</button>
+            </div>
         </div>
     `;
 
