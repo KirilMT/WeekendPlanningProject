@@ -536,13 +536,18 @@ def get_satellite_points_api():
             if not name:
                 return jsonify({"message": "Satellite point name is required"}), 400
             try:
+                # Check if satellite point with this name already exists
+                cursor.execute("SELECT id FROM satellite_points WHERE name = ?", (name,))
+                existing_point = cursor.fetchone()
+                if existing_point:
+                    return jsonify({"message": f"Satellite point '{name}' already exists."}), 409
+
+                # If not, proceed to create
                 point_id = get_or_create_satellite_point(g.db, name)
-                # Fetch the created/existing point to return its details
+                # Fetch the created point to return its details
                 cursor.execute("SELECT id, name FROM satellite_points WHERE id = ?", (point_id,))
                 point = cursor.fetchone()
-                return jsonify(dict(point)), 201 # Return the created or existing point
-            except sqlite3.IntegrityError: # Should be caught by get_or_create if it tries to insert duplicate
-                return jsonify({"message": f"Satellite point '{name}' may already exist or other integrity issue."}), 409
+                return jsonify(dict(point)), 201 # Return the newly created point
             except Exception as e:
                 current_app.logger.error(f"Error creating satellite point: {e}", exc_info=True)
                 return jsonify({"message": f"Server error: {str(e)}"}), 500
@@ -645,7 +650,10 @@ def add_technology_api():
 
         cursor.execute(query_check_duplicate, tuple(params_check_duplicate))
         if cursor.fetchone():
-            return jsonify({"message": f"Technology '{tech_name}' with the same parent under group ID {group_id} already exists."}), 409
+            # Fetch the group name for a more user-friendly message
+            group_name_query = cursor.execute("SELECT name FROM technology_groups WHERE id = ?", (group_id,)).fetchone()
+            group_name_display = group_name_query['name'] if group_name_query else str(group_id)
+            return jsonify({"message": f"Technology '{tech_name}' with the same parent under group '{group_name_display}' already exists."}), 409
 
         # Use the new manager to create the technology
         created_technology_id = technology_manager.get_or_create(tech_name, group_id, parent_id_from_payload)
@@ -815,14 +823,18 @@ def add_technology_group_api():
             return jsonify({"message": "Technology group name is required."}), 400
 
         technology_manager = TechnologyManager(g.db)
-        group_id = technology_manager.get_or_create_group(group_name)
         cursor = g.db.cursor()
+
+        # Check if technology group with this name already exists
+        cursor.execute("SELECT id FROM technology_groups WHERE name = ?", (group_name,))
+        existing_group = cursor.fetchone()
+        if existing_group:
+            return jsonify({"message": f"Technology group '{group_name}' already exists."}), 409
+
+        group_id = technology_manager.get_or_create_group(group_name)
         cursor.execute("SELECT id, name FROM technology_groups WHERE id = ?", (group_id,))
         group = cursor.fetchone()
         return jsonify(dict(group)), 201
-    except sqlite3.IntegrityError:
-        if g.db: g.db.rollback()
-        return jsonify({"message": f"Technology group '{group_name}' already exists."}), 409
     except Exception as e:
         if g.db: g.db.rollback()
         current_app.logger.error(f"Error adding technology group: {e}", exc_info=True)
@@ -942,6 +954,12 @@ def add_task_api():
 
         task_manager = TaskManager(g.db)
         cursor = g.db.cursor()
+
+        # Check if task with this name already exists
+        cursor.execute("SELECT id FROM tasks WHERE name = ?", (task_name,))
+        existing_task = cursor.fetchone()
+        if existing_task:
+            return jsonify({"message": f"Task '{task_name}' already exists."}), 409
 
         # Get all parent IDs
         cursor.execute("SELECT DISTINCT parent_id FROM technologies WHERE parent_id IS NOT NULL")
@@ -1220,14 +1238,18 @@ def add_technician_group_api():
             return jsonify({"message": "Technician group name is required."}), 400
 
         manager = TechnicianGroupManager(g.db)
-        group_id = manager.get_or_create_group(group_name)
         cursor = g.db.cursor()
+
+        # Check if technician group with this name already exists
+        cursor.execute("SELECT id FROM technician_groups WHERE name = ?", (group_name,))
+        existing_group = cursor.fetchone()
+        if existing_group:
+            return jsonify({"message": f"Technician group '{group_name}' already exists."}), 409
+
+        group_id = manager.get_or_create_group(group_name)
         cursor.execute("SELECT id, name FROM technician_groups WHERE id = ?", (group_id,))
         group = cursor.fetchone()
         return jsonify(dict(group)), 201
-    except sqlite3.IntegrityError:
-        if g.db: g.db.rollback()
-        return jsonify({"message": f"Technician group '{group_name}' already exists."}), 409
     except Exception as e:
         if g.db: g.db.rollback()
         current_app.logger.error(f"Error adding technician group: {e}", exc_info=True)

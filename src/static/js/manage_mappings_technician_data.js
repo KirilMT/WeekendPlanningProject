@@ -351,24 +351,13 @@ function handleNewTechnicianNameInputChange() {
 async function handleSaveNewTechnician() {
     const name = newTechnicianNameInput.value.trim();
     const satellitePointId = newTechnicianSatellitePointSelect.value;
-    const newTechErrorDiv = document.getElementById('newTechnicianError'); // get it fresh
-
-    if (!newTechErrorDiv) {
-        console.error("Error display element not found for new technician form.");
-        displayMessage("An unexpected UI error occurred.", "error");
-        return;
-    }
-    newTechErrorDiv.style.display = 'none';
-    newTechErrorDiv.textContent = '';
 
     if (!name) {
-        newTechErrorDiv.textContent = "Technician name cannot be empty.";
-        newTechErrorDiv.style.display = 'block';
+        window.displayMessage("Technician name cannot be empty.", 'error');
         return;
     }
     if (!satellitePointId) {
-        newTechErrorDiv.textContent = "Please select a satellite point.";
-        newTechErrorDiv.style.display = 'block';
+        window.displayMessage("Please select a satellite point.", 'error');
         return;
     }
 
@@ -379,8 +368,7 @@ async function handleSaveNewTechnician() {
         if (!isNaN(satellitePointIdInt) && satellitePointIdInt > 0) {
             payload.satellite_point_id = satellitePointIdInt;
         } else {
-            newTechErrorDiv.textContent = "Invalid satellite point selected.";
-            newTechErrorDiv.style.display = 'block';
+            window.displayMessage("Invalid satellite point selected.", 'error');
             return;
         }
 
@@ -398,17 +386,11 @@ async function handleSaveNewTechnician() {
             newTechnicianSatellitePointSelect.value = '';
             await fetchMappings(name); // Refresh and select the new technician
         } else {
-            if (response.status === 409) {
-                newTechErrorDiv.textContent = `Error: Technician '${name}' already exists.`;
-                newTechErrorDiv.style.display = 'block';
-            } else {
-                throw new Error(result.message || `Server error ${response.status}`);
-            }
+            window.displayMessage(result.message || `Error adding technician: Server error ${response.status}`, 'error');
         }
     } catch (error) {
-        console.error('Error in handleSaveNewTechnician:', error);
-        newTechErrorDiv.textContent = `Error adding technician: ${error.message}`;
-        newTechErrorDiv.style.display = 'block';
+        window.displayMessage(`Failed to add technician. Network error or invalid response.`, 'error');
+        // console.error('Error in handleSaveNewTechnician:', error); // Removed to avoid duplicate console logging
     }
 }
 

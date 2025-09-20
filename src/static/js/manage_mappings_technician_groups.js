@@ -85,31 +85,26 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             body: JSON.stringify({ name: groupName })
         })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(err => {
-                    if (response.status === 409) {
-                        throw new Error(`Group '${groupName}' already exists.`);
-                    }
-                    throw new Error(err.message || 'Error creating group');
-                }).catch(() => {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.id) {
-                newTechnicianGroupNameInput.value = '';
-                fetchTechnicianGroups();
-                window.displayMessage(`Group '${data.name}' created successfully.`, 'success');
+        .then(response => response.json().then(result => ({ response, result })))
+        .then(({ response, result }) => {
+            if (response.ok) {
+                if (result.id) {
+                    newTechnicianGroupNameInput.value = '';
+                    fetchTechnicianGroups();
+                    window.displayMessage(`Group '${result.name}' created successfully.`, 'success');
+                } else {
+                    // This case might indicate a successful response but unexpected data structure
+                    window.displayMessage(result.message || 'Error creating group: Unexpected response.', 'error');
+                }
             } else {
-                alert(data.message || 'Error creating group');
+                // Handle HTTP errors (e.g., 409 Conflict)
+                window.displayMessage(result.message || `Error creating group: Server error ${response.status}`, 'error');
             }
         })
         .catch(error => {
             console.error('Error creating technician group:', error);
-            window.displayMessage(error.message, 'error');
+            // This catch block will handle network errors or issues with response.json() itself
+            window.displayMessage(`Failed to add technician group. Network error or invalid response.`, 'error');
         });
     });
 

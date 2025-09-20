@@ -386,6 +386,11 @@ def delete_satellite_point(conn, point_id):
 
 def add_line(conn, name, satellite_point_id):
     cursor = conn.cursor()
+    # Check for existing line with the same name under the same satellite point
+    cursor.execute("SELECT id FROM lines WHERE name = ? AND satellite_point_id = ?", (name, satellite_point_id))
+    if cursor.fetchone():
+        raise sqlite3.IntegrityError(f"Line with name '{name}' already exists for satellite point ID {satellite_point_id}.")
+
     cursor.execute("INSERT INTO lines (name, satellite_point_id) VALUES (?, ?)", (name, satellite_point_id))
     conn.commit()
     return cursor.lastrowid

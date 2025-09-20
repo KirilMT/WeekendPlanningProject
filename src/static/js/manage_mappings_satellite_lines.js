@@ -95,21 +95,18 @@ async function handleAddSatellitePoint() {
 
     try {
         const response = await window.fetch_post('/api/satellite_points', { name });
-        const responseData = await response.json().catch(() => ({ message: 'Invalid JSON response' }));
+        const responseData = await response.json();
 
         if (!response.ok) {
-            if (response.status === 409) {
-                window.displayMessage(`Error: Satellite point '${name}' already exists.`, 'error');
-            } else {
-                window.displayMessage(`Error adding satellite point: ${responseData.message || response.status}`, 'error');
-            }
+            window.displayMessage(responseData.message || `Error adding satellite point: Server error ${response.status}`, 'error');
         } else {
             window.displayMessage(`Satellite point '${window.escapeHtml(responseData.name)}' added successfully.`, 'success');
             newNameInput.value = ''; // Clear input
             loadSatellitePoints(); // Refresh the list
         }
     } catch (error) {
-        window.displayMessage('Failed to add satellite point. See console for details.', 'error');
+        window.displayMessage('Failed to add satellite point. Network error or invalid response.', 'error');
+        // console.error('Error in handleAddSatellitePoint:', error); // Removed to avoid duplicate console logging
     }
 }
 
@@ -309,38 +306,22 @@ async function handleAddLine() {
     const satellitePointSelect = document.getElementById('newLineSatellitePointSelect');
     const name = newNameInput.value.trim(); // raw name
     const satellitePointId = satellitePointSelect.value;
-    const newLineErrorDiv = document.getElementById('newLineError');
-
-    if (newLineErrorDiv) {
-        newLineErrorDiv.textContent = '';
-        newLineErrorDiv.style.display = 'none';
-    }
 
     if (!name) {
-        if (newLineErrorDiv) {
-            newLineErrorDiv.textContent = 'Line name cannot be empty.';
-            newLineErrorDiv.style.display = 'block';
-        }
+        window.displayMessage('Line name cannot be empty.', 'error');
         return;
     }
     if (!satellitePointId) {
-        if (newLineErrorDiv) {
-            newLineErrorDiv.textContent = 'Please select a satellite point for the line.';
-            newLineErrorDiv.style.display = 'block';
-        }
+        window.displayMessage('Please select a satellite point for the line.', 'error');
         return;
     }
 
     try {
         const response = await window.fetch_post('/api/lines', { name, satellite_point_id: parseInt(satellitePointId) });
-        const responseData = await response.json().catch(() => ({ message: 'Invalid JSON response' }));
+        const responseData = await response.json();
 
         if (!response.ok) {
-            if (response.status === 409) {
-                window.displayMessage(`Error: Line '${name}' already exists for this satellite point.`, 'error');
-            } else {
-                window.displayMessage(`Error adding line: ${responseData.message || response.status}`, 'error');
-            }
+            window.displayMessage(responseData.message || `Error adding line: Server error ${response.status}`, 'error');
         } else {
             const rawLineName = responseData.name; // raw
             const rawSpName = responseData.satellite_point_name; // raw
@@ -358,7 +339,8 @@ async function handleAddLine() {
             loadLines();
         }
     } catch (error) {
-        window.displayMessage('Failed to add line. See console for details.', 'error');
+        window.displayMessage('Failed to add line. Network error or invalid response.', 'error');
+        // console.error('Error in handleAddLine:', error); // Removed to avoid duplicate console logging
     }
 }
 
@@ -745,25 +727,17 @@ async function handleDeleteTechnician(event) {
 function initializeNewLineForm() {
     const newLineNameInput = document.getElementById('newLineName');
     const newLineSatellitePointSelect = document.getElementById('newLineSatellitePointSelect');
-    const newLineErrorDiv = document.getElementById('newLineError');
 
     if (newLineNameInput && newLineSatellitePointSelect) {
         newLineSatellitePointSelect.disabled = true; // Initial state
 
         newLineNameInput.addEventListener('input', () => {
             newLineSatellitePointSelect.disabled = newLineNameInput.value.trim() === '';
-            if (newLineNameInput.value.trim() !== '' && newLineErrorDiv) { // Clear error if name is filled
-                newLineErrorDiv.textContent = '';
-                newLineErrorDiv.style.display = 'none';
-            }
         });
 
         // Also clear error if satellite point is selected (after name was entered)
         newLineSatellitePointSelect.addEventListener('change', () => {
-            if (newLineSatellitePointSelect.value !== '' && newLineErrorDiv) {
-                newLineErrorDiv.textContent = '';
-                newLineErrorDiv.style.display = 'none';
-            }
+            // No local error div to clear here anymore
         });
     }
 }

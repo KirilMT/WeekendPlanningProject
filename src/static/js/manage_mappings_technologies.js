@@ -218,11 +218,11 @@ async function addNewTechnology() {
                 await fetchMappings(selectedTechnician);
             }
         } else {
-            throw new Error(result.message || `Server error ${response.status}`);
+            displayMessage(result.message || `Error adding technology: Server error ${response.status}`, 'error');
         }
     } catch (error) {
-        displayMessage(`Error adding technology: ${error.message}`, 'error');
-        console.error(error);
+        displayMessage(`Failed to add technology. Network error or invalid response.`, 'error');
+        // console.error(error); // Removed to avoid duplicate console logging
     }
 }
 
@@ -434,7 +434,7 @@ async function addNewTechnologyGroup() {
         }
     } catch (error) {
         displayMessage(`Error adding group: ${error.message}`, 'error');
-        console.error(error);
+        // console.error(error);
     }
 }
 

@@ -771,11 +771,27 @@ label.required::after {
 }
 
 .status-message {
-    padding: var(--spacing-sm) var(--spacing-md);
-    border-radius: var(--border-radius);
+    position: fixed;
+    top: 20px; /* Distance from the top */
+    left: 50%;
+    transform: translateX(-50%); /* Center horizontally */
+    display: inline-block; /* Allow width to shrink-wrap to content */
+    z-index: 1000; /* Ensure it's above other content */
+    box-sizing: border-box; /* Include padding in the element's total width and height */
+    padding: 12px 20px; /* Adjusted padding for a box */
+    font-size: var(--font-size-sm); /* Smaller font size */
     font-weight: 500;
-    min-width: 200px;
     text-align: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* More prominent shadow */
+    border-radius: var(--border-radius); /* Re-add border-radius for a box shape */
+    opacity: 0; /* Start hidden */
+    visibility: hidden; /* Start hidden */
+    transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out, transform 0.3s ease-in-out; /* Animation */
+}
+
+.status-message.show {
+    opacity: 1;
+    visibility: visible;
 }
 
 .status-message.success {

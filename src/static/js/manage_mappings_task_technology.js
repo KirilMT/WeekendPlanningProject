@@ -275,15 +275,11 @@ async function addNewTaskForMapping() {
             }
 
         } else {
-            if (response.status === 409) {
-                displayMessage(`Error: Task '${taskName}' already exists.`, 'error');
-            } else {
-                throw new Error(result.message || `Server error ${response.status}`);
-            }
+            displayMessage(result.message || `Error adding task: Server error ${response.status}`, 'error');
         }
     } catch (error) {
-        displayMessage(`Error adding task: ${error.message}`, 'error');
-        console.error('Error in addNewTaskForMapping:', error);
+        displayMessage(`Failed to add task. Network error or invalid response.`, 'error');
+        // console.error('Error in addNewTaskForMapping:', error); // Removed to avoid duplicate console logging
     }
 }
 
