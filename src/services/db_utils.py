@@ -135,7 +135,8 @@ def init_db(db_path, logger=None, debug_use_test_db=False):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             satellite_point_id INTEGER,
-            FOREIGN KEY(satellite_point_id) REFERENCES satellite_points(id)
+            FOREIGN KEY(satellite_point_id) REFERENCES satellite_points(id),
+            UNIQUE(name, satellite_point_id)
         )
     ''')
     logger.info("Table 'lines' ensured.") if logger else None
@@ -385,6 +386,11 @@ def delete_satellite_point(conn, point_id):
 
 def add_line(conn, name, satellite_point_id):
     cursor = conn.cursor()
+    # Check for existing line with the same name under the same satellite point
+    cursor.execute("SELECT id FROM lines WHERE name = ? AND satellite_point_id = ?", (name, satellite_point_id))
+    if cursor.fetchone():
+        raise sqlite3.IntegrityError(f"Line with name '{name}' already exists for satellite point ID {satellite_point_id}.")
+
     cursor.execute("INSERT INTO lines (name, satellite_point_id) VALUES (?, ?)", (name, satellite_point_id))
     conn.commit()
     return cursor.lastrowid
@@ -412,7 +418,7 @@ def get_all_lines(conn):
     cursor.execute("""
         SELECT l.id, l.name, l.satellite_point_id, sp.name as satellite_point_name
         FROM lines l
-        JOIN satellite_points sp ON l.satellite_point_id = sp.id
+        LEFT JOIN satellite_points sp ON l.satellite_point_id = sp.id
         ORDER BY sp.name, l.name
     """)
     return [dict(row) for row in cursor.fetchall()]
@@ -621,3 +627,54 @@ def log_technician_skill_update(conn, technician_id, technology_id, task_id, pre
         ) VALUES (?, ?, ?, ?, ?, ?)
     ''', (technician_id, technology_id, task_id, previous_skill_level, new_skill_level, message))
     conn.commit()
+
+class TechnicianGroupManager:
+    def __init__(self, conn):
+        self.conn = conn
+        self.cursor = conn.cursor()
+
+    def get_or_create_group(self, group_name):
+        self.cursor.execute("SELECT id FROM technician_groups WHERE name = ?", (group_name,))
+        row = self.cursor.fetchone()
+        if row:
+            return row['id']
+        else:
+            self.cursor.execute("INSERT INTO technician_groups (name) VALUES (?)", (group_name,))
+            self.conn.commit()
+            return self.cursor.lastrowid
+
+    def get_all_groups(self):
+        self.cursor.execute("SELECT id, name FROM technician_groups ORDER BY name")
+        return [dict(row) for row in self.cursor.fetchall()]
+
+    def update_group(self, group_id, new_name):
+        self.cursor.execute("UPDATE technician_groups SET name = ? WHERE id = ?", (new_name, group_id))
+        self.conn.commit()
+        return self.cursor.rowcount > 0
+
+    def delete_group(self, group_id):
+        # First, remove all members from the group to avoid integrity issues
+        self.cursor.execute("DELETE FROM technician_group_members WHERE group_id = ?", (group_id,))
+        # Then, delete the group itself
+        self.cursor.execute("DELETE FROM technician_groups WHERE id = ?", (group_id,))
+        self.conn.commit()
+        return self.cursor.rowcount > 0
+
+    def add_member(self, group_id, technician_id):
+        self.cursor.execute("INSERT OR IGNORE INTO technician_group_members (group_id, technician_id) VALUES (?, ?)", (group_id, technician_id))
+        self.conn.commit()
+        return self.cursor.lastrowid
+
+    def remove_member(self, group_id, technician_id):
+        self.cursor.execute("DELETE FROM technician_group_members WHERE group_id = ? AND technician_id = ?", (group_id, technician_id))
+        self.conn.commit()
+        return self.cursor.rowcount > 0
+
+    def get_group_members(self, group_id):
+        self.cursor.execute("""
+            SELECT t.id, t.name FROM technicians t
+            JOIN technician_group_members tgm ON t.id = tgm.technician_id
+            WHERE tgm.group_id = ?
+            ORDER BY t.name
+        """, (group_id,))
+        return [dict(row) for row in self.cursor.fetchall()]

@@ -95,17 +95,18 @@ async function handleAddSatellitePoint() {
 
     try {
         const response = await window.fetch_post('/api/satellite_points', { name });
-        const responseData = await response.json().catch(() => ({ message: 'Invalid JSON response' }));
+        const responseData = await response.json();
 
         if (!response.ok) {
-            window.displayMessage(`Error adding satellite point: ${responseData.message || response.status}`, 'error');
+            window.displayMessage(responseData.message || `Error adding satellite point: Server error ${response.status}`, 'error');
         } else {
             window.displayMessage(`Satellite point '${window.escapeHtml(responseData.name)}' added successfully.`, 'success');
             newNameInput.value = ''; // Clear input
             loadSatellitePoints(); // Refresh the list
         }
     } catch (error) {
-        window.displayMessage('Failed to add satellite point. See console for details.', 'error');
+        window.displayMessage('Failed to add satellite point. Network error or invalid response.', 'error');
+        // console.error('Error in handleAddSatellitePoint:', error); // Removed to avoid duplicate console logging
     }
 }
 
@@ -116,7 +117,7 @@ function handleEditSatellitePoint(event) {
     const listItem = event.target.closest('.item-list-item');
 
     listItem.innerHTML = `
-        <input type="text" value="${window.escapeHtml(currentRawName)}" class="edit-input form-control" data-id="${pointId}" style="flex-grow:1; margin-right: 5px;">
+        <input type="text" id="editSatellitePointName_${pointId}" value="${window.escapeHtml(currentRawName)}" class="edit-input form-control" data-id="${pointId}" style="flex-grow:1; margin-right: 5px;">
         <div class="item-actions">
             <button class="btn btn-success btn-sm save-edit-satellite-point" data-id="${pointId}" data-current-name="${currentRawName}">
                 <span class="btn-icon">💾</span> Save
@@ -161,6 +162,7 @@ async function executeUpdateSatellitePoint(pointId, newName) { // newName is raw
         window.displayMessage('Failed to update satellite point. See console for details.', 'error');
     } finally {
         loadSatellitePoints();
+        loadLines(); // Refresh lines to show updated satellite point name
     }
 }
 
@@ -171,25 +173,25 @@ async function handleDeleteSatellitePoint(event) {
 
     const cleanedPointName = typeof rawPointName === 'string' ? rawPointName.replace(/\"/g, '"') : rawPointName;
 
-    if (!confirm(`Are you sure you want to delete satellite point "${cleanedPointName}"?`)) {
+    if (!confirm(`Are you sure you want to delete satellite point "${cleanedPointName}"? This may affect associated production lines.`)) {
         return;
     }
 
     try {
         const response = await window.fetch_delete(`/api/satellite_points/${pointId}`);
-        // Assuming responseData might not always be JSON or relevant for delete success message
-        await response.json().catch(() => {}); // Consume JSON if any, ignore error
+        const responseData = await response.json().catch(() => ({})); // Consume JSON if any, ignore error
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: 'Failed to parse error response.' }));
-            window.displayMessage(`Error deleting satellite point: ${errorData.message || response.status}`, 'error');
+            window.displayMessage(`Error deleting satellite point: ${responseData.message || response.status}`, 'error');
         } else {
             window.displayMessage(`Satellite point '${window.escapeHtml(rawPointName)}' deleted successfully.`, 'success');
+            loadSatellitePoints(); // Refresh the satellite points list
+            loadLines(); // Refresh the lines list
         }
     } catch (error) {
         window.displayMessage('Failed to delete satellite point. See console for details.', 'error');
-    } finally {
-        loadSatellitePoints(); // Refresh the list
+        loadSatellitePoints(); // Also refresh on error to reset UI state
+        loadLines();
     }
 }
 
@@ -304,34 +306,22 @@ async function handleAddLine() {
     const satellitePointSelect = document.getElementById('newLineSatellitePointSelect');
     const name = newNameInput.value.trim(); // raw name
     const satellitePointId = satellitePointSelect.value;
-    const newLineErrorDiv = document.getElementById('newLineError');
-
-    if (newLineErrorDiv) {
-        newLineErrorDiv.textContent = '';
-        newLineErrorDiv.style.display = 'none';
-    }
 
     if (!name) {
-        if (newLineErrorDiv) {
-            newLineErrorDiv.textContent = 'Line name cannot be empty.';
-            newLineErrorDiv.style.display = 'block';
-        }
+        window.displayMessage('Line name cannot be empty.', 'error');
         return;
     }
     if (!satellitePointId) {
-        if (newLineErrorDiv) {
-            newLineErrorDiv.textContent = 'Please select a satellite point for the line.';
-            newLineErrorDiv.style.display = 'block';
-        }
+        window.displayMessage('Please select a satellite point for the line.', 'error');
         return;
     }
 
     try {
         const response = await window.fetch_post('/api/lines', { name, satellite_point_id: parseInt(satellitePointId) });
-        const responseData = await response.json().catch(() => ({ message: 'Invalid JSON response' }));
+        const responseData = await response.json();
 
         if (!response.ok) {
-            window.displayMessage(`Error adding line: ${responseData.message || response.status}`, 'error');
+            window.displayMessage(responseData.message || `Error adding line: Server error ${response.status}`, 'error');
         } else {
             const rawLineName = responseData.name; // raw
             const rawSpName = responseData.satellite_point_name; // raw
@@ -349,7 +339,8 @@ async function handleAddLine() {
             loadLines();
         }
     } catch (error) {
-        window.displayMessage('Failed to add line. See console for details.', 'error');
+        window.displayMessage('Failed to add line. Network error or invalid response.', 'error');
+        // console.error('Error in handleAddLine:', error); // Removed to avoid duplicate console logging
     }
 }
 
@@ -388,13 +379,17 @@ function handleEditLine(event) {
     }
 
     listItem.innerHTML = `
-        <input type="text" value="${window.escapeHtml(currentRawName)}" class="edit-line-name-input form-control" style="flex-grow:1; margin-right: 5px;">
-        ${spSelectElement.outerHTML}
-        <div class="item-actions" style="display: flex; align-items: center;">
-            <button class="btn btn-success btn-sm save-line-edit-button" data-id="${lineId}" data-current-name="${currentRawName}" data-current-sp-id="${currentSpId}">
-                <span class="btn-icon">💾</span> Save
-            </button>
-            <button class="btn btn-secondary btn-sm cancel-line-edit-button">Cancel</button>
+        <div class="edit-line-container">
+            <input type="text" id="editLineName_${lineId}" value="${window.escapeHtml(currentRawName)}" class="edit-line-name-input form-control" style="flex-grow:1; margin-right: 5px;">
+            <select name="satellitePointId" class="edit-line-sp-select" style="padding: 8px; margin-right: 5px;">
+                ${spSelectElement.innerHTML}
+            </select>
+            <div class="item-actions" style="display: flex; align-items: center;">
+                <button class="btn btn-success btn-sm save-line-edit-button" data-id="${lineId}" data-current-name="${currentRawName}" data-current-sp-id="${currentSpId}">
+                    <span class="btn-icon">💾</span> Save
+                </button>
+                <button class="btn btn-secondary btn-sm cancel-line-edit-button">Cancel</button>
+            </div>
         </div>
     `;
 
@@ -734,25 +729,17 @@ async function handleDeleteTechnician(event) {
 function initializeNewLineForm() {
     const newLineNameInput = document.getElementById('newLineName');
     const newLineSatellitePointSelect = document.getElementById('newLineSatellitePointSelect');
-    const newLineErrorDiv = document.getElementById('newLineError');
 
     if (newLineNameInput && newLineSatellitePointSelect) {
         newLineSatellitePointSelect.disabled = true; // Initial state
 
         newLineNameInput.addEventListener('input', () => {
             newLineSatellitePointSelect.disabled = newLineNameInput.value.trim() === '';
-            if (newLineNameInput.value.trim() !== '' && newLineErrorDiv) { // Clear error if name is filled
-                newLineErrorDiv.textContent = '';
-                newLineErrorDiv.style.display = 'none';
-            }
         });
 
         // Also clear error if satellite point is selected (after name was entered)
         newLineSatellitePointSelect.addEventListener('change', () => {
-            if (newLineSatellitePointSelect.value !== '' && newLineErrorDiv) {
-                newLineErrorDiv.textContent = '';
-                newLineErrorDiv.style.display = 'none';
-            }
+            // No local error div to clear here anymore
         });
     }
 }

@@ -80,7 +80,7 @@ function renderTechnologyTree(parentElement, technologies, parentId, level) {
     children.forEach(tech => {
         const techDiv = document.createElement('div');
         techDiv.classList.add('list-item');
-        // techDiv.classList.add('technology-tree-node'); // Class for border if needed, margin handles indent
+        techDiv.dataset.techId = tech.id;
         techDiv.style.marginLeft = `${level * 25}px`; // Indent child technologies
 
         const techNameSpan = document.createElement('span');
@@ -93,11 +93,10 @@ function renderTechnologyTree(parentElement, technologies, parentId, level) {
         const editBtn = document.createElement('button');
         editBtn.textContent = 'Edit';
         editBtn.classList.add('btn', 'btn-warning', 'btn-sm');
-        editBtn.onclick = (e) => {
-            e.stopPropagation();
-            editTechnology(tech.id, tech.name, tech.group_id, tech.parent_id);
-        };
-        actionsDiv.appendChild(editBtn);
+                    editBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        editTechnology(tech.id);
+                    };        actionsDiv.appendChild(editBtn);
 
         const deleteBtn = document.createElement('button');
         deleteBtn.textContent = 'Delete';
@@ -145,6 +144,7 @@ function renderAllTechnologies() {
 
         const techDiv = document.createElement('div');
         techDiv.classList.add('list-item');
+        techDiv.dataset.techId = topLevelTech.id;
         // techDiv.classList.add('no-parent'); // Top-level items don't need extra left margin from this class
         techDiv.style.marginLeft = '0px'; // Explicitly no indent for top-level items under a group header
 
@@ -159,7 +159,7 @@ function renderAllTechnologies() {
         editBtn.classList.add('btn', 'btn-warning', 'btn-sm');
         editBtn.onclick = (e) => {
             e.stopPropagation();
-            editTechnology(topLevelTech.id, topLevelTech.name, topLevelTech.group_id, topLevelTech.parent_id);
+            editTechnology(topLevelTech.id);
         };
         actionsDiv.appendChild(editBtn);
         const deleteBtn = document.createElement('button');
@@ -218,85 +218,107 @@ async function addNewTechnology() {
                 await fetchMappings(selectedTechnician);
             }
         } else {
-            throw new Error(result.message || `Server error ${response.status}`);
+            displayMessage(result.message || `Error adding technology: Server error ${response.status}`, 'error');
         }
     } catch (error) {
-        displayMessage(`Error adding technology: ${error.message}`, 'error');
-        console.error(error);
+        displayMessage(`Failed to add technology. Network error or invalid response.`, 'error');
+        // console.error(error); // Removed to avoid duplicate console logging
     }
 }
 
-async function editTechnology(techId, currentName, currentGroupId, currentParentId) {
-    const newName = prompt("Enter the new name for the technology:", currentName);
-    if (newName === null || newName.trim() === "") {
-        displayMessage("Edit cancelled or name empty.", "info");
+async function editTechnology(techId) {
+    const techToEdit = allTechnologies.find(tech => tech.id === techId);
+    if (!techToEdit) {
+        console.error(`Technology with ID ${techId} not found.`);
         return;
     }
 
-    const payload = {
-        name: newName.trim(),
-        group_id: currentGroupId,
-        parent_id: currentParentId
-    };
-
-    // Prompt for new group
-    const newGroupIdPrompt = prompt("Enter new Group ID (or leave blank to keep current):", currentGroupId || "");
-    if (newGroupIdPrompt !== null) { // If user didn't cancel
-        if (newGroupIdPrompt.trim() === "") {
-            payload.group_id = null; // Set to null if cleared
-        } else {
-            const newGroupId = parseInt(newGroupIdPrompt);
-            if (!isNaN(newGroupId) && allTechnologyGroups.some(g => g.id === newGroupId)) {
-                payload.group_id = newGroupId;
-            } else if (newGroupIdPrompt.trim() !== (currentGroupId ? currentGroupId.toString() : "")) {
-                displayMessage("Invalid Group ID or group does not exist. Group not changed.", "warning");
-            }
-        }
+    const currentName = techToEdit.name;
+    const currentGroupId = techToEdit.group_id;
+    const currentParentId = techToEdit.parent_id;
+    const techListItem = technologyListContainerDiv.querySelector(`.list-item[data-tech-id="${techId}"]`);
+    if (!techListItem) {
+        console.error(`Could not find list item for technology ID ${techId}`);
+        return;
     }
 
+    const originalContent = techListItem.innerHTML;
 
-    // Prompt for new parent
-    const newParentIdPrompt = prompt("Enter new Parent Technology ID (or leave blank for no parent/top-level within group):", currentParentId || "");
-    if (newParentIdPrompt !== null) { // If user didn't cancel
-         if (newParentIdPrompt.trim() === "") {
-            payload.parent_id = null; // Set to null if cleared
-        } else {
-            const newParentId = parseInt(newParentIdPrompt);
-            if (!isNaN(newParentId) && newParentId !== techId && allTechnologies.some(t => t.id === newParentId && t.group_id === payload.group_id)) {
-                // Check if the new parent is in the same group as the technology
-                 if (allTechnologies.some(t => t.id === newParentId && t.group_id === payload.group_id)) {
-                    payload.parent_id = newParentId;
+    // Create Group Dropdown
+    let groupSelectHtml = `<select id="editTechnologyGroupSelect_${techId}" name="groupId" class="form-control">`;
+    allTechnologyGroups.forEach(group => {
+        const isSelected = parseInt(group.id) === parseInt(currentGroupId) ? 'selected' : '';
+        groupSelectHtml += `<option value="${group.id}" ${isSelected}>${escapeHtml(group.name)}</option>`;
+    });
+    groupSelectHtml += '</select>';
+
+    // Create Parent Dropdown
+    let parentSelectHtml = `<select id="editTechnologyParentSelect_${techId}" name="parentId" class="form-control">`;
+    parentSelectHtml += '<option value="">No Parent</option>';
+    allTechnologies.forEach(tech => {
+        if (tech.id !== techId) { // Cannot be its own parent
+            const isSelected = parseInt(tech.id) === parseInt(currentParentId) ? 'selected' : '';
+            parentSelectHtml += `<option value="${tech.id}" ${isSelected}>${escapeHtml(tech.name)}</option>`;
+        }
+    });
+    parentSelectHtml += '</select>';
+
+    techListItem.innerHTML = `
+        <input type="text" id="editTechnologyName_${techId}" value="${escapeHtml(currentName)}" class="form-control" style="flex-grow: 1;"/>
+        ${groupSelectHtml}
+        ${parentSelectHtml}
+        <div class="item-actions">
+            <button class="btn btn-success btn-sm save-tech-btn">💾 Save</button>
+            <button class="btn btn-secondary btn-sm cancel-edit-tech-btn">❌ Cancel</button>
+        </div>
+    `;
+
+    techListItem.querySelector('.save-tech-btn').addEventListener('click', async () => {
+        const newName = techListItem.querySelector('input').value.trim();
+        const newGroupId = parseInt(techListItem.querySelector('select').value);
+        const newParentId = techListItem.querySelectorAll('select')[1].value ? parseInt(techListItem.querySelectorAll('select')[1].value) : null;
+
+        if (newName) {
+            const payload = {
+                name: newName,
+                group_id: newGroupId,
+                parent_id: newParentId
+            };
+
+            try {
+                const response = await fetch(`/api/technologies/${techId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    displayMessage(`Technology '${escapeHtml(result.name)}' updated.`, 'success');
+                    // Explicitly update the technology in the allTechnologies array
+                    const updatedTechIndex = allTechnologies.findIndex(t => t.id === techId);
+                    if (updatedTechIndex !== -1) {
+                        allTechnologies[updatedTechIndex].name = newName;
+                        allTechnologies[updatedTechIndex].group_id = newGroupId;
+                        allTechnologies[updatedTechIndex].parent_id = newParentId;
+                    }
+                    await fetchAllTechnologies(); // This should refresh allTechnologies
+                    await fetchAllTasksForMapping();
+                    if (selectedTechnician) {
+                        await fetchMappings(selectedTechnician);
+                    }
                 } else {
-                     displayMessage("Invalid Parent ID: Parent must be in the same group. Parent not changed.", "warning");
+                    throw new Error(result.message || `Server error ${response.status}`);
                 }
-            } else if (newParentIdPrompt.trim() !== (currentParentId ? currentParentId.toString() : "")) {
-                 displayMessage("Invalid Parent ID (e.g., cannot be self, must exist, must be in same group). Parent not changed.", "warning");
+            } catch (error) {
+                displayMessage(`Error updating technology: ${error.message}`, 'error');
+                techListItem.innerHTML = originalContent; // Revert on error
             }
         }
-    }
+    });
 
-
-    try {
-        const response = await fetch(`/api/technologies/${techId}`, {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-        });
-        const result = await response.json();
-        if (response.ok) {
-            displayMessage(`Technology '${escapeHtml(result.name)}' updated.`, 'success');
-            await fetchAllTechnologies();
-            await fetchAllTasksForMapping();
-            if (selectedTechnician) { // If a technician is selected, refresh their details
-                await fetchMappings(selectedTechnician);
-            }
-        } else {
-            throw new Error(result.message || `Server error ${response.status}`);
-        }
-    } catch (error) {
-        displayMessage(`Error updating technology: ${error.message}`, 'error');
-        console.error(error);
-    }
+    techListItem.querySelector('.cancel-edit-tech-btn').addEventListener('click', () => {
+        fetchAllTechnologies(); // Re-render all technologies to restore event listeners
+    });
 }
 
 async function deleteTechnology(techId) {
@@ -355,6 +377,7 @@ function renderTechnologyGroups() {
         allTechnologyGroups.sort((a, b) => a.name.localeCompare(b.name)).forEach(group => {
             const groupDiv = document.createElement('div');
             groupDiv.classList.add('list-item');
+            groupDiv.dataset.groupId = group.id;
             const nameSpan = document.createElement('span');
             nameSpan.textContent = escapeHtml(group.name);
             groupDiv.appendChild(nameSpan);
@@ -415,34 +438,56 @@ async function addNewTechnologyGroup() {
         }
     } catch (error) {
         displayMessage(`Error adding group: ${error.message}`, 'error');
-        console.error(error);
+        // console.error(error);
     }
 }
 
 async function editTechnologyGroup(groupId, currentName) {
-    const newName = prompt("Enter the new name for the technology group:", currentName);
-    if (newName === null || newName.trim() === "") {
-        displayMessage("Edit cancelled or name empty.", "info");
+    const groupListItem = technologyGroupListContainerDiv.querySelector(`.list-item[data-group-id="${groupId}"]`);
+    if (!groupListItem) {
+        console.error(`Could not find list item for group ID ${groupId}`);
         return;
     }
-    try {
-        const response = await fetch(`/api/technology_groups/${groupId}`, {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({name: newName.trim()})
-        });
-        const result = await response.json();
-        if (response.ok) {
-            displayMessage(`Technology group '${escapeHtml(result.name)}' updated.`, 'success');
-            fetchTechnologyGroups();
-            fetchAllTechnologies();
+
+    const originalContent = groupListItem.innerHTML;
+
+    groupListItem.innerHTML = `
+        <input type="text" name="groupName" class="form-control" value="${escapeHtml(currentName)}" style="flex-grow: 1;"/>
+        <div class="item-actions">
+            <button class="btn btn-success btn-sm save-group-btn">💾 Save</button>
+            <button class="btn btn-secondary btn-sm cancel-edit-group-btn">❌ Cancel</button>
+        </div>
+    `;
+
+    groupListItem.querySelector('.save-group-btn').addEventListener('click', async () => {
+        const newName = groupListItem.querySelector('input').value.trim();
+        if (newName && newName !== currentName) {
+            try {
+                const response = await fetch(`/api/technology_groups/${groupId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    displayMessage(`Group updated to '${escapeHtml(newName)}'.`, 'success');
+                    await fetchTechnologyGroups(); // Refetch all groups and re-render
+                    await fetchAllTechnologies(); // Also refresh technologies as their group names might have changed
+                } else {
+                    throw new Error(result.message || `Server error ${response.status}`);
+                }
+            } catch (error) {
+                displayMessage(`Error updating group: ${error.message}`, 'error');
+                groupListItem.innerHTML = originalContent; // Revert on error
+            }
         } else {
-            throw new Error(result.message || `Server error ${response.status}`);
+            groupListItem.innerHTML = originalContent; // Revert if name is unchanged or empty
         }
-    } catch (error) {
-        displayMessage(`Error updating technology group: ${error.message}`, 'error');
-        console.error(error);
-    }
+    });
+
+    groupListItem.querySelector('.cancel-edit-group-btn').addEventListener('click', () => {
+        fetchTechnologyGroups(); // Re-render all groups to restore event listeners
+    });
 }
 
 async function deleteTechnologyGroup(groupId) {

@@ -79,25 +79,19 @@ def load_app_config(database_path, logger=None): # Added logger argument
             tech_name = row['name']
             tech_satellite_point_id = row['satellite_point_id']
 
-            # Determine satellite point name for grouping
-            tech_satellite_point_name = None
-            if tech_satellite_point_id in satellite_points_map:
-                tech_satellite_point_name = satellite_points_map[tech_satellite_point_id]
+            # Determine satellite point name for grouping, with a fallback for unassigned technicians
+            tech_satellite_point_name = satellite_points_map.get(tech_satellite_point_id, 'Unassigned')
 
-            if not tech_name or not tech_satellite_point_name:
-                _log(f"      SKIPPING row {row_idx + 1} (ID {tech_id}, Name '{tech_name}', SP_ID '{tech_satellite_point_id}') due to missing name or unresolvable/unassigned satellite point.", 'warning')
+            if not tech_name:
+                _log(f"      SKIPPING row {row_idx + 1} (ID {tech_id}) due to missing name.", 'warning')
                 continue
 
             TECHNICIANS.append(tech_name)
 
             # Add technician to the correct group (satellite point)
-            if tech_satellite_point_name in TECHNICIAN_GROUPS:
-                TECHNICIAN_GROUPS[tech_satellite_point_name].append(tech_name)
-            else:
-                # This case handles technicians assigned to a satellite point that might have been missed
-                # during initialization, or if the satellite point name is valid but wasn't in the initial list.
-                _log(f"      Technician '{tech_name}' assigned to a new group '{tech_satellite_point_name}' not found during initial setup.", 'warning')
-                TECHNICIAN_GROUPS[tech_satellite_point_name] = [tech_name]
+            if tech_satellite_point_name not in TECHNICIAN_GROUPS:
+                TECHNICIAN_GROUPS[tech_satellite_point_name] = []
+            TECHNICIAN_GROUPS[tech_satellite_point_name].append(tech_name)
 
             # Fetch lines for the technician using their satellite_point_id via the new db_utils function
             # get_technician_lines_via_satellite_point returns a list of line names

@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function fetchTechnicianGroups() {
-        fetch('/api/technology_groups')
+        fetch('/api/technician_groups') // Corrected endpoint
             .then(response => response.json())
             .then(data => {
                 allGroups = data;
@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const groupName = newTechnicianGroupNameInput.value.trim();
         if (!groupName) return;
 
-        fetch('/api/technology_groups', {
+        fetch('/api/technician_groups', { // Corrected endpoint
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -85,16 +85,27 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             body: JSON.stringify({ name: groupName })
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.id) {
-                newTechnicianGroupNameInput.value = '';
-                fetchTechnicianGroups();
+        .then(response => response.json().then(result => ({ response, result })))
+        .then(({ response, result }) => {
+            if (response.ok) {
+                if (result.id) {
+                    newTechnicianGroupNameInput.value = '';
+                    fetchTechnicianGroups();
+                    window.displayMessage(`Group '${result.name}' created successfully.`, 'success');
+                } else {
+                    // This case might indicate a successful response but unexpected data structure
+                    window.displayMessage(result.message || 'Error creating group: Unexpected response.', 'error');
+                }
             } else {
-                alert(data.message || 'Error creating group');
+                // Handle HTTP errors (e.g., 409 Conflict)
+                window.displayMessage(result.message || `Error creating group: Server error ${response.status}`, 'error');
             }
         })
-        .catch(error => console.error('Error creating technician group:', error));
+        .catch(error => {
+            console.error('Error creating technician group:', error);
+            // This catch block will handle network errors or issues with response.json() itself
+            window.displayMessage(`Failed to add technician group. Network error or invalid response.`, 'error');
+        });
     });
 
     technicianGroupListContainer.addEventListener('click', function (e) {
@@ -109,7 +120,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const groupElement = editBtn.closest('.list-item');
 
             groupElement.innerHTML = `
-                <input type="text" class="form-control" value="${groupName}" style="flex-grow: 1;"/>
+                <input type="text" name="groupName" class="form-control" value="${groupName}" style="flex-grow: 1;"/>
                 <div class="item-actions">
                     <button class="btn btn-success btn-sm save-group-btn" data-group-id="${groupId}">💾 Save</button>
                     <button class="btn btn-secondary btn-sm cancel-edit-group-btn">❌ Cancel</button>
@@ -117,8 +128,12 @@ document.addEventListener('DOMContentLoaded', function () {
             `;
         } else if (deleteBtn) {
             const groupId = deleteBtn.dataset.groupId;
+            if (!groupId) {
+                alert('Could not find group ID. Cannot delete.');
+                return;
+            }
             if (confirm('Are you sure you want to delete this group?')) {
-                fetch(`/api/technology_groups/${groupId}`, {
+                fetch(`/api/technician_groups/${groupId}`, { // Corrected endpoint
                     method: 'DELETE',
                     headers: {
                         'X-CSRFToken': csrfToken
@@ -127,6 +142,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 .then(response => {
                     if (response.ok) {
                         fetchTechnicianGroups();
+                        groupMembershipSelect.value = '';
+                        groupMembershipDetails.style.display = 'none';
                     } else {
                         response.json().then(data => alert(data.message || 'Error deleting group'));
                     }
@@ -135,11 +152,15 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } else if (saveBtn) {
             const groupId = saveBtn.dataset.groupId;
+            if (!groupId) {
+                alert('Could not find group ID. Cannot save.');
+                return;
+            }
             const input = saveBtn.closest('.list-item').querySelector('input');
             const newName = input.value.trim();
 
             if (newName) {
-                fetch(`/api/technology_groups/${groupId}`, {
+                fetch(`/api/technician_groups/${groupId}`, { // Corrected endpoint
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
@@ -173,7 +194,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     function loadGroupMembers(groupId) {
-        fetch(`/api/technology_groups/${groupId}/technicians`)
+        fetch(`/api/technician_groups/${groupId}/members`) // Corrected endpoint
             .then(response => response.json())
             .then(members => {
                 const memberIds = new Set(members.map(m => m.id));
@@ -247,7 +268,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const technicianIds = selectedItems.map(card => card.dataset.id);
 
         const promises = technicianIds.map(technicianId => {
-            return fetch('/api/technician_group_members', {
+            return fetch('/api/technician_groups/members', { // Corrected endpoint
                 method: isAdding ? 'POST' : 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',

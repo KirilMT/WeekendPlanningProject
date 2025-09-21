@@ -115,7 +115,7 @@ function renderTechnicianSkills() {
         container.classList.add('skill-level-container', 'edit-mode');
 
         const skillSelect = document.createElement('select');
-        skillSelect.id = `skill-${technology.id}-select`;
+        skillSelect.name = 'skillLevel';
         skillSelect.dataset.technologyId = technology.id;
         SKILL_LEVEL_TEXTS.forEach((lvlText, idx) => {
             const option = document.createElement('option');

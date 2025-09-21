@@ -60,20 +60,35 @@ async function initializePage() {
     }
 
     // Management section "add" buttons
-    if (addTechnologyBtn) {
-        addTechnologyBtn.addEventListener('click', addNewTechnology);
+    const technologyForm = document.getElementById('technologyForm');
+    if (technologyForm) {
+        technologyForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            addNewTechnology();
+        });
     }
-    if (addTechnologyGroupBtn) {
-        addTechnologyGroupBtn.addEventListener('click', addNewTechnologyGroup);
+    const technologyGroupForm = document.getElementById('technologyGroupForm');
+    if (technologyGroupForm) {
+        technologyGroupForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            addNewTechnologyGroup();
+        });
     }
-    if (addNewTaskForMappingBtn) {
-        addNewTaskForMappingBtn.addEventListener('click', addNewTaskForMapping);
+    const newTaskForm = document.getElementById('newTaskForm');
+    if (newTaskForm) {
+        newTaskForm.addEventListener('submit', (event) => {
+            event.preventDefault(); // Prevent page reload
+            addNewTaskForMapping();
+        });
     }
 
     // Technician action buttons
-    const addNewTechnicianBtn = document.getElementById('addNewTechnicianBtn');
-    if (addNewTechnicianBtn) {
-        addNewTechnicianBtn.addEventListener('click', handleAddTechnician); // handleAddTechnician is in manage_mappings_technician_data.js
+    const addNewTechnicianForm = document.getElementById('addNewTechnicianForm');
+    if (addNewTechnicianForm) {
+        addNewTechnicianForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            handleSaveNewTechnician();
+        });
     }
     const editTechnicianNameBtn = document.getElementById('editTechnicianNameBtn');
     if (editTechnicianNameBtn) {
@@ -89,9 +104,12 @@ async function initializePage() {
     if (newTechnicianNameInputElement) {
         newTechnicianNameInputElement.addEventListener('input', handleNewTechnicianNameInputChange);
     }
-    const saveNewTechnicianButton = document.getElementById('saveNewTechnicianBtn');
-    if (saveNewTechnicianButton) {
-        saveNewTechnicianButton.addEventListener('click', handleSaveNewTechnician);
+    const newTechnicianForm = document.getElementById('addNewTechnicianFormContainer');
+    if (newTechnicianForm) {
+        newTechnicianForm.addEventListener('submit', (event) => {
+            event.preventDefault(); // Prevent page reload
+            handleSaveNewTechnician();
+        });
     }
     const cancelNewTechnicianButton = document.getElementById('cancelNewTechnicianBtn');
     if (cancelNewTechnicianButton) {
@@ -166,8 +184,14 @@ async function initializePage() {
     });
 
     // Initialize Satellite Points and Lines Management
-    document.getElementById('addSatellitePointBtn').addEventListener('click', handleAddSatellitePoint);
-    document.getElementById('addLineBtn').addEventListener('click', handleAddLine); // Added event listener for Add Line button
+    document.getElementById('satellitePointForm').addEventListener('submit', (event) => {
+        event.preventDefault();
+        handleAddSatellitePoint();
+    });
+    document.getElementById('productionLineForm').addEventListener('submit', (event) => {
+        event.preventDefault();
+        handleAddLine();
+    });
     loadSatellitePoints(); // Also populates dropdowns for other sections
     loadLines(); // Load lines after satellite points are loaded
     initializeNewLineForm(); // Added this call

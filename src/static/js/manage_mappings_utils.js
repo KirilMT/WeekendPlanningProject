@@ -53,12 +53,19 @@ function escapeHtml(unsafe) {
 }
 
 function displayMessage(message, type = 'info') {
-    statusMessageDiv.textContent = message;
-    statusMessageDiv.className = type; // Applies .success, .error, or .info
-    setTimeout(() => {
-        statusMessageDiv.textContent = '';
-        statusMessageDiv.className = '';
-    }, 5000);
+    const statusMessageDiv = document.getElementById('statusMessage');
+    if (statusMessageDiv) {
+        statusMessageDiv.textContent = message;
+        statusMessageDiv.className = `status-message ${type} show`; // Add 'show' class
+        setTimeout(() => {
+            statusMessageDiv.classList.remove('show'); // Remove 'show' class to hide
+            // Clear text content and reset class after animation completes (or a short delay)
+            setTimeout(() => {
+                statusMessageDiv.textContent = '';
+                statusMessageDiv.className = 'status-message';
+            }, 300); // Match CSS transition duration
+        }, 5000);
+    }
 }
 
 // Alias for displayMessage or specific implementation for showStatus
