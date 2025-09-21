@@ -15,4 +15,5 @@ if __name__ == '__main__':
     # The reloader should be used in debug mode for a better development experience.
     use_reloader = is_debug_mode
 
-    app.run(host='127.0.0.1', port=5000, debug=is_debug_mode, use_reloader=use_reloader)
+    # Bind to 0.0.0.0 to make the application accessible from outside the container
+    app.run(host='0.0.0.0', port=5000, debug=is_debug_mode, use_reloader=use_reloader)
