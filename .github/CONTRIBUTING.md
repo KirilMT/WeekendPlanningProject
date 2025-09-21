@@ -45,14 +45,14 @@ Instances of abusive, harassing, or otherwise unacceptable behavior may be repor
 All community leaders are obligated to respect the privacy and security of the reporter of any incident.
 
 ---
-The section below is specific to the WeekendPlanningProject project. It explains how we work, how we use GitHub, and what contributors can expect when engaging with this repository.
+The section below is specific to the WorkforceManager project. It explains how we work, how we use GitHub, and what contributors can expect when engaging with this repository.
 ---
 
 ## Contribution Process
 
 ### Before contributing code
 
-Before doing any significant work, open an issue to propose your idea and ensure alignment. You can either [file a new issue](https://github.com/YourOrganization/WeekendPlanningProject/issues/new/choose), or comment on an [existing one](https://github.com/YourOrganization/WeekendPlanningProject/issues). A pull request (PR) that does not go through this coordination process may be closed to avoid wasted effort.
+Before doing any significant work, open an issue to propose your idea and ensure alignment. You can either [file a new issue](https://github.com/YourOrganization/WorkforceManager/issues/new/choose), or comment on an [existing one](https://github.com/YourOrganization/WorkforceManager/issues). A pull request (PR) that does not go through this coordination process may be closed to avoid wasted effort.
 
 ## Checking the issue tracker
 
@@ -72,12 +72,12 @@ If you open a pull request from a personal fork, you should allow repository mai
 
 ## Commit messages
 
-Commit messages for WeekendPlanningProject follow the conventions below. Here is an example:
+Commit messages for WorkforceManager follow the conventions below. Here is an example:
 
 '''
-feat(internal/WeekendPlanningProject): add version subcommand
+feat(internal/WorkforceManager): add version subcommand
 
-A version subcommand is added to WeekendPlanningProject, which prints the current version of the tool. The version follows the versioning conventions described at https://go.dev/ref/mod#versions.
+A version subcommand is added to WorkforceManager, which prints the current version of the tool. The version follows the versioning conventions described at https://go.dev/ref/mod#versions.
 
 Resolves #12345
 '''
@@ -96,7 +96,7 @@ The name of the package affected by the change, and should be provided in parent
 
 #### description
 
-A short one-line summary of the change, that should be written to complete the sentence "This change modifies WeekendPlanningProject to ..." That means it does not start with a capital letter, is not a complete sentence, and actually summarizes the result of the change. Note that the verb after the colon is lowercase, and there is no trailing period
+A short one-line summary of the change, that should be written to complete the sentence "This change modifies WorkforceManager to ..." That means it does not start with a capital letter, is not a complete sentence, and actually summarizes the result of the change. Note that the verb after the colon is lowercase, and there is no trailing period
 
 The first line should be kept as short as possible (many git viewing tools prefer under ~76 characters). Follow the first line by a blank line.
 
@@ -143,7 +143,7 @@ Using the GitHub "Revert" button is the preferred method over manually creating 
 
 ### Keeping the pull request dashboard clean
 
-We aim to keep https://github.com/YourOrganization/WeekendPlanningProject/pulls clean so that we can quickly notice and review incoming changes that require attention. Given that goal, please do not open a pull request unless you are ready for a code review. Draft pull requests and ones without author activity for more than one business day may be closed (they can always be reopened later). If you're still working on something, continue iterating on your branch without creating a pull request until it’s ready for review.
+We aim to keep https://github.com/YourOrganization/WorkforceManager/pulls clean so that we can quickly notice and review incoming changes that require attention. Given that goal, please do not open a pull request unless you are ready for a code review. Draft pull requests and ones without author activity for more than one business day may be closed (they can always be reopened later). If you're still working on something, continue iterating on your branch without creating a pull request until it’s ready for review.
 
 ### Addressing code review comments
 
@@ -156,7 +156,7 @@ After pushing, [click the button](https://docs.github.com/en/pull-requests/colla
 When adding a TODO to the codebase, always include a link to an issue, no matter how small the task. Use the format:
 
 '''
-// TODO(https://github.com/YourOrganization/WeekendPlanningProject/issues/): explain what needs to be done
+// TODO(https://github.com/YourOrganization/WorkforceManager/issues/): explain what needs to be done
 '''
 
 This helps provide context for future readers and keeps the TODO relevant and actionable as the project evolves.

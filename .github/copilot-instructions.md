@@ -1,4 +1,4 @@
-# AI Assistant Instructions for WeekendPlanningProject
+# AI Assistant Instructions for WorkforceManager
 
 This document provides instructions for an AI assistant to help it provide the best possible assistance for this project.
 
@@ -54,7 +54,7 @@ The project is transitioning from a simple task priority-based system to a more 
 ## Project Structure
 
 ```
-WeekendPlanningProject/
+WorkforceManager/
 ├── src/                     # Main application package
 │   ├── routes/              # Flask blueprints and routing
 │   ├── services/            # Business logic and utilities (core logic here)

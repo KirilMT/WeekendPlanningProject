@@ -1,4 +1,4 @@
-# Weekend Planning Project
+# Workforce Manager
 
 A professional Flask-based web application for managing weekend technician task assignments using skill-based matching and workload optimization.
 
@@ -17,7 +17,7 @@ A professional Flask-based web application for managing weekend technician task 
 
 ## 🖼️ Screenshots
 
-Here's a glimpse of the Weekend Planning Project in action:
+Here's a glimpse of the Workforce Manager in action:
 
 | Main Page | Manage Mappings |
 | :---: | :---: |
@@ -42,7 +42,7 @@ Here's a glimpse of the Weekend Planning Project in action:
 ## 📁 Project Structure
 
 ```
-WeekendPlanningProject/
+WorkforceManager/
 ├── src/                     # Main application package
 │   ├── routes/              # Flask blueprints and routing
 │   ├── services/            # Business logic and utilities
@@ -78,7 +78,7 @@ WeekendPlanningProject/
 1. **Clone the repository:**
    ```bash
    git clone <repository-url>
-   cd WeekendPlanningProject
+   cd WorkforceManager
    ```
 
 2. **Create a virtual environment:**

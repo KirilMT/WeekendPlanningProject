@@ -1,6 +1,6 @@
 # Gemini Code Assist Instructions
 
-This document provides instructions for Gemini Code Assist to help it provide the best possible assistance for the Weekend Planning Project.
+This document provides instructions for Gemini Code Assist to help it provide the best possible assistance for the Workforce Manager.
 
 ## Core Principles for Assistance
 
@@ -43,7 +43,7 @@ This is a professional Flask-based web application for managing weekend technici
 ## Project Structure
 
 ```
-WeekendPlanningProject/
+WorkforceManager/
 ├── src/                     # Main application package
 │   ├── routes/              # Flask blueprints and routing
 │   ├── services/            # Business logic and utilities (core logic here)
