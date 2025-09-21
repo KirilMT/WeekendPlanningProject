@@ -610,10 +610,10 @@ function populateTaskTechnicians(task) {
 
         const forceLabel = document.createElement('label');
         forceLabel.textContent = 'Force';
-        forceLabel.htmlFor = forceCheckbox.id;
-        forceLabel.style.cursor = 'pointer';
+        forceLabel.style.cursor = 'default';
         forceLabel.style.userSelect = 'none';
-        forceLabel.style.display = 'none'; // Hide by default
+        forceLabel.style.display = 'none';
+        forceLabel.style.pointerEvents = 'none'; // Make label transparent to clicks
 
         function updateVisualFeedback() {
             if (checkbox.checked) {
@@ -632,18 +632,12 @@ function populateTaskTechnicians(task) {
 
         // Use a single click listener on the container div
         techDiv.addEventListener('click', function(e) {
-            // If the click was on the force checkbox or its label, do nothing.
-            // The browser will handle checking the box.
-            if (e.target === forceCheckbox || e.target === forceLabel) {
+            // If the click was on the force checkbox itself, do nothing.
+            if (e.target === forceCheckbox) {
                 return;
             }
-
-            // If the click was not on the main checkbox, toggle its state.
-            if (e.target !== checkbox) {
-                checkbox.checked = !checkbox.checked;
-            }
-            
-            // Update visuals based on the new state of the main checkbox.
+            // Otherwise, toggle the main checkbox and update visual feedback.
+            checkbox.checked = !checkbox.checked;
             updateVisualFeedback();
         });
 
