@@ -446,6 +446,8 @@ function renderTasksForTechnologyMapping(tasks) {
 
         const taskNameInput = document.createElement('input');
         taskNameInput.type = 'text';
+        taskNameInput.id = `editTaskName_${task.id}`;
+        taskNameInput.name = 'taskName';
         taskNameInput.value = task.name;
         // ... (taskNameInput styling) ...
         taskNameInput.style.flexGrow = '1.5'; // Changed from 0.5 to match add form proportion
@@ -460,12 +462,15 @@ function renderTasksForTechnologyMapping(tasks) {
 
         const techSearchInput = document.createElement('input');
         techSearchInput.type = 'text';
+        techSearchInput.id = `editTaskTechnologySearch_${task.id}`;
+        techSearchInput.name = 'techSearch';
         techSearchInput.classList.add('select-search-input');
         techSearchInput.placeholder = 'Search technologies...';
         techSelectContainer.appendChild(techSearchInput);
 
         const techSelect = document.createElement('select');
         techSelect.multiple = true; // Make it a multi-select dropdown
+        techSelect.name = 'requiredSkills';
         techSelect.classList.add('task-technology-select'); // Add class for styling
         techSelect.style.width = '100%'; // Fill container
         // ... (techSelect styling) ...

@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const groupElement = editBtn.closest('.list-item');
 
             groupElement.innerHTML = `
-                <input type="text" class="form-control" value="${groupName}" style="flex-grow: 1;"/>
+                <input type="text" name="groupName" class="form-control" value="${groupName}" style="flex-grow: 1;"/>
                 <div class="item-actions">
                     <button class="btn btn-success btn-sm save-group-btn" data-group-id="${groupId}">💾 Save</button>
                     <button class="btn btn-secondary btn-sm cancel-edit-group-btn">❌ Cancel</button>

@@ -117,7 +117,7 @@ function handleEditSatellitePoint(event) {
     const listItem = event.target.closest('.item-list-item');
 
     listItem.innerHTML = `
-        <input type="text" value="${window.escapeHtml(currentRawName)}" class="edit-input form-control" data-id="${pointId}" style="flex-grow:1; margin-right: 5px;">
+        <input type="text" id="editSatellitePointName_${pointId}" value="${window.escapeHtml(currentRawName)}" class="edit-input form-control" data-id="${pointId}" style="flex-grow:1; margin-right: 5px;">
         <div class="item-actions">
             <button class="btn btn-success btn-sm save-edit-satellite-point" data-id="${pointId}" data-current-name="${currentRawName}">
                 <span class="btn-icon">💾</span> Save
@@ -380,8 +380,10 @@ function handleEditLine(event) {
 
     listItem.innerHTML = `
         <div class="edit-line-container">
-            <input type="text" value="${window.escapeHtml(currentRawName)}" class="edit-line-name-input form-control" style="flex-grow:1; margin-right: 5px;">
-            ${spSelectElement.outerHTML}
+            <input type="text" id="editLineName_${lineId}" value="${window.escapeHtml(currentRawName)}" class="edit-line-name-input form-control" style="flex-grow:1; margin-right: 5px;">
+            <select name="satellitePointId" class="edit-line-sp-select" style="padding: 8px; margin-right: 5px;">
+                ${spSelectElement.innerHTML}
+            </select>
             <div class="item-actions" style="display: flex; align-items: center;">
                 <button class="btn btn-success btn-sm save-line-edit-button" data-id="${lineId}" data-current-name="${currentRawName}" data-current-sp-id="${currentSpId}">
                     <span class="btn-icon">💾</span> Save

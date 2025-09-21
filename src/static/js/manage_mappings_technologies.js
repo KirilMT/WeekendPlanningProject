@@ -245,7 +245,7 @@ async function editTechnology(techId) {
     const originalContent = techListItem.innerHTML;
 
     // Create Group Dropdown
-    let groupSelectHtml = '<select class="form-control">';
+    let groupSelectHtml = `<select id="editTechnologyGroupSelect_${techId}" name="groupId" class="form-control">`;
     allTechnologyGroups.forEach(group => {
         const isSelected = parseInt(group.id) === parseInt(currentGroupId) ? 'selected' : '';
         groupSelectHtml += `<option value="${group.id}" ${isSelected}>${escapeHtml(group.name)}</option>`;
@@ -253,7 +253,7 @@ async function editTechnology(techId) {
     groupSelectHtml += '</select>';
 
     // Create Parent Dropdown
-    let parentSelectHtml = '<select class="form-control">';
+    let parentSelectHtml = `<select id="editTechnologyParentSelect_${techId}" name="parentId" class="form-control">`;
     parentSelectHtml += '<option value="">No Parent</option>';
     allTechnologies.forEach(tech => {
         if (tech.id !== techId) { // Cannot be its own parent
@@ -264,7 +264,7 @@ async function editTechnology(techId) {
     parentSelectHtml += '</select>';
 
     techListItem.innerHTML = `
-        <input type="text" value="${escapeHtml(currentName)}" class="form-control" style="flex-grow: 1;"/>
+        <input type="text" id="editTechnologyName_${techId}" value="${escapeHtml(currentName)}" class="form-control" style="flex-grow: 1;"/>
         ${groupSelectHtml}
         ${parentSelectHtml}
         <div class="item-actions">
@@ -452,7 +452,7 @@ async function editTechnologyGroup(groupId, currentName) {
     const originalContent = groupListItem.innerHTML;
 
     groupListItem.innerHTML = `
-        <input type="text" value="${escapeHtml(currentName)}" class="form-control" style="flex-grow: 1;"/>
+        <input type="text" name="groupName" class="form-control" value="${escapeHtml(currentName)}" style="flex-grow: 1;"/>
         <div class="item-actions">
             <button class="btn btn-success btn-sm save-group-btn">💾 Save</button>
             <button class="btn btn-secondary btn-sm cancel-edit-group-btn">❌ Cancel</button>
